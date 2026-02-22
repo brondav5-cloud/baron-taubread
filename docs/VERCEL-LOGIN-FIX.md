@@ -1,5 +1,7 @@
 # תיקון התחברות ב-Vercel
 
+> עדכון: וודא שמשתני הסביבה מוגדרים ב-Vercel **לפני** ה-build. אחרי הוספה – Redeploy!
+
 ## שלב 1: משתני סביבה ב-Vercel
 
 1. היכנס ל-[Vercel](https://vercel.com) → בחר את הפרויקט `baron-taubread-vtfi`
@@ -48,3 +50,20 @@
 1. פתח https://baron-taubread-vtfi.vercel.app/login
 2. התחבר עם אימייל וסיסמה שיצרת ב-Supabase
 3. אם מופיעה שגיאה – העתק את הטקסט המלא
+
+---
+
+## אם עדיין מופיע "supabaseUrl is required"
+
+משתני `NEXT_PUBLIC_*` נטמעים **בזמן ה-build**. אם הוספת משתנים אחרי ה-build, הם לא יופיעו.
+
+**פתרון מומלץ – Push חדש ל-Git:**
+```bash
+git add .
+git commit -m "Trigger rebuild"
+git push
+```
+זה מפעיל build חדש עם משתני הסביבה המעודכנים.
+
+**או – ב-Vercel:**
+- Deployments → ⋮ → Redeploy (בלי לסמן "Use existing build cache")
