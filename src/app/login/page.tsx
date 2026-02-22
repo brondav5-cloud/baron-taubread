@@ -11,8 +11,10 @@ function mapAuthError(message: string): string {
     return "נא לאשר את כתובת האימייל";
   if (message.includes("Too many requests"))
     return "יותר מדי ניסיונות, נסה שוב מאוחר יותר";
-  if (message.includes("Network"))
+  if (message.includes("Network") || message.includes("fetch"))
     return "בעיית תקשורת, בדוק את החיבור לאינטרנט";
+  if (message.includes("supabaseUrl") || message.includes("API key"))
+    return "ההגדרות לא הוגדרו כראוי – יש לבדוק משתני סביבה";
   return message || "אירעה שגיאה, נסה שוב";
 }
 
@@ -39,8 +41,10 @@ export default function LoginPage() {
         return;
       }
       router.push("/dashboard");
-    } catch {
-      setError("אירעה שגיאה, נסה שוב");
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : "אירעה שגיאה, נסה שוב";
+      setError(mapAuthError(msg));
     } finally {
       setIsLoading(false);
     }
