@@ -1,6 +1,7 @@
 "use client";
 
 import { Component, type ReactNode, type ErrorInfo } from "react";
+import { usePathname } from "next/navigation";
 import { QueryProvider } from "./QueryProvider";
 import { ToastProvider } from "./ToastProvider";
 import { SupabaseAuthProvider } from "@/context/SupabaseAuthContext";
@@ -15,10 +16,10 @@ import { WorkflowProvider } from "@/context/WorkflowContext";
 import { FaultsProvider } from "@/context/FaultsContext";
 
 class ProviderErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; fallback: ReactNode },
   { hasError: boolean }
 > {
-  constructor(props: { children: ReactNode }) {
+  constructor(props: { children: ReactNode; fallback: ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
@@ -33,7 +34,7 @@ class ProviderErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
-      return this.props.children;
+      return this.props.fallback;
     }
     return this.props.children;
   }
@@ -42,6 +43,8 @@ class ProviderErrorBoundary extends Component<
 interface ProvidersProps {
   children: ReactNode;
 }
+
+const AUTH_PAGES = ["/login"];
 
 function InnerProviders({ children }: ProvidersProps) {
   return (
@@ -72,8 +75,14 @@ function InnerProviders({ children }: ProvidersProps) {
 }
 
 export function Providers({ children }: ProvidersProps) {
+  const pathname = usePathname();
+
+  if (AUTH_PAGES.includes(pathname)) {
+    return <>{children}</>;
+  }
+
   return (
-    <ProviderErrorBoundary>
+    <ProviderErrorBoundary fallback={children}>
       <InnerProviders>{children}</InnerProviders>
     </ProviderErrorBoundary>
   );
