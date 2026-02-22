@@ -31,10 +31,12 @@ import type { StoreInput, UpdateStoreInput } from "@/validations/schemas";
 // ============================================
 
 function getStoresCollection(companyId: string) {
+  if (!db) throw new Error("Firebase not configured");
   return collection(db, getCollectionPath(companyId, "stores"));
 }
 
 function getStoreDoc(companyId: string, storeId: string) {
+  if (!db) throw new Error("Firebase not configured");
   return doc(db, getCollectionPath(companyId, "stores"), storeId);
 }
 

@@ -18,6 +18,10 @@ import { FIREBASE_ERROR_MESSAGES } from "@/lib/constants";
 export function subscribeToAuthState(
   callback: (user: FirebaseUser | null) => void,
 ): Unsubscribe {
+  if (!auth) {
+    callback(null);
+    return () => {};
+  }
   return onAuthStateChanged(auth, callback);
 }
 
@@ -29,6 +33,9 @@ export async function signIn(
   email: string,
   password: string,
 ): Promise<ApiResponse<User>> {
+  if (!auth || !db) {
+    return { success: false, error: "Firebase לא מוגדר" };
+  }
   try {
     const result = await signInWithEmailAndPassword(auth, email, password);
 
@@ -68,6 +75,7 @@ export async function signIn(
 // ============================================
 
 export async function signOut(): Promise<ApiResponse<void>> {
+  if (!auth) return { success: true };
   try {
     await firebaseSignOut(auth);
     return { success: true };
@@ -84,6 +92,9 @@ export async function signOut(): Promise<ApiResponse<void>> {
 // ============================================
 
 export async function resetPassword(email: string): Promise<ApiResponse<void>> {
+  if (!auth) {
+    return { success: false, error: "Firebase לא מוגדר" };
+  }
   try {
     await sendPasswordResetEmail(auth, email);
     return {
@@ -107,6 +118,7 @@ export async function resetPassword(email: string): Promise<ApiResponse<void>> {
 // ============================================
 
 export async function getUserData(userId: string): Promise<User | null> {
+  if (!db) return null;
   try {
     const userDoc = await getDoc(doc(db, "users", userId));
 
@@ -144,6 +156,7 @@ export async function updateUserData(
   userId: string,
   data: Partial<Omit<User, "id" | "email" | "createdAt">>,
 ): Promise<ApiResponse<void>> {
+  if (!db) return { success: false, error: "Firebase לא מוגדר" };
   try {
     await updateDoc(doc(db, "users", userId), {
       ...data,
@@ -164,10 +177,11 @@ export async function updateUserData(
 // ============================================
 
 export function getCurrentFirebaseUser(): FirebaseUser | null {
-  return auth.currentUser;
+  return auth?.currentUser ?? null;
 }
 
 export async function getCurrentUser(): Promise<User | null> {
+  if (!auth) return null;
   const firebaseUser = auth.currentUser;
 
   if (!firebaseUser) {

@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { collection, getDocs, doc, getDoc } from "firebase/firestore";
-import { db } from "@/services/firebase/config";
+import { db, isFirebaseConfigured } from "@/services/firebase/config";
 import type { Company } from "@/types";
 import { useAuth } from "./AuthContext";
 
@@ -59,6 +59,12 @@ export function CompanyProvider({ children }: CompanyProviderProps) {
   useEffect(() => {
     const fetchCompanies = async () => {
       if (!user) {
+        setCompanies([]);
+        setCurrentCompany(null);
+        setIsLoading(false);
+        return;
+      }
+      if (!db || !isFirebaseConfigured()) {
         setCompanies([]);
         setCurrentCompany(null);
         setIsLoading(false);

@@ -13,56 +13,47 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Validate configuration
-function validateConfig(): void {
-  const requiredKeys = [
-    "NEXT_PUBLIC_FIREBASE_API_KEY",
-    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-    "NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET",
-    "NEXT_PUBLIC_FIREBASE_APP_ID",
-  ];
+const DEMO_PLACEHOLDERS = [
+  "demo-key-for-development",
+  "your-api-key",
+  "demo.firebaseapp.com",
+  "demo-project",
+];
 
-  const missingKeys = requiredKeys.filter((key) => !process.env[key]);
-
-  if (missingKeys.length > 0 && process.env.NODE_ENV === "development") {
-    console.warn(
-      `⚠️ Missing Firebase config keys: ${missingKeys.join(", ")}\n` +
-        "The app will run with demo data until Firebase is configured.",
-    );
-  }
+function isFirebaseKeyValid(): boolean {
+  const key = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+  if (!key) return false;
+  if (DEMO_PLACEHOLDERS.some((p) => key.includes(p))) return false;
+  return key.startsWith("AIza");
 }
 
-// Initialize Firebase only once
-let app: FirebaseApp;
-let auth: Auth;
-let db: Firestore;
-let storage: FirebaseStorage;
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+let storage: FirebaseStorage | null = null;
 
 function initializeFirebase(): void {
-  if (getApps().length === 0) {
-    validateConfig();
-    app = initializeApp(firebaseConfig);
-  } else {
-    app = getApps()[0]!;
+  if (!isFirebaseKeyValid()) return;
+  try {
+    if (getApps().length === 0) {
+      app = initializeApp(firebaseConfig);
+    } else {
+      app = getApps()[0] as FirebaseApp;
+    }
+    auth = getAuth(app);
+    db = getFirestore(app);
+    storage = getStorage(app);
+  } catch {
+    app = auth = db = storage = null;
   }
-
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
 }
 
-// Initialize on module load
 initializeFirebase();
 
 export { app, auth, db, storage };
 
-// Helper to check if Firebase is properly configured
 export function isFirebaseConfigured(): boolean {
-  return !!(
-    process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-    process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  );
+  return !!(auth && db);
 }
 
 // Collection paths helper
