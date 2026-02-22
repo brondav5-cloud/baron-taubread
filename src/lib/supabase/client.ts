@@ -1,10 +1,11 @@
 import { createBrowserClient } from "@supabase/ssr";
 
+const SUPABASE_URL = "https://wxkauqhlaiyxpiebmvkb.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4a2F1cWhsYWl5eHBpZWJtdmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxOTg0NzIsImV4cCI6MjA4NTc3NDQ3Mn0.qrbVO80ZUCjoc9YfVeWjB6AFgPUY5R9LtnSiQooyb-U";
+
 export function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  console.log("[DIAG2] URL:", JSON.stringify(url), "KEY len:", key?.length);
-  return createBrowserClient(url, key);
+  return createBrowserClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 }
 
 export function getSupabaseClient() {
