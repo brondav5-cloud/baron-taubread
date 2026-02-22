@@ -1,0 +1,285 @@
+@import url("https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   BASE STYLES
+   ============================================ */
+@layer base {
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+
+  html {
+    direction: rtl;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply font-heebo antialiased;
+    @apply bg-gradient-main min-h-screen;
+    @apply text-gray-900;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100 rounded;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+
+  /* Focus Styles */
+  :focus-visible {
+    @apply outline-2 outline-primary-500 outline-offset-2;
+  }
+
+  /* Selection */
+  ::selection {
+    @apply bg-primary-100 text-primary-900;
+  }
+}
+
+/* ============================================
+   COMPONENT STYLES
+   ============================================ */
+@layer components {
+  /* Card */
+  .card {
+    @apply bg-white rounded-2xl shadow-card;
+    @apply transition-all duration-300;
+  }
+
+  .card-hover:hover {
+    @apply shadow-elevated;
+  }
+
+  /* Button Base */
+  .btn {
+    @apply px-6 py-3 rounded-xl font-medium;
+    @apply transition-all duration-200;
+    @apply inline-flex items-center justify-center gap-2;
+    @apply disabled:opacity-60 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-primary text-white;
+    @apply hover:shadow-lg hover:shadow-primary-500/30;
+    @apply active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply bg-gray-100 text-gray-700;
+    @apply hover:bg-gray-200;
+    @apply active:scale-[0.98];
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary-500 text-primary-600;
+    @apply hover:bg-primary-50;
+    @apply active:scale-[0.98];
+  }
+
+  .btn-danger {
+    @apply bg-red-500 text-white;
+    @apply hover:bg-red-600;
+    @apply active:scale-[0.98];
+  }
+
+  .btn-ghost {
+    @apply text-gray-600;
+    @apply hover:bg-gray-100;
+    @apply active:scale-[0.98];
+  }
+
+  /* Input Base */
+  .input {
+    @apply w-full px-4 py-3 rounded-xl;
+    @apply border-2 border-gray-200 bg-white;
+    @apply transition-all duration-200;
+    @apply focus:border-primary-500 focus:ring-4 focus:ring-primary-100 focus:outline-none;
+    @apply placeholder:text-gray-400;
+  }
+
+  .input-error {
+    @apply border-red-300 focus:border-red-500 focus:ring-red-100;
+  }
+
+  /* Badge */
+  .badge {
+    @apply px-3 py-1 rounded-full text-sm font-medium;
+    @apply inline-flex items-center gap-1;
+  }
+
+  /* Status Badges */
+  .status-rising {
+    @apply bg-emerald-100 text-emerald-700 border border-emerald-200;
+  }
+
+  .status-growth {
+    @apply bg-lime-100 text-lime-700 border border-lime-200;
+  }
+
+  .status-stable {
+    @apply bg-gray-100 text-gray-600 border border-gray-200;
+  }
+
+  .status-decline {
+    @apply bg-amber-100 text-amber-700 border border-amber-200;
+  }
+
+  .status-crash {
+    @apply bg-red-100 text-red-700 border border-red-200;
+  }
+
+  .status-new {
+    @apply bg-blue-100 text-blue-700 border border-blue-200;
+  }
+
+  .status-inactive {
+    @apply bg-gray-100 text-gray-400 border border-gray-200;
+  }
+
+  /* Table - גלילה אופקית במובייל */
+  .table-container {
+    @apply overflow-x-auto rounded-2xl bg-white shadow-card;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table-container table {
+    min-width: 600px;
+  }
+
+  /* גלילה חלקה לטבלאות במובייל */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .table {
+    @apply w-full text-sm;
+  }
+
+  .table thead {
+    @apply bg-gray-50 border-b border-gray-200;
+  }
+
+  .table th {
+    @apply px-4 py-3 text-right font-semibold text-gray-700;
+  }
+
+  .table td {
+    @apply px-4 py-4 border-b border-gray-100;
+  }
+
+  .table tbody tr:hover {
+    @apply bg-gray-50/50;
+  }
+
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  /* Sidebar */
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl;
+    @apply text-gray-600 transition-all duration-200;
+    @apply hover:bg-primary-50 hover:text-primary-600;
+  }
+
+  .sidebar-link.active {
+    @apply bg-primary-100 text-primary-700 font-medium;
+  }
+
+  /* Loading Spinner */
+  .spinner {
+    @apply w-6 h-6 rounded-full animate-spin;
+    @apply border-3 border-primary-200 border-t-primary-600;
+  }
+
+  /* Skeleton Loading */
+  .skeleton {
+    @apply animate-pulse bg-gray-200 rounded;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    @apply fixed inset-0 bg-black/50 backdrop-blur-sm z-50;
+  }
+
+  .modal-content {
+    @apply bg-white rounded-2xl shadow-elevated;
+    @apply animate-scale-in;
+  }
+}
+
+/* ============================================
+   UTILITY STYLES
+   ============================================ */
+@layer utilities {
+  /* Text Gradient */
+  .text-gradient {
+    @apply bg-gradient-to-l from-primary-600 to-primary-400;
+    @apply bg-clip-text text-transparent;
+  }
+
+  /* Stagger Animations */
+  .stagger-1 {
+    animation-delay: 0.1s;
+  }
+  .stagger-2 {
+    animation-delay: 0.2s;
+  }
+  .stagger-3 {
+    animation-delay: 0.3s;
+  }
+  .stagger-4 {
+    animation-delay: 0.4s;
+  }
+  .stagger-5 {
+    animation-delay: 0.5s;
+  }
+
+  /* Hide Scrollbar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Text Truncation */
+  .truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .truncate-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* Glass Effect */
+  .glass {
+    @apply bg-white/70 backdrop-blur-lg;
+    @apply border border-white/20;
+  }
+}

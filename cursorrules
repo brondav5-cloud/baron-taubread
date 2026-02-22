@@ -1,0 +1,11 @@
+Rules for this project:
+
+Modular Code: Always prefer splitting code into small, reusable components.
+
+Separation of Concerns: Keep business logic (calculations, data fetching) separate from UI components. Place logic in lib/ or utils/ folders.
+
+File Size: If a file exceeds 150 lines, suggest a way to split it into sub-components.
+
+Consistent Style: Follow the project's existing folder structure and naming conventions.
+
+No Spaghetti: Avoid long, nested functions. Keep the code clean and readable.

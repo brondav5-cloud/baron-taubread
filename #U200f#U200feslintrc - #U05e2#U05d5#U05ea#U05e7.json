@@ -1,0 +1,14 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "prettier"
+  ],
+  "rules": {
+    "no-console": ["warn", { "allow": ["warn", "error", "info"] }],
+    "react-hooks/exhaustive-deps": "warn",
+    "@next/next/no-page-custom-font": "off",
+    "prefer-const": "error",
+    "no-var": "error",
+    "eqeqeq": ["error", "always"]
+  }
+}

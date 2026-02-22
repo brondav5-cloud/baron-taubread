@@ -1,0 +1,439 @@
+{
+  "users": [
+    {
+      "id": "user_agent_moshe",
+      "name": "משה כהן",
+      "role": "agent",
+      "avatar": "👨‍💼",
+      "email": "moshe@bakery.com",
+      "department": "מכירות שטח"
+    },
+    {
+      "id": "user_agent_yossi",
+      "name": "יוסי לוי",
+      "role": "agent",
+      "avatar": "👨‍💼",
+      "email": "yossi@bakery.com",
+      "department": "מכירות שטח"
+    },
+    {
+      "id": "user_warehouse_dani",
+      "name": "דני אברהם",
+      "role": "warehouse_manager",
+      "avatar": "📦",
+      "email": "dani@bakery.com",
+      "department": "מחסן"
+    },
+    {
+      "id": "user_pricing_sara",
+      "name": "שרה מזרחי",
+      "role": "pricing_manager",
+      "avatar": "💰",
+      "email": "sara@bakery.com",
+      "department": "תמחור"
+    },
+    {
+      "id": "user_logistics_avi",
+      "name": "אבי רוזן",
+      "role": "logistics_manager",
+      "avatar": "🚚",
+      "email": "avi@bakery.com",
+      "department": "לוגיסטיקה"
+    },
+    {
+      "id": "user_accountant_michal",
+      "name": "מיכל דוד",
+      "role": "accountant",
+      "avatar": "💳",
+      "email": "michal@bakery.com",
+      "department": "הנהלת חשבונות"
+    },
+    {
+      "id": "user_quality_eli",
+      "name": "אלי שמעון",
+      "role": "quality_manager",
+      "avatar": "⚠️",
+      "email": "eli@bakery.com",
+      "department": "בקרת איכות"
+    },
+    {
+      "id": "user_admin_ron",
+      "name": "רון מנהל",
+      "role": "admin",
+      "avatar": "👔",
+      "email": "ron@bakery.com",
+      "department": "הנהלה"
+    }
+  ],
+  "categories": [
+    {
+      "id": "cat_inventory",
+      "name": "מלאי",
+      "icon": "📦",
+      "color": "blue",
+      "defaultAssigneeId": "user_warehouse_dani",
+      "defaultAssigneeName": "דני אברהם",
+      "isActive": true,
+      "order": 1
+    },
+    {
+      "id": "cat_pricing",
+      "name": "תמחור",
+      "icon": "💰",
+      "color": "yellow",
+      "defaultAssigneeId": "user_pricing_sara",
+      "defaultAssigneeName": "שרה מזרחי",
+      "isActive": true,
+      "order": 2
+    },
+    {
+      "id": "cat_delivery",
+      "name": "משלוח",
+      "icon": "🚚",
+      "color": "green",
+      "defaultAssigneeId": "user_logistics_avi",
+      "defaultAssigneeName": "אבי רוזן",
+      "isActive": true,
+      "order": 3
+    },
+    {
+      "id": "cat_payment",
+      "name": "תשלום / גבייה",
+      "icon": "💳",
+      "color": "purple",
+      "defaultAssigneeId": "user_accountant_michal",
+      "defaultAssigneeName": "מיכל דוד",
+      "isActive": true,
+      "order": 4
+    },
+    {
+      "id": "cat_quality",
+      "name": "איכות מוצר",
+      "icon": "⚠️",
+      "color": "red",
+      "defaultAssigneeId": "user_quality_eli",
+      "defaultAssigneeName": "אלי שמעון",
+      "isActive": true,
+      "order": 5
+    },
+    {
+      "id": "cat_competitor",
+      "name": "מתחרים",
+      "icon": "🏪",
+      "color": "orange",
+      "defaultAssigneeId": "user_admin_ron",
+      "defaultAssigneeName": "רון מנהל",
+      "isActive": true,
+      "order": 6
+    },
+    {
+      "id": "cat_general",
+      "name": "כללי",
+      "icon": "📋",
+      "color": "gray",
+      "defaultAssigneeId": "user_admin_ron",
+      "defaultAssigneeName": "רון מנהל",
+      "isActive": true,
+      "order": 7
+    }
+  ],
+  "sampleTasks": [
+    {
+      "id": "task_sample_1",
+      "taskType": "store",
+      "createdBy": "user_agent_moshe",
+      "createdByName": "משה כהן",
+      "assignees": [
+        {
+          "userId": "user_warehouse_dani",
+          "userName": "דני אברהם",
+          "role": "primary",
+          "status": "new"
+        }
+      ],
+      "createdAt": "2026-01-27T09:30:00.000Z",
+      "updatedAt": "2026-01-27T09:30:00.000Z",
+      "storeId": 1001,
+      "storeName": "סופר יוסי - תל אביב",
+      "categoryId": "cat_inventory",
+      "categoryName": "מלאי",
+      "categoryIcon": "📦",
+      "priority": "urgent",
+      "title": "חסר לחם אחיד על המדף",
+      "description": "המדף של הלחמים ריק כבר יומיים. הלקוח מתלונן ומאיים לעבור למתחרים.",
+      "photos": [],
+      "status": "new",
+      "checklist": [
+        { "id": "cl_1", "text": "לבדוק מלאי במחסן", "completed": false },
+        { "id": "cl_2", "text": "לתאם משלוח חירום", "completed": false },
+        { "id": "cl_3", "text": "לעדכן את הסוכן", "completed": false }
+      ],
+      "comments": [],
+      "history": [
+        {
+          "id": "h_1",
+          "action": "created",
+          "userId": "user_agent_moshe",
+          "userName": "משה כהן",
+          "timestamp": "2026-01-27T09:30:00.000Z",
+          "details": "המשימה נוצרה"
+        }
+      ],
+      "handlerPhotos": [],
+      "dueDate": "2026-01-28T09:30:00.000Z"
+    },
+    {
+      "id": "task_sample_2",
+      "taskType": "store",
+      "createdBy": "user_agent_yossi",
+      "createdByName": "יוסי לוי",
+      "assignees": [
+        {
+          "userId": "user_pricing_sara",
+          "userName": "שרה מזרחי",
+          "role": "primary",
+          "status": "in_progress",
+          "seenAt": "2026-01-27T09:45:00.000Z"
+        }
+      ],
+      "createdAt": "2026-01-26T14:00:00.000Z",
+      "updatedAt": "2026-01-27T10:15:00.000Z",
+      "storeId": 1005,
+      "storeName": "מינימרקט דני - חיפה",
+      "categoryId": "cat_pricing",
+      "categoryName": "תמחור",
+      "categoryIcon": "💰",
+      "priority": "normal",
+      "title": "מחיר לא מעודכן על רוגלך",
+      "description": "המחיר על המדף 4.90 אבל במערכת 5.50. הלקוח קנה וכעס.",
+      "photos": [],
+      "status": "in_progress",
+      "checklist": [
+        {
+          "id": "cl_4",
+          "text": "לבדוק מחיר במערכת",
+          "completed": true,
+          "completedAt": "2026-01-27T10:00:00.000Z",
+          "completedBy": "שרה מזרחי"
+        },
+        { "id": "cl_5", "text": "לעדכן תוויות", "completed": false },
+        {
+          "id": "cl_6",
+          "text": "לשלוח תוויות מעודכנות לחנות",
+          "completed": false
+        }
+      ],
+      "comments": [
+        {
+          "id": "c_1",
+          "userId": "user_pricing_sara",
+          "userName": "שרה מזרחי",
+          "text": "בדקתי - אכן יש פער. מעדכנת את התוויות.",
+          "createdAt": "2026-01-27T10:15:00.000Z"
+        }
+      ],
+      "history": [
+        {
+          "id": "h_2",
+          "action": "created",
+          "userId": "user_agent_yossi",
+          "userName": "יוסי לוי",
+          "timestamp": "2026-01-26T14:00:00.000Z",
+          "details": "המשימה נוצרה"
+        },
+        {
+          "id": "h_3",
+          "action": "seen",
+          "userId": "user_pricing_sara",
+          "userName": "שרה מזרחי",
+          "timestamp": "2026-01-27T09:45:00.000Z",
+          "details": "המשימה נצפתה"
+        },
+        {
+          "id": "h_4",
+          "action": "started",
+          "userId": "user_pricing_sara",
+          "userName": "שרה מזרחי",
+          "timestamp": "2026-01-27T10:00:00.000Z",
+          "details": "התחיל טיפול"
+        }
+      ],
+      "handlerPhotos": [],
+      "dueDate": "2026-01-29T14:00:00.000Z"
+    },
+    {
+      "id": "task_sample_3",
+      "taskType": "store",
+      "createdBy": "user_agent_moshe",
+      "createdByName": "משה כהן",
+      "assignees": [
+        {
+          "userId": "user_logistics_avi",
+          "userName": "אבי רוזן",
+          "role": "primary",
+          "status": "done",
+          "seenAt": "2026-01-25T09:00:00.000Z",
+          "handledAt": "2026-01-27T14:00:00.000Z",
+          "response": "דיברתי עם הנהג, לא יקרה שוב."
+        }
+      ],
+      "createdAt": "2026-01-25T08:00:00.000Z",
+      "updatedAt": "2026-01-27T14:00:00.000Z",
+      "storeId": 1012,
+      "storeName": "סופר רמי - ירושלים",
+      "categoryId": "cat_delivery",
+      "categoryName": "משלוח",
+      "categoryIcon": "🚚",
+      "priority": "normal",
+      "title": "משלוח הגיע באיחור",
+      "description": "המשלוח היה אמור להגיע ב-7 בבוקר, הגיע רק ב-11.",
+      "photos": [],
+      "status": "done",
+      "checklist": [
+        {
+          "id": "cl_7",
+          "text": "לבדוק מה קרה",
+          "completed": true,
+          "completedAt": "2026-01-26T09:00:00.000Z",
+          "completedBy": "אבי רוזן"
+        },
+        {
+          "id": "cl_8",
+          "text": "לדבר עם הנהג",
+          "completed": true,
+          "completedAt": "2026-01-26T10:30:00.000Z",
+          "completedBy": "אבי רוזן"
+        }
+      ],
+      "comments": [
+        {
+          "id": "c_2",
+          "userId": "user_logistics_avi",
+          "userName": "אבי רוזן",
+          "text": "בדקתי - הנהג תקוע בפקק בגלל תאונה.",
+          "createdAt": "2026-01-26T10:30:00.000Z"
+        }
+      ],
+      "history": [
+        {
+          "id": "h_5",
+          "action": "created",
+          "userId": "user_agent_moshe",
+          "userName": "משה כהן",
+          "timestamp": "2026-01-25T08:00:00.000Z",
+          "details": "המשימה נוצרה"
+        },
+        {
+          "id": "h_8",
+          "action": "done",
+          "userId": "user_logistics_avi",
+          "userName": "אבי רוזן",
+          "timestamp": "2026-01-27T14:00:00.000Z",
+          "details": "סומן כטופל"
+        }
+      ],
+      "handlerResponse": "דיברתי עם הנהג, לא יקרה שוב.",
+      "handlerPhotos": [],
+      "handledAt": "2026-01-27T14:00:00.000Z",
+      "dueDate": "2026-01-28T08:00:00.000Z"
+    },
+    {
+      "id": "task_sample_4",
+      "taskType": "general",
+      "createdBy": "user_admin_ron",
+      "createdByName": "רון מנהל",
+      "assignees": [
+        {
+          "userId": "user_pricing_sara",
+          "userName": "שרה מזרחי",
+          "role": "primary",
+          "status": "new"
+        },
+        {
+          "userId": "user_warehouse_dani",
+          "userName": "דני אברהם",
+          "role": "secondary",
+          "status": "new"
+        }
+      ],
+      "createdAt": "2026-01-28T08:00:00.000Z",
+      "updatedAt": "2026-01-28T08:00:00.000Z",
+      "categoryId": "cat_general",
+      "categoryName": "כללי",
+      "categoryIcon": "📋",
+      "priority": "normal",
+      "title": "להכין מחירון חדש לפברואר",
+      "description": "צריך לעדכן את המחירון לקראת פברואר. לתאם עם המחסן לגבי עלויות.",
+      "photos": [],
+      "status": "new",
+      "checklist": [
+        { "id": "cl_10", "text": "לאסוף עלויות מהמחסן", "completed": false },
+        { "id": "cl_11", "text": "לחשב מחירים חדשים", "completed": false },
+        { "id": "cl_12", "text": "להפיץ לסוכנים", "completed": false }
+      ],
+      "comments": [],
+      "history": [
+        {
+          "id": "h_9",
+          "action": "created",
+          "userId": "user_admin_ron",
+          "userName": "רון מנהל",
+          "timestamp": "2026-01-28T08:00:00.000Z",
+          "details": "המשימה נוצרה"
+        }
+      ],
+      "handlerPhotos": [],
+      "dueDate": "2026-01-31T08:00:00.000Z"
+    },
+    {
+      "id": "task_sample_5",
+      "taskType": "store",
+      "createdBy": "user_agent_moshe",
+      "createdByName": "משה כהן",
+      "assignees": [
+        {
+          "userId": "user_quality_eli",
+          "userName": "אלי שמעון",
+          "role": "primary",
+          "status": "new"
+        },
+        {
+          "userId": "user_warehouse_dani",
+          "userName": "דני אברהם",
+          "role": "secondary",
+          "status": "new"
+        }
+      ],
+      "createdAt": "2026-01-28T07:00:00.000Z",
+      "updatedAt": "2026-01-28T07:00:00.000Z",
+      "storeId": 1020,
+      "storeName": "מרכול השכונה - רמת גן",
+      "categoryId": "cat_quality",
+      "categoryName": "איכות מוצר",
+      "categoryIcon": "⚠️",
+      "priority": "urgent",
+      "title": "עוגיות עם טעם מוזר",
+      "description": "לקוח התלונן שהעוגיות יש להם טעם מוזר. צריך לבדוק את האצווה במחסן.",
+      "photos": [],
+      "status": "new",
+      "checklist": [
+        { "id": "cl_13", "text": "לבדוק אצווה במחסן", "completed": false },
+        { "id": "cl_14", "text": "לשלוח לבדיקת מעבדה", "completed": false },
+        { "id": "cl_15", "text": "להחליט אם למשוך מהמדפים", "completed": false }
+      ],
+      "comments": [],
+      "history": [
+        {
+          "id": "h_10",
+          "action": "created",
+          "userId": "user_agent_moshe",
+          "userName": "משה כהן",
+          "timestamp": "2026-01-28T07:00:00.000Z",
+          "details": "המשימה נוצרה"
+        }
+      ],
+      "handlerPhotos": [],
+      "dueDate": "2026-01-29T07:00:00.000Z"
+    }
+  ]
+}
