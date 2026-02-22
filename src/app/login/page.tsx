@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 
 function mapAuthError(message: string): string {
   if (message.includes("Invalid login")) return "פרטי התחברות שגויים";
@@ -31,16 +30,18 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const supabase = createClient();
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      if (authError) {
-        setError(mapAuthError(authError.message));
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(mapAuthError(data.error || "אירעה שגיאה, נסה שוב"));
         return;
       }
       router.push("/dashboard");
+      router.refresh();
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "אירעה שגיאה, נסה שוב";

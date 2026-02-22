@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { Component, type ReactNode, type ErrorInfo } from "react";
 import { QueryProvider } from "./QueryProvider";
 import { ToastProvider } from "./ToastProvider";
 import { SupabaseAuthProvider } from "@/context/SupabaseAuthContext";
@@ -14,11 +14,36 @@ import { TasksProvider } from "@/context/TasksContext";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 import { FaultsProvider } from "@/context/FaultsContext";
 
+class ProviderErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error("[Providers] Error caught by boundary:", error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.children;
+    }
+    return this.props.children;
+  }
+}
+
 interface ProvidersProps {
   children: ReactNode;
 }
 
-export function Providers({ children }: ProvidersProps) {
+function InnerProviders({ children }: ProvidersProps) {
   return (
     <QueryProvider>
       <ToastProvider>
@@ -43,5 +68,13 @@ export function Providers({ children }: ProvidersProps) {
         </SupabaseAuthProvider>
       </ToastProvider>
     </QueryProvider>
+  );
+}
+
+export function Providers({ children }: ProvidersProps) {
+  return (
+    <ProviderErrorBoundary>
+      <InnerProviders>{children}</InnerProviders>
+    </ProviderErrorBoundary>
   );
 }
