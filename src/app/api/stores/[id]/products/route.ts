@@ -3,13 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 import type { MonthlyData } from "@/types/supabase";
 
 function getSupabaseAdmin() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key)
-    throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for store products");
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key);
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
 /**

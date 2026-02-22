@@ -14,21 +14,15 @@ import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
 import { checkRateLimit, getClientIdentifier } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const PAYLOAD_TOO_LARGE_MSG = {
   error: "גודל הבקשה חורג מהמותר (4MB). נסה קובץ קטן יותר.",
 };
 
-const getSupabaseAdmin = () => {
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SERVICE_KEY) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is required for delivery uploads",
-    );
-  }
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, SERVICE_KEY);
-};
+const getSupabaseAdmin = () =>
+  createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const DELIVERY_RATE_LIMIT = { max: 10, windowMs: 60_000 };
 

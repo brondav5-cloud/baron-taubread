@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import type { MonthlyData, DbStore, DbProduct } from "@/types/supabase";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 
-const getSupabaseAdmin = () => {
-  const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!SERVICE_KEY) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is required for upload (bypasses RLS)",
-    );
-  }
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, SERVICE_KEY);
-};
-import type { MonthlyData, DbStore, DbProduct } from "@/types/supabase";
+const getSupabaseAdmin = () =>
+  createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 import {
   calculateStoreMetrics,
   calculateProductMetrics,

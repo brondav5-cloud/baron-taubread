@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase/env";
 
 /**
  * Creates a Supabase client for server-side use with cookie-based session.
@@ -10,8 +11,8 @@ export function createServerDBClient(_request: NextRequest) {
   const cookieStore = cookies();
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
     {
       cookieOptions: {
         name: "hlaiyxpiebmvkb-auth-token",

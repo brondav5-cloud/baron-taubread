@@ -2,11 +2,10 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
+import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 
 function getSupabaseAdmin() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) throw new Error("SUPABASE_SERVICE_ROLE_KEY required for whoami");
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, key);
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 }
 
 export interface WhoamiCompany {
