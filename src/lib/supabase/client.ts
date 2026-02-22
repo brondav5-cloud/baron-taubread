@@ -16,6 +16,7 @@ let clientInstance: SupabaseClient | null = null;
  */
 export function createClient(): SupabaseClient {
   if (!clientInstance) {
+    console.log("[DIAG] createClient called — URL:", JSON.stringify(SUPABASE_URL), "KEY length:", SUPABASE_ANON_KEY?.length);
     clientInstance = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         flowType: "pkce",
