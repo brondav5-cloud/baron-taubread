@@ -31,7 +31,10 @@ export async function POST(request: Request) {
     },
   });
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
   if (error) {
     return NextResponse.json(
@@ -40,5 +43,9 @@ export async function POST(request: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({
+    ok: true,
+    access_token: data.session?.access_token,
+    refresh_token: data.session?.refresh_token,
+  });
 }

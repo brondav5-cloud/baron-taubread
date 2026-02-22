@@ -1,29 +1,33 @@
-import { createBrowserClient } from "@supabase/ssr";
+import {
+  createClient as createSupabaseClient,
+  SupabaseClient,
+} from "@supabase/supabase-js";
 
-// Literal strings - zero dependency on env (fixes Vercel)
 const SUPABASE_URL = "https://wxkauqhlaiyxpiebmvkb.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind4a2F1cWhsYWl5eHBpZWJtdmtiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAxOTg0NzIsImV4cCI6MjA4NTc3NDQ3Mn0.qrbVO80ZUCjoc9YfVeWjB6AFgPUY5R9LtnSiQooyb-U";
 
-export function createClient() {
-  return createBrowserClient(
-    SUPABASE_URL,
-    SUPABASE_ANON_KEY,
-    {
-      cookieOptions: {
-        name: "hlaiyxpiebmvkb-auth-token",
-        path: "/",
-      },
-    },
-  );
-}
+let clientInstance: SupabaseClient | null = null;
 
-// Singleton instance for client-side usage
-let clientInstance: ReturnType<typeof createClient> | null = null;
-
-export function getSupabaseClient() {
+/**
+ * Singleton browser client using @supabase/supabase-js directly.
+ * Bypasses @supabase/ssr's createBrowserClient which fails on Vercel
+ * with "supabaseUrl is required" despite receiving valid arguments.
+ */
+export function createClient(): SupabaseClient {
   if (!clientInstance) {
-    clientInstance = createClient();
+    clientInstance = createSupabaseClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        flowType: "pkce",
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        persistSession: true,
+      },
+    });
   }
   return clientInstance;
+}
+
+export function getSupabaseClient(): SupabaseClient {
+  return createClient();
 }

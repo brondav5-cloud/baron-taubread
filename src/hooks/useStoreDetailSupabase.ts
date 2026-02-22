@@ -131,6 +131,7 @@ export function useStoreDetailSupabase() {
     if (!storeId) return;
 
     async function loadStore() {
+      if (!companyId) return;
       setIsLoading(true);
       setError(null);
 

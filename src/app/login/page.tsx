@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
 function mapAuthError(message: string): string {
   if (message.includes("Invalid login")) return "פרטי התחברות שגויים";
@@ -40,6 +41,15 @@ export default function LoginPage() {
         setError(mapAuthError(data.error || "אירעה שגיאה, נסה שוב"));
         return;
       }
+
+      if (data.access_token && data.refresh_token) {
+        const supabase = createClient();
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+      }
+
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
