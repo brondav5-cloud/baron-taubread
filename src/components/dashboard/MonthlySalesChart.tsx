@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { formatNumber } from "@/lib/calculations";
 import { Card, CardContent } from "@/components/ui";
-import type { ChartDataPoint } from "@/hooks/useDashboard";
+import type { ChartDataPoint } from "@/hooks/useDashboardSupabase";
 
 interface MonthlySalesChartProps {
   data: ChartDataPoint[];

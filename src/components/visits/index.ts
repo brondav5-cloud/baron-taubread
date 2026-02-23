@@ -1,4 +1,3 @@
-export { StoreVisitsHistory } from "./StoreVisitsHistory";
 export { VisitsTabs, type VisitsTabType } from "./VisitsTabs";
 export { VisitCard } from "./VisitCard";
 export { VisitDetailModal } from "./VisitDetailModal";

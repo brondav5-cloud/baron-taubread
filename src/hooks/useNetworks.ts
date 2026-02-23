@@ -10,19 +10,29 @@ import {
   saveNetworkPricing,
   initNetworksFromStores,
 } from "@/lib/networkLoader";
-import { getStores } from "@/lib/dataLoader";
+import { useSupabaseData } from "./useSupabaseData";
 import type { Network, NetworkPricing, NetworkWithInfo } from "@/types/network";
 
 export function useNetworks() {
   const [networks, setNetworks] = useState<Network[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { stores: dbStores } = useSupabaseData();
+
+  const storesForNetworks = useMemo(
+    () =>
+      dbStores.map((s) => ({
+        id: s.external_id,
+        network: s.network,
+      })),
+    [dbStores],
+  );
 
   const load = useCallback(() => {
     setIsLoading(true);
-    const data = initNetworksFromStores();
+    const data = initNetworksFromStores(storesForNetworks);
     setNetworks(data);
     setIsLoading(false);
-  }, []);
+  }, [storesForNetworks]);
 
   useEffect(() => {
     load();
@@ -61,10 +71,9 @@ export function useNetworks() {
   );
 
   const storesWithoutNetwork = useMemo(() => {
-    const allStores = getStores();
     const assignedIds = new Set(networks.flatMap((n) => n.storeIds));
-    return allStores.filter((s) => !assignedIds.has(s.id));
-  }, [networks]);
+    return storesForNetworks.filter((s) => !assignedIds.has(s.id));
+  }, [networks, storesForNetworks]);
 
   return {
     networks: networksWithInfo,
@@ -115,6 +124,7 @@ export function useNetworkPricing(networkId: string) {
 
 export function useNetworkDetail(networkId: string) {
   const [network, setNetwork] = useState<Network | null>(null);
+  const { stores: dbStores } = useSupabaseData();
 
   useEffect(() => {
     const data = getNetwork(networkId);
@@ -123,9 +133,15 @@ export function useNetworkDetail(networkId: string) {
 
   const stores = useMemo(() => {
     if (!network) return [];
-    const allStores = getStores();
-    return allStores.filter((s) => network.storeIds.includes(s.id));
-  }, [network]);
+    return dbStores
+      .filter((s) => network.storeIds.includes(s.external_id))
+      .map((s) => ({
+        id: s.external_id,
+        name: s.name,
+        city: s.city ?? "",
+        network: s.network ?? "",
+      }));
+  }, [network, dbStores]);
 
   return { network, stores };
 }

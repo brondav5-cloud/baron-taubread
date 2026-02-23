@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { formatNumber } from "@/lib/calculations";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui";
-import type { CitySalesData } from "@/hooks/useDashboard";
+import type { CitySalesData } from "@/hooks/useDashboardSupabase";
 
 interface CitySalesCardsProps {
   cities: CitySalesData[];

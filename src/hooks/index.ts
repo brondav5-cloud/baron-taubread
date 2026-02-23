@@ -32,9 +32,6 @@ export {
 // Settings hook
 export { useSettings } from "./useSettings";
 
-// Visits Page hook
-export { useVisitsPage, DEMO_VISITS, type Visit } from "./useVisitsPage";
-
 // Product Detail hook
 export {
   useProductDetail,
@@ -71,86 +68,8 @@ export {
   type StoreProfitability,
 } from "./useProfitability";
 
-// Store Detail hook
-export {
-  useStoreDetail,
-  MONTHS as STORE_DETAIL_MONTHS,
-  DONUT_COLORS,
-  type StoreMonthlyData,
-  type StoreTotals,
-  type StoreChartData,
-  type TopProduct,
-} from "./useStoreDetail";
-
-// Dashboard hook
-export {
-  useDashboard,
-  DASHBOARD_CHART_COLORS,
-  MONTHS,
-  type MonthlyDataPoint,
-  type TotalsData as DashboardTotalsData,
-  type HalfYearData,
-  type CitySalesData,
-  type StatusDistributionItem,
-  type ChartDataPoint,
-} from "./useDashboard";
-
-// Comparison hooks
-export {
-  useComparison,
-  CHART_COLORS,
-  type CityStats,
-  type ComparisonDataPoint,
-} from "./useComparison";
-
-// Stores Page hook
-export {
-  useStoresPage,
-  type ViewMode,
-  type SortDirection,
-  type SortKey,
-  type StoresFilters,
-  type TotalsData,
-} from "./useStoresPage";
-
-// Store hooks
-export {
-  useStores,
-  useFilteredStores,
-  useStore,
-  useTopStores,
-  useBottomStores,
-  useAlertStores,
-  useStoresByCity,
-  useStoresByAgent,
-  useOverviewStats,
-  useStoreRankInCity,
-  usePrefetchStores,
-  usePrefetchStore,
-  useStoreStatusCounts,
-  useStoreSearch,
-  storeKeys,
-} from "./useStores";
-
-// Product hooks
-export {
-  useProducts,
-  useFilteredProducts,
-  useProduct,
-  useCategories,
-  useProductsByCategory,
-  useTopProducts,
-  useBottomProducts,
-  useProductsCount,
-  useProductStatusCounts,
-  useProductsByStatus,
-  usePrefetchProducts,
-  usePrefetchProduct,
-  useProductSearch,
-  useCategoryDistribution,
-  productKeys,
-  type ProductFilterOptions,
-} from "./useProducts";
+// Dashboard Supabase hook
+export { useDashboardSupabase } from "./useDashboardSupabase";
 
 // Pricing hooks
 export { usePricing, useStorePricing } from "./usePricing";
@@ -210,6 +129,3 @@ export {
 
 // Supabase Data hook
 export { useSupabaseData } from "./useSupabaseData";
-
-// Dashboard Supabase hook
-export { useDashboardSupabase } from "./useDashboardSupabase";

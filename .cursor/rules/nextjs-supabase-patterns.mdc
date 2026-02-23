@@ -15,7 +15,7 @@ alwaysApply: true
 ## Key Conventions
 
 - Cookie name for auth: `"hlaiyxpiebmvkb-auth-token"` — must match in ALL files
-- Data from `dataLoader.ts` loads local JSON files (stores, products) — NOT from Supabase
+- ALL data (stores, products, metadata) comes from Supabase via `useSupabaseData` hook — `dataLoader.ts` has been removed
 - RLS must be enabled on ALL public tables with authenticated policies
 - Use `@supabase/ssr` (not `@supabase/supabase-js` directly) for cookie-based auth
 

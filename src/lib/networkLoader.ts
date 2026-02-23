@@ -8,7 +8,6 @@ import type {
   NetworkProductPrice,
 } from "@/types/network";
 import { generateNetworkId } from "@/types/network";
-import { getStores } from "@/lib/dataLoader";
 
 const KEYS = {
   NETWORKS: "bakery_networks",
@@ -117,13 +116,13 @@ export function updateNetworkProductPrice(
 // INIT FROM EXISTING DATA
 // ============================================
 
-export function initNetworksFromStores(): Network[] {
-  const stores = getStores();
+export function initNetworksFromStores(
+  stores: Array<{ id: number; network?: string | null }>,
+): Network[] {
   const existingNetworks = getNetworks();
 
   if (existingNetworks.length > 0) return existingNetworks;
 
-  // Group stores by network field
   const networkMap = new Map<string, number[]>();
 
   stores.forEach((store) => {
@@ -135,7 +134,6 @@ export function initNetworksFromStores(): Network[] {
     }
   });
 
-  // Create networks
   const networks: Network[] = [];
   networkMap.forEach((storeIds, name) => {
     networks.push({
@@ -161,15 +159,19 @@ export function getNetworkForStore(storeId: number): Network | null {
   return networks.find((n) => n.storeIds.includes(storeId)) ?? null;
 }
 
-export function getNetworkStoresData(networkId: string): {
-  stores: ReturnType<typeof getStores>;
+export function getNetworkStoresData<
+  T extends { id: number; sales_2025?: number },
+>(
+  networkId: string,
+  allStores: T[],
+): {
+  stores: T[];
   avgSales: number;
   totalSales: number;
 } {
   const network = getNetwork(networkId);
   if (!network) return { stores: [], avgSales: 0, totalSales: 0 };
 
-  const allStores = getStores();
   const networkStores = allStores.filter((s) =>
     network.storeIds.includes(s.id),
   );
