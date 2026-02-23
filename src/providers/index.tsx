@@ -14,6 +14,7 @@ import { UsersProvider } from "@/context/UsersContext";
 import { TasksProvider } from "@/context/TasksContext";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 import { FaultsProvider } from "@/context/FaultsContext";
+import { PushNotificationProvider } from "@/context/PushNotificationContext";
 
 class ProviderErrorBoundary extends Component<
   { children: ReactNode; fallback: ReactNode },
@@ -52,21 +53,23 @@ function InnerProviders({ children }: ProvidersProps) {
       <ToastProvider>
         <SupabaseAuthProvider>
           <AuthProvider>
-            <CompanyProvider>
-              <UsersProvider>
-                <TasksProvider>
-                  <WorkflowProvider>
-                    <FaultsProvider>
-                      <StoresAndProductsProvider>
-                        <VisitsProvider>
-                          <TreatmentProvider>{children}</TreatmentProvider>
-                        </VisitsProvider>
-                      </StoresAndProductsProvider>
-                    </FaultsProvider>
-                  </WorkflowProvider>
-                </TasksProvider>
-              </UsersProvider>
-            </CompanyProvider>
+            <PushNotificationProvider>
+              <CompanyProvider>
+                <UsersProvider>
+                  <TasksProvider>
+                    <WorkflowProvider>
+                      <FaultsProvider>
+                        <StoresAndProductsProvider>
+                          <VisitsProvider>
+                            <TreatmentProvider>{children}</TreatmentProvider>
+                          </VisitsProvider>
+                        </StoresAndProductsProvider>
+                      </FaultsProvider>
+                    </WorkflowProvider>
+                  </TasksProvider>
+                </UsersProvider>
+              </CompanyProvider>
+            </PushNotificationProvider>
           </AuthProvider>
         </SupabaseAuthProvider>
       </ToastProvider>

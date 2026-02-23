@@ -19,6 +19,7 @@ import {
   deleteAllTasks,
 } from "@/lib/supabase/tasks.queries";
 import { dbTaskToTask, taskToDbTask } from "@/lib/supabase/tasks.mappers";
+import { sendNotification } from "@/lib/notifications/notify";
 
 // ============================================
 // TYPES
@@ -274,6 +275,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
           if (!error && data) {
             const created = dbTaskToTask(data);
             setTasks((prev) => [created, ...prev]);
+
+            const recipientIds = input.assignees
+              .map((a) => a.userId)
+              .filter((id) => id !== createdBy);
+            if (recipientIds.length > 0) {
+              sendNotification({
+                recipientUserIds: recipientIds,
+                type: "task_assigned",
+                title: "משימה חדשה הוקצתה לך",
+                body: `${createdByName}: ${input.title}`,
+                url: `/dashboard/tasks`,
+                referenceId: created.id,
+                referenceType: "task",
+              });
+            }
           }
         });
         return { ...newTask, id: `pending_${Date.now()}` } as Task;
@@ -666,6 +682,18 @@ export function TasksProvider({ children }: { children: ReactNode }) {
               history: u.history,
               updated_at: now,
             });
+
+            if (toUserId !== byUserId) {
+              sendNotification({
+                recipientUserIds: [toUserId],
+                type: "task_reassigned",
+                title: "משימה הועברה אליך",
+                body: `${byUserName} העביר אליך: ${task.title}`,
+                url: `/dashboard/tasks`,
+                referenceId: taskId,
+                referenceType: "task",
+              });
+            }
           }
           return updated;
         }),
@@ -715,6 +743,18 @@ export function TasksProvider({ children }: { children: ReactNode }) {
               history: u.history,
               updated_at: now,
             });
+
+            if (userId !== byUserId) {
+              sendNotification({
+                recipientUserIds: [userId],
+                type: "task_assigned",
+                title: "צורפת למשימה",
+                body: `${byUserName} הוסיף אותך ל: ${task.title}`,
+                url: `/dashboard/tasks`,
+                referenceId: taskId,
+                referenceType: "task",
+              });
+            }
           }
           return updated;
         }),

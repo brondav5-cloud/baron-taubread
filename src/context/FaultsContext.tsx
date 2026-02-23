@@ -26,6 +26,7 @@ import {
   type DbFaultStatus,
   type DbFault,
 } from "@/lib/supabase/faults.queries";
+import { sendNotification } from "@/lib/notifications/notify";
 
 // ============================================
 // TYPES
@@ -294,6 +295,19 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
       });
       if (error || !data) return null;
       await refetch();
+
+      if (input.assignedTo && input.assignedTo !== userId) {
+        sendNotification({
+          recipientUserIds: [input.assignedTo],
+          type: "fault_assigned",
+          title: "תקלה חדשה הוקצתה לך",
+          body: `${currentUser.name}: ${input.title}`,
+          url: `/dashboard/faults`,
+          referenceId: data.id,
+          referenceType: "fault",
+        });
+      }
+
       return dbToFault(data, faultTypes, faultStatuses);
     },
     [companyId, userId, currentUser.name, faultStatuses, faultTypes, refetch],
@@ -318,7 +332,28 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
           },
         ],
       });
-      if (ok) await refetch();
+      if (ok) {
+        await refetch();
+
+        const notifyIds = Array.from(
+          new Set(
+            [fault.reportedBy, fault.assignedTo].filter(
+              (id): id is string => !!id && id !== userId,
+            ),
+          ),
+        );
+        if (notifyIds.length > 0) {
+          sendNotification({
+            recipientUserIds: notifyIds,
+            type: "fault_status",
+            title: "עדכון סטטוס תקלה",
+            body: `${currentUser.name} שינה סטטוס ל-${status?.name ?? ""}: ${fault.title}`,
+            url: `/dashboard/faults`,
+            referenceId: faultId,
+            referenceType: "fault",
+          });
+        }
+      }
       return ok;
     },
     [faults, faultStatuses, userId, currentUser.name, refetch],
