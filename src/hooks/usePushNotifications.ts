@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "@/providers/ToastProvider";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? "";
 
@@ -55,11 +56,16 @@ export function usePushNotifications() {
 
   const subscribe = useCallback(async (): Promise<boolean> => {
     try {
-      if (!VAPID_PUBLIC_KEY) return false;
+      if (!VAPID_PUBLIC_KEY) {
+        console.error("[Push] VAPID key missing — NEXT_PUBLIC_VAPID_PUBLIC_KEY not set");
+        toast.error("הגדרות התראות חסרות בשרת. פנה למנהל.");
+        return false;
+      }
 
       const permission = await Notification.requestPermission();
       if (permission !== "granted") {
         setState("denied");
+        toast.error("ההתראות נחסמו. יש לאפשר בהגדרות הדפדפן.");
         return false;
       }
 
@@ -91,11 +97,16 @@ export function usePushNotifications() {
       if (res.ok) {
         setSubscription(sub);
         setState("subscribed");
+        toast.success("התראות הופעלו בהצלחה!");
         return true;
       }
+      const errData = await res.json().catch(() => ({}));
+      console.error("[Push] subscribe API error:", res.status, errData);
+      toast.error("שגיאה בשמירת ההרשמה להתראות");
       return false;
     } catch (err) {
       console.error("[usePushNotifications] subscribe error:", err);
+      toast.error("שגיאה בהפעלת התראות");
       return false;
     }
   }, []);
