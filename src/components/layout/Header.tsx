@@ -152,6 +152,28 @@ export default function Header({ onMenuClick }: HeaderProps) {
                         </p>
                       </div>
                     )}
+                    {push && push.isSubscribed && (
+                      <div className="p-2 border-b border-gray-100">
+                        <button
+                          onClick={() => {
+                            fetch("/api/push/test", { method: "POST" })
+                              .then((r) => r.json())
+                              .then((d) => {
+                                console.log("[Push Test]", d);
+                                if (d.sent > 0) {
+                                  alert("התראת בדיקה נשלחה! בדוק אם הגיעה.");
+                                } else {
+                                  alert(`לא נשלח: sent=${d.sent}, hasVapidKeys=${d.hasVapidKeys}`);
+                                }
+                              })
+                              .catch((e) => alert("שגיאה: " + e.message));
+                          }}
+                          className="w-full px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 rounded-lg transition-colors"
+                        >
+                          שלח התראת בדיקה לעצמי
+                        </button>
+                      </div>
+                    )}
 
                     {/* New Tasks */}
                     {unreadCount > 0 && (
