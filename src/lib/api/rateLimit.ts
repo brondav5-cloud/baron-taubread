@@ -67,3 +67,40 @@ export function getClientIdentifier(request: Request): string {
     "unknown";
   return ip;
 }
+
+/**
+ * DB-based upload rate limit — works across all serverless instances.
+ * Checks the `uploads` table for recent uploads by this company.
+ * Fail-open: if the query fails, the upload is allowed.
+ */
+export async function checkUploadRateDb(
+  supabase: { from: (table: string) => unknown },
+  companyId: string,
+  maxUploads: number,
+  windowMinutes: number,
+): Promise<RateLimitResult> {
+  try {
+    const since = new Date(
+      Date.now() - windowMinutes * 60_000,
+    ).toISOString();
+
+    const { count, error } = await (supabase as ReturnType<typeof Object>)
+      .from("uploads")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .gte("uploaded_at", since);
+
+    if (error || count === null) return { ok: true, remaining: maxUploads };
+
+    if (count >= maxUploads) {
+      return {
+        ok: false,
+        remaining: 0,
+        retryAfter: windowMinutes * 60,
+      };
+    }
+    return { ok: true, remaining: maxUploads - count };
+  } catch {
+    return { ok: true, remaining: maxUploads };
+  }
+}

@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/deliveries.repo";
 import type { DeliveryUploadPayload } from "@/types/deliveries";
 import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
-import { checkRateLimit, getClientIdentifier } from "@/lib/api/rateLimit";
+import { checkRateLimit, checkUploadRateDb, getClientIdentifier } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
@@ -85,6 +85,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const supabaseAdmin = getSupabaseAdmin();
+
+    const dbRate = await checkUploadRateDb(supabaseAdmin, companyId, 10, 10);
+    if (!dbRate.ok) {
+      return NextResponse.json(
+        { error: "יותר מדי העלאות ב-10 הדקות האחרונות. נסה שוב מאוחר יותר." },
+        { status: 429, headers: { "Retry-After": String(dbRate.retryAfter ?? 600) } },
+      );
+    }
+
     const parseResult = await readJsonWithLimit(request, MAX_BODY_BYTES);
     if (!parseResult.ok) {
       return NextResponse.json(PAYLOAD_TOO_LARGE_MSG, { status: 413 });
@@ -102,8 +112,6 @@ export async function POST(request: NextRequest) {
         { status: 504 },
       );
     }
-
-    const supabaseAdmin = getSupabaseAdmin();
     const result = await upsertDeliveries(
       supabaseAdmin,
       companyId,

@@ -27,7 +27,7 @@ import {
 } from "./mergeUtils";
 import type { UploadPayload } from "./types";
 import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
-import { checkRateLimit, getClientIdentifier } from "@/lib/api/rateLimit";
+import { checkRateLimit, checkUploadRateDb, getClientIdentifier } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 
@@ -90,6 +90,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "רק עורכים ומנהלים יכולים להעלות נתונים" },
         { status: 403 },
+      );
+    }
+
+    const dbRate = await checkUploadRateDb(supabaseAdmin, companyId, 10, 10);
+    if (!dbRate.ok) {
+      return NextResponse.json(
+        { error: "יותר מדי העלאות ב-10 הדקות האחרונות. נסה שוב מאוחר יותר." },
+        { status: 429, headers: { "Retry-After": String(dbRate.retryAfter ?? 600) } },
       );
     }
 
