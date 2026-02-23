@@ -20,8 +20,10 @@ export function useRealtimeTable(
     if (!companyId) return;
 
     const supabase = createClient();
+    const channelName = `realtime:${table}:${companyId}`;
+
     const channel = supabase
-      .channel(`realtime:${table}:${companyId}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         {
@@ -30,11 +32,14 @@ export function useRealtimeTable(
           table,
           filter: `company_id=eq.${companyId}`,
         },
-        () => {
+        (payload) => {
+          console.log(`[Realtime] ${table} change:`, payload.eventType);
           onSync();
         },
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log(`[Realtime] ${table} channel status:`, status);
+      });
 
     channelRef.current = channel;
 
