@@ -59,7 +59,7 @@ export async function getStores(companyId: string): Promise<DbStore[]> {
     .select("*")
     .eq("company_id", companyId)
     .order("name")
-    .limit(2000);
+    .limit(5000);
 
   if (error) {
     console.error("Error fetching stores:", error);
@@ -127,7 +127,7 @@ export async function getProducts(companyId: string): Promise<DbProduct[]> {
     .select("*")
     .eq("company_id", companyId)
     .order("name")
-    .limit(2000);
+    .limit(5000);
 
   if (error) {
     console.error("Error fetching products:", error);
@@ -298,7 +298,7 @@ export async function getVisits(companyId: string): Promise<DbVisit[]> {
     .select("*")
     .eq("company_id", companyId)
     .order("date", { ascending: false })
-    .limit(5000);
+    .limit(10000);
 
   if (error) {
     console.error("Error fetching visits:", error);
@@ -322,7 +322,7 @@ export async function getVisitsSummary(
     .select("store_external_id, date, competitors")
     .eq("company_id", companyId)
     .order("date", { ascending: false })
-    .limit(5000);
+    .limit(10000);
 
   if (error) {
     console.error("Error fetching visits summary:", error);
