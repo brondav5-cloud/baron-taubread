@@ -19,6 +19,7 @@ import GlobalSearch from "./GlobalSearch";
 import CompanyPicker from "./CompanyPicker";
 import { useUsers } from "@/context/UsersContext";
 import { useTasks } from "@/context/TasksContext";
+import { usePush } from "@/context/PushNotificationContext";
 import { createClient } from "@/lib/supabase/client";
 
 interface HeaderProps {
@@ -41,6 +42,7 @@ export default function Header({ onMenuClick }: HeaderProps) {
   const { currentUser } = useUsers();
   const { tasks, getUnreadCount, getPendingApprovalCount, getOverdueTasks } =
     useTasks();
+  const push = usePush();
 
   const unreadCount = getUnreadCount(currentUser.id);
   const pendingCount = getPendingApprovalCount(currentUser.id);
@@ -129,6 +131,28 @@ export default function Header({ onMenuClick }: HeaderProps) {
                   </div>
 
                   <div className="max-h-80 overflow-y-auto">
+                    {/* Push Permission Banner */}
+                    {push && push.isSupported && !push.isSubscribed && push.state !== "denied" && (
+                      <div className="p-3 bg-amber-50 border-b border-amber-200">
+                        <p className="text-sm text-amber-800 mb-2">
+                          הפעל התראות כדי לקבל עדכונים על משימות ותקלות
+                        </p>
+                        <button
+                          onClick={() => void push.subscribe()}
+                          className="w-full px-3 py-1.5 bg-amber-500 text-white text-sm font-medium rounded-lg hover:bg-amber-600 transition-colors"
+                        >
+                          🔔 הפעל התראות
+                        </button>
+                      </div>
+                    )}
+                    {push && push.state === "denied" && (
+                      <div className="p-3 bg-red-50 border-b border-red-200">
+                        <p className="text-xs text-red-700">
+                          ההתראות חסומות בדפדפן. יש לשנות בהגדרות הדפדפן.
+                        </p>
+                      </div>
+                    )}
+
                     {/* New Tasks */}
                     {unreadCount > 0 && (
                       <div className="p-3 bg-blue-50 border-b border-blue-100">

@@ -27,6 +27,7 @@ import {
   type DbFault,
 } from "@/lib/supabase/faults.queries";
 import { sendNotification } from "@/lib/notifications/notify";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 // ============================================
 // TYPES
@@ -263,6 +264,8 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     }
     refetch().finally(() => setIsLoading(false));
   }, [auth.status, companyId, refetch]);
+
+  useRealtimeTable("faults", companyId, refetch);
 
   const createFault = useCallback(
     async (input: CreateFaultInput): Promise<Fault | null> => {

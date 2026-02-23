@@ -20,6 +20,7 @@ import {
 } from "@/lib/supabase/tasks.queries";
 import { dbTaskToTask, taskToDbTask } from "@/lib/supabase/tasks.mappers";
 import { sendNotification } from "@/lib/notifications/notify";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 // ============================================
 // TYPES
@@ -155,6 +156,15 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [auth.status, companyId]);
+
+  const refetchTasks = useCallback(() => {
+    if (!companyId) return;
+    fetchTasks(companyId)
+      .then((dbTasks) => setTasks(dbTasks.map(dbTaskToTask)))
+      .catch((err) => console.error("[TasksContext] realtime refetch error:", err));
+  }, [companyId]);
+
+  useRealtimeTable("tasks", companyId, refetchTasks);
 
   // ============================================
   // GETTERS
