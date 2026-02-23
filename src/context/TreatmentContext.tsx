@@ -18,6 +18,7 @@ import {
   removeStoreTreatment,
 } from "@/lib/supabase/treatment.queries";
 import type { StatusLong } from "@/types/data";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 // ============================================
 // TYPES
@@ -211,6 +212,17 @@ export function TreatmentProvider({ children }: TreatmentProviderProps) {
       cancelled = true;
     };
   }, [auth.status, companyId]);
+
+  const refetchTreatments = useCallback(() => {
+    if (!companyId) return;
+    getStoreTreatments(companyId)
+      .then((rows) =>
+        setStores(rows.map(dbToStore).filter((s) => s.treatmentStatus !== "resolved")),
+      )
+      .catch((err) => console.error("[TreatmentContext] realtime refetch error:", err));
+  }, [companyId]);
+
+  useRealtimeTable("store_treatments", companyId, refetchTreatments);
 
   const addStore = useCallback(
     async (

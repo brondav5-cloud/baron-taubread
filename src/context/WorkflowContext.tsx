@@ -19,6 +19,7 @@ import {
   dbWorkflowToWorkflow,
   workflowToDbWorkflow,
 } from "@/lib/supabase/tasks.mappers";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import type {
   CreateWorkflowInput,
   WorkflowContextType,
@@ -75,6 +76,15 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [auth.status, companyId]);
+
+  const refetchWorkflows = useCallback(() => {
+    if (!companyId) return;
+    fetchWorkflows(companyId)
+      .then((db) => setWorkflows(db.map(dbWorkflowToWorkflow)))
+      .catch((err) => console.error("[WorkflowContext] realtime refetch error:", err));
+  }, [companyId]);
+
+  useRealtimeTable("workflows", companyId, refetchWorkflows);
 
   // ============================================
   // GETTERS

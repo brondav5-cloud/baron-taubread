@@ -19,6 +19,7 @@ import {
 } from "@/lib/supabase/queries";
 import { toast } from "@/providers/ToastProvider";
 import type { DbVisit } from "@/types/supabase";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 // ============================================
 // TYPES
@@ -163,6 +164,15 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
       cancelled = true;
     };
   }, [auth.status, companyId]);
+
+  const refetchVisits = useCallback(() => {
+    if (!companyId) return;
+    getVisits(companyId)
+      .then((dbVisits) => setVisits(dbVisits.map(dbToVisit)))
+      .catch((err) => console.error("[VisitsContext] realtime refetch error:", err));
+  }, [companyId]);
+
+  useRealtimeTable("visits", companyId, refetchVisits);
 
   const stores = useMemo(
     () =>
