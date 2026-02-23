@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from "react";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import MobileBottomNav from "./MobileBottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { WhoamiCompany } from "@/context/SupabaseAuthContext";
@@ -24,7 +25,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     !auth.user.selectedCompanyId;
 
   return (
-    <div className="min-h-screen bg-gradient-main">
+    <div className="min-h-screen bg-gradient-main overflow-x-hidden">
       {needsCompanySelection ? (
         <div className="flex min-h-screen items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-elevated p-8">
@@ -52,12 +53,15 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
         </div>
       ) : (
-        <div className="flex">
+        <div className="flex min-h-screen">
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-          <div className="flex-1 lg:mr-0">
+          <div className="flex-1 min-w-0 flex flex-col">
             <Header onMenuClick={() => setSidebarOpen(true)} />
-            <main className="p-4 lg:p-6 min-w-0">{children}</main>
+            <main className="flex-1 p-4 lg:p-6 min-w-0 pb-20 lg:pb-6">
+              {children}
+            </main>
           </div>
+          <MobileBottomNav onMenuClick={() => setSidebarOpen(true)} />
         </div>
       )}
     </div>

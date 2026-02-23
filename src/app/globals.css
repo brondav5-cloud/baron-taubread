@@ -17,12 +17,22 @@
   html {
     direction: rtl;
     scroll-behavior: smooth;
+    overflow-x: hidden;
   }
 
   body {
     @apply font-heebo antialiased;
     @apply bg-gradient-main min-h-screen;
     @apply text-gray-900;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  @media (max-width: 1023px) {
+    html,
+    body {
+      overscroll-behavior-x: none;
+    }
   }
 
   /* Custom Scrollbar */
@@ -281,5 +291,16 @@
   .glass {
     @apply bg-white/70 backdrop-blur-lg;
     @apply border border-white/20;
+  }
+
+  /* Mobile bottom nav spacer */
+  .mobile-bottom-safe {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  @media (min-width: 1024px) {
+    .mobile-bottom-safe {
+      padding-bottom: 0;
+    }
   }
 }

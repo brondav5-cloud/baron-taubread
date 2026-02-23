@@ -84,18 +84,20 @@ export function MonthlySalesTable({
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <CardTitle icon={<BarChart3 className="w-5 h-5 text-green-500" />}>
-            מכירות חודשיות - כל החנויות - {selectedYear}
+            <span className="text-sm sm:text-base">
+              מכירות חודשיות - כל החנויות - {selectedYear}
+            </span>
           </CardTitle>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <div className="flex items-center bg-gray-100 rounded-xl p-1">
               {availableYears.map((year) => (
                 <button
                   key={year}
                   onClick={() => onYearChange(year)}
                   className={clsx(
-                    "px-4 py-1.5 rounded-lg text-sm font-medium transition-all",
+                    "px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all",
                     selectedYear === year
                       ? "bg-primary-500 text-white"
                       : "text-gray-600",
@@ -105,7 +107,7 @@ export function MonthlySalesTable({
                 </button>
               ))}
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+            <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 whitespace-nowrap">
               <input
                 type="checkbox"
                 checked={hideHolidays}

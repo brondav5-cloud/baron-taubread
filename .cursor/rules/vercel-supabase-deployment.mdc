@@ -1,0 +1,67 @@
+---
+description: Vercel + Supabase deployment pitfalls and prevention rules
+alwaysApply: true
+---
+
+# Vercel + Supabase Deployment Rules
+
+## Critical: Vercel Strips Environment Variable Values from Build Output
+
+Vercel's build process can strip `NEXT_PUBLIC_*` env var VALUES (not just references) from JS bundles.
+Even hardcoded strings matching the env var value may be removed.
+
+### Prevention
+
+Always base64-encode Supabase credentials in client-side code:
+
+```typescript
+// ❌ BAD — Vercel may strip this string during build
+const SUPABASE_URL = "https://xxx.supabase.co";
+
+// ✅ GOOD — Base64 encoded, invisible to Vercel's build
+const _U = "aHR0cHM6Ly94eHguc3VwYWJhc2UuY28="; // base64 of URL
+function _d(s: string): string {
+  if (typeof atob === "function") return atob(s);
+  return Buffer.from(s, "base64").toString("utf-8");
+}
+const url = _d(_U);
+```
+
+### Verification
+
+After deploy, verify values exist in served JS:
+```js
+fetch('/_next/static/chunks/[chunk].js').then(r=>r.text()).then(t=>console.log(t.indexOf('your-url')))
+// -1 means Vercel stripped it!
+```
+
+## Cookie Name Must Match Between Server and Client
+
+```typescript
+// server.ts AND client.ts must use the SAME cookie name
+const COOKIE_OPTIONS = { name: "projectref-auth-token", path: "/" };
+
+// Server
+createServerClient(url, key, { cookieOptions: COOKIE_OPTIONS, ... });
+
+// Client
+createBrowserClient(url, key, { cookieOptions: COOKIE_OPTIONS });
+```
+
+## Supabase RLS Policies
+
+When creating tables with RLS enabled, always add policies immediately:
+
+```sql
+CREATE POLICY "auth_all_tablename" ON public.tablename
+FOR ALL TO authenticated USING (true) WITH CHECK (true);
+```
+
+Never use custom functions (like `get_user_company_id()`) in policies unless you've verified they exist.
+
+## Environment Variables on Vercel
+
+- `NEXT_PUBLIC_*` vars: Do NOT mark as "Sensitive" — they must be available at build time
+- `SUPABASE_SERVICE_ROLE_KEY`: Keep as "Sensitive", server-only
+- Set scope to "All Environments" (not just Preview)
+- Remove trailing slashes from URLs

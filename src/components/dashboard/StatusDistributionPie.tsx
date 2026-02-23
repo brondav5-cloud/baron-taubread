@@ -46,16 +46,16 @@ export function StatusDistributionPie({ data }: StatusDistributionPieProps) {
         <CardTitle>התפלגות סטטוסים</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="flex items-center gap-8">
-          <div className="w-48 h-48">
+        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
+          <div className="w-36 h-36 sm:w-48 sm:h-48 shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={data}
                   cx="50%"
                   cy="50%"
-                  innerRadius={40}
-                  outerRadius={70}
+                  innerRadius={35}
+                  outerRadius={60}
                   dataKey="value"
                 >
                   {data.map((_, index) => (
@@ -73,21 +73,23 @@ export function StatusDistributionPie({ data }: StatusDistributionPieProps) {
               </PieChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex-1 grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="flex-1 w-full grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
             {data.map((item) => (
               <Link
                 key={item.status}
                 href={`/dashboard/stores?status_long=${item.status}`}
                 className={clsx(
-                  "p-3 rounded-xl text-center hover:shadow-md transition-all cursor-pointer",
+                  "p-2 sm:p-3 rounded-xl text-center hover:shadow-md transition-all cursor-pointer",
                   STATUS_CARD_COLORS[item.status] || "bg-gray-100",
                 )}
               >
-                <span className="text-xl">
+                <span className="text-base sm:text-xl">
                   {STATUS_ICONS[item.status] || "❓"}
                 </span>
-                <p className="text-2xl font-bold mt-1">{item.value}</p>
-                <p className="text-xs">{item.name}</p>
+                <p className="text-xl sm:text-2xl font-bold mt-0.5 sm:mt-1">
+                  {item.value}
+                </p>
+                <p className="text-[10px] sm:text-xs">{item.name}</p>
               </Link>
             ))}
           </div>
