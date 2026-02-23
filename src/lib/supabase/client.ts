@@ -10,7 +10,12 @@ function _d(s: string): string {
 }
 
 export function createClient() {
-  return createBrowserClient(_d(_U), _d(_K));
+  return createBrowserClient(_d(_U), _d(_K), {
+    cookieOptions: {
+      name: "hlaiyxpiebmvkb-auth-token",
+      path: "/",
+    },
+  });
 }
 
 export function getSupabaseClient() {
