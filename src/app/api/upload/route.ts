@@ -5,6 +5,7 @@ import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 import type { MonthlyData, DbStore, DbProduct } from "@/types/supabase";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_PROCESSING_MS = 55_000;
 
 const getSupabaseAdmin = () =>
   createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -437,6 +438,14 @@ export async function POST(request: NextRequest) {
       // ============================================
       // 6b. ATOMIC UPLOAD (stores + products + store_products in one transaction)
       // ============================================
+      const elapsed = Date.now() - startTime;
+      if (elapsed > MAX_PROCESSING_MS) {
+        return NextResponse.json(
+          { ok: false, message: "העיבוד ארך יותר מדי זמן. נסה קובץ קטן יותר." },
+          { status: 504 },
+        );
+      }
+
       const { error: rpcError } = await supabaseAdmin.rpc(
         "perform_company_data_upload",
         {

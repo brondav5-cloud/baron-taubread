@@ -143,7 +143,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
           setTasks(dbTasks.map(dbTaskToTask));
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[TasksContext] fetch error:", err);
         if (!cancelled) setTasks([]);
       })
       .finally(() => {

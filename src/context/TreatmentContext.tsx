@@ -200,7 +200,8 @@ export function TreatmentProvider({ children }: TreatmentProviderProps) {
             rows.map(dbToStore).filter((s) => s.treatmentStatus !== "resolved"),
           );
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[TreatmentContext] fetch error:", err);
         if (!cancelled) setStores([]);
       })
       .finally(() => {

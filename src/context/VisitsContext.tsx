@@ -152,7 +152,8 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
           setVisits(dbVisits.map(dbToVisit));
         }
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[VisitsContext] fetch error:", err);
         if (!cancelled) setVisits([]);
       })
       .finally(() => {
@@ -251,7 +252,8 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
         !id.startsWith("visit-") &&
         Object.keys(toDb).length > 0
       ) {
-        updateVisitInDb(id, toDb).catch(() => {
+        updateVisitInDb(companyId, id, toDb).catch((err) => {
+          console.error("[VisitsContext] update error:", err);
           getVisits(companyId).then((db) => setVisits(db.map(dbToVisit)));
         });
       }
@@ -263,7 +265,8 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
     (id: string) => {
       setVisits((prev) => prev.filter((v) => v.id !== id));
       if (companyId && !id.startsWith("visit-")) {
-        deleteVisitInDb(id).catch(() => {
+        deleteVisitInDb(companyId, id).catch((err) => {
+          console.error("[VisitsContext] delete error:", err);
           getVisits(companyId).then((db) => setVisits(db.map(dbToVisit)));
         });
       }

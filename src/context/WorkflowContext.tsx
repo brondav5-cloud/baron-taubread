@@ -64,7 +64,8 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
       .then((db) => {
         if (!cancelled) setWorkflows(db.map(dbWorkflowToWorkflow));
       })
-      .catch(() => {
+      .catch((err) => {
+        console.error("[WorkflowContext] fetch error:", err);
         if (!cancelled) setWorkflows([]);
       })
       .finally(() => {

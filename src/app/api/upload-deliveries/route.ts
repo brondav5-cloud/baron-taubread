@@ -17,6 +17,7 @@ import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
+const MAX_PROCESSING_MS = 55_000;
 const PAYLOAD_TOO_LARGE_MSG = {
   error: "גודל הבקשה חורג מהמותר (4MB). נסה קובץ קטן יותר.",
 };
@@ -94,7 +95,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "אין נתוני אספקות" }, { status: 400 });
     }
 
-    // Upsert deliveries (using admin client to bypass RLS - auth already verified above)
+    const elapsed = performance.now() - startTime;
+    if (elapsed > MAX_PROCESSING_MS) {
+      return NextResponse.json(
+        { error: "העיבוד ארך יותר מדי זמן. נסה קובץ קטן יותר." },
+        { status: 504 },
+      );
+    }
+
     const supabaseAdmin = getSupabaseAdmin();
     const result = await upsertDeliveries(
       supabaseAdmin,

@@ -58,7 +58,8 @@ export async function getStores(companyId: string): Promise<DbStore[]> {
     .from("stores")
     .select("*")
     .eq("company_id", companyId)
-    .order("name");
+    .order("name")
+    .limit(2000);
 
   if (error) {
     console.error("Error fetching stores:", error);
@@ -125,7 +126,8 @@ export async function getProducts(companyId: string): Promise<DbProduct[]> {
     .from("products")
     .select("*")
     .eq("company_id", companyId)
-    .order("name");
+    .order("name")
+    .limit(2000);
 
   if (error) {
     console.error("Error fetching products:", error);
@@ -175,7 +177,8 @@ export async function getSnapshots(companyId: string): Promise<DbSnapshot[]> {
     .from("snapshots")
     .select("*")
     .eq("company_id", companyId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(100);
 
   if (error) {
     console.error("Error fetching snapshots:", error);
@@ -201,12 +204,16 @@ export async function createSnapshot(
   return data;
 }
 
-export async function deleteSnapshot(snapshotId: string): Promise<boolean> {
+export async function deleteSnapshot(
+  companyId: string,
+  snapshotId: string,
+): Promise<boolean> {
   const supabase = createClient();
   const { error } = await supabase
     .from("snapshots")
     .delete()
-    .eq("id", snapshotId);
+    .eq("id", snapshotId)
+    .eq("company_id", companyId);
 
   if (error) {
     console.error("Error deleting snapshot:", error);
@@ -253,6 +260,7 @@ export async function createUpload(
 }
 
 export async function updateUploadStatus(
+  companyId: string,
   uploadId: string,
   status: "completed" | "failed",
   stats?: {
@@ -269,7 +277,8 @@ export async function updateUploadStatus(
   const { error } = await supabase
     .from("uploads")
     .update({ status, ...stats })
-    .eq("id", uploadId);
+    .eq("id", uploadId)
+    .eq("company_id", companyId);
 
   if (error) {
     console.error("Error updating upload status:", error);
@@ -288,7 +297,8 @@ export async function getVisits(companyId: string): Promise<DbVisit[]> {
     .from("visits")
     .select("*")
     .eq("company_id", companyId)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .limit(5000);
 
   if (error) {
     console.error("Error fetching visits:", error);
@@ -311,7 +321,8 @@ export async function getVisitsSummary(
     .from("visits")
     .select("store_external_id, date, competitors")
     .eq("company_id", companyId)
-    .order("date", { ascending: false });
+    .order("date", { ascending: false })
+    .limit(5000);
 
   if (error) {
     console.error("Error fetching visits summary:", error);
@@ -338,11 +349,16 @@ export async function insertVisit(
 }
 
 export async function updateVisit(
+  companyId: string,
   id: string,
   updates: Partial<Omit<DbVisit, "id" | "company_id" | "created_at">>,
 ): Promise<boolean> {
   const supabase = createClient();
-  const { error } = await supabase.from("visits").update(updates).eq("id", id);
+  const { error } = await supabase
+    .from("visits")
+    .update(updates)
+    .eq("id", id)
+    .eq("company_id", companyId);
 
   if (error) {
     console.error("Error updating visit:", error);
@@ -351,9 +367,16 @@ export async function updateVisit(
   return true;
 }
 
-export async function deleteVisit(id: string): Promise<boolean> {
+export async function deleteVisit(
+  companyId: string,
+  id: string,
+): Promise<boolean> {
   const supabase = createClient();
-  const { error } = await supabase.from("visits").delete().eq("id", id);
+  const { error } = await supabase
+    .from("visits")
+    .delete()
+    .eq("id", id)
+    .eq("company_id", companyId);
 
   if (error) {
     console.error("Error deleting visit:", error);
