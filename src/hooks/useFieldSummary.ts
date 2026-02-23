@@ -3,10 +3,12 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseData } from "./useSupabaseData";
-import { getVisits } from "@/lib/supabase/queries";
+import {
+  getVisitsSummary,
+  type VisitSummaryRow,
+} from "@/lib/supabase/queries";
 import { getStoreTreatments } from "@/lib/supabase/treatment.queries";
 import { getAllWorkPlanItems } from "@/lib/supabase/work-plan.queries";
-import type { DbVisit } from "@/types/supabase";
 
 export interface StoreActionCounts {
   storeId: string;
@@ -58,7 +60,7 @@ export function useFieldSummary() {
     isLoading: storesLoading,
   } = useSupabaseData();
 
-  const [visits, setVisits] = useState<DbVisit[]>([]);
+  const [visits, setVisits] = useState<VisitSummaryRow[]>([]);
   const [treatments, setTreatments] = useState<Array<{ store_id: number }>>([]);
   const [workPlanItems, setWorkPlanItems] = useState<
     Array<{ store_id: number | null; item_type: string }>
@@ -73,18 +75,27 @@ export function useFieldSummary() {
   });
 
   const fetchActions = useCallback(() => {
-    if (!companyId) return;
+    if (!companyId) {
+      setIsLoadingActions(false);
+      return;
+    }
     setIsLoadingActions(true);
     Promise.all([
-      getVisits(companyId),
+      getVisitsSummary(companyId),
       getStoreTreatments(companyId),
       getAllWorkPlanItems(companyId),
-    ]).then(([v, t, w]) => {
-      setVisits(v);
-      setTreatments(t);
-      setWorkPlanItems(w);
-      setIsLoadingActions(false);
-    });
+    ])
+      .then(([v, t, w]) => {
+        setVisits(v);
+        setTreatments(t);
+        setWorkPlanItems(w);
+      })
+      .catch((err) => {
+        console.error("[useFieldSummary] Error fetching actions:", err);
+      })
+      .finally(() => {
+        setIsLoadingActions(false);
+      });
   }, [companyId]);
 
   useEffect(() => {

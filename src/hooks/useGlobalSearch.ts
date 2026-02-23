@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { getStores, getProducts } from "@/lib/dataLoader";
-import type { StoreWithStatus, ProductWithStatus } from "@/types/data";
+import { useSupabaseData } from "./useSupabaseData";
 
 export interface SearchResult {
   type: "store" | "product";
-  id: number;
+  id: number | string;
   name: string;
   subtitle: string;
   href: string;
@@ -16,8 +15,7 @@ export function useGlobalSearch() {
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
-  const stores = useMemo(() => getStores(), []);
-  const products = useMemo(() => getProducts(), []);
+  const { stores, products } = useSupabaseData();
 
   const results = useMemo<SearchResult[]>(() => {
     if (!query.trim() || query.length < 2) {
@@ -27,42 +25,40 @@ export function useGlobalSearch() {
     const normalizedQuery = query.toLowerCase().trim();
     const matchedResults: SearchResult[] = [];
 
-    // Search stores
     const matchedStores = stores
       .filter(
-        (store: StoreWithStatus) =>
+        (store) =>
           store.name.toLowerCase().includes(normalizedQuery) ||
-          store.city.toLowerCase().includes(normalizedQuery) ||
-          store.id.toString().includes(normalizedQuery),
+          (store.city ?? "").toLowerCase().includes(normalizedQuery) ||
+          store.external_id.toString().includes(normalizedQuery),
       )
       .slice(0, 5);
 
-    matchedStores.forEach((store: StoreWithStatus) => {
+    matchedStores.forEach((store) => {
       matchedResults.push({
         type: "store",
-        id: store.id,
+        id: store.external_id,
         name: store.name,
-        subtitle: `${store.city} • ${store.agent}`,
+        subtitle: `${store.city ?? ""} • ${store.agent ?? ""}`.replace(/ • $/, ""),
         href: `/dashboard/stores/${store.id}`,
       });
     });
 
-    // Search products
     const matchedProducts = products
       .filter(
-        (product: ProductWithStatus) =>
+        (product) =>
           product.name.toLowerCase().includes(normalizedQuery) ||
-          product.category.toLowerCase().includes(normalizedQuery) ||
-          product.id.toString().includes(normalizedQuery),
+          (product.category ?? "").toLowerCase().includes(normalizedQuery) ||
+          product.external_id.toString().includes(normalizedQuery),
       )
       .slice(0, 5);
 
-    matchedProducts.forEach((product: ProductWithStatus) => {
+    matchedProducts.forEach((product) => {
       matchedResults.push({
         type: "product",
-        id: product.id,
+        id: product.external_id,
         name: product.name,
-        subtitle: product.category,
+        subtitle: product.category ?? "",
         href: `/dashboard/products/${product.id}`,
       });
     });

@@ -297,6 +297,29 @@ export async function getVisits(companyId: string): Promise<DbVisit[]> {
   return data || [];
 }
 
+export interface VisitSummaryRow {
+  store_external_id: number;
+  date: string;
+  competitors: Array<{ name?: string }> | null;
+}
+
+export async function getVisitsSummary(
+  companyId: string,
+): Promise<VisitSummaryRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("visits")
+    .select("store_external_id, date, competitors")
+    .eq("company_id", companyId)
+    .order("date", { ascending: false });
+
+  if (error) {
+    console.error("Error fetching visits summary:", error);
+    return [];
+  }
+  return (data as VisitSummaryRow[]) || [];
+}
+
 export async function insertVisit(
   visit: VisitInsert,
 ): Promise<{ data: DbVisit | null; error: { message: string } | null }> {

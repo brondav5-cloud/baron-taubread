@@ -13,12 +13,14 @@ import {
   ClipboardList,
   Users,
   ChevronLeft,
+  Loader2,
 } from "lucide-react";
 import { clsx } from "clsx";
 import Link from "next/link";
 
 import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/hooks/useAuth";
+import { useSupabaseData } from "@/hooks/useSupabaseData";
 import {
   Card,
   CardHeader,
@@ -105,6 +107,13 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function SettingsPage() {
   const auth = useAuth();
+  const {
+    stores,
+    products,
+    metadata,
+    isLoading: dataLoading,
+    refetch: refetchData,
+  } = useSupabaseData();
   const {
     saved,
     handleSave,
@@ -402,24 +411,44 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
               <div>
                 <p className="font-medium text-gray-900">סנכרון נתונים</p>
-                <p className="text-sm text-gray-500">עדכון אחרון: ינואר 2026</p>
+                <p className="text-sm text-gray-500">
+                  {metadata?.updated_at
+                    ? `עדכון אחרון: ${new Date(metadata.updated_at).toLocaleDateString("he-IL")}`
+                    : "לא הועלו נתונים עדיין"}
+                </p>
               </div>
-              <button className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
-                <RefreshCw className="w-4 h-4" />
-                סנכרן עכשיו
+              <button
+                onClick={() => void refetchData()}
+                disabled={dataLoading}
+                className="flex items-center gap-2 px-4 py-2 bg-white border rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                {dataLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="w-4 h-4" />
+                )}
+                {dataLoading ? "מסנכרן..." : "סנכרן עכשיו"}
               </button>
             </div>
             <div className="grid sm:grid-cols-3 gap-4 text-center">
               <div className="p-4 bg-blue-50 rounded-xl">
-                <p className="text-2xl font-bold text-blue-700">558</p>
+                <p className="text-2xl font-bold text-blue-700">
+                  {dataLoading ? "..." : stores.length}
+                </p>
                 <p className="text-sm text-blue-600">חנויות</p>
               </div>
               <div className="p-4 bg-purple-50 rounded-xl">
-                <p className="text-2xl font-bold text-purple-700">84</p>
+                <p className="text-2xl font-bold text-purple-700">
+                  {dataLoading ? "..." : products.length}
+                </p>
                 <p className="text-sm text-purple-600">מוצרים</p>
               </div>
               <div className="p-4 bg-green-50 rounded-xl">
-                <p className="text-2xl font-bold text-green-700">24</p>
+                <p className="text-2xl font-bold text-green-700">
+                  {dataLoading
+                    ? "..."
+                    : (metadata?.months_list?.length ?? 0)}
+                </p>
                 <p className="text-sm text-green-600">חודשי נתונים</p>
               </div>
             </div>
