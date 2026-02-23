@@ -43,6 +43,12 @@ export async function middleware(request: NextRequest) {
   }
 
   response.headers.set('x-mw', '1');
+
+  if (isDashboard) {
+    response.headers.set('Cache-Control', 'private, no-store, no-cache, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+  }
+
   return response;
 }
 

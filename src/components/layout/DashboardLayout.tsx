@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import MobileBottomNav from "./MobileBottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { WhoamiCompany } from "@/context/SupabaseAuthContext";
-import { Building2 } from "lucide-react";
+import { Building2, Loader2 } from "lucide-react";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -17,6 +18,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const auth = useAuth();
   const { selectCompany } = useSupabaseAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (auth.status === "anon") {
+      router.replace("/login");
+    }
+  }, [auth.status, router]);
+
+  if (auth.status === "loading") {
+    return (
+      <div className="min-h-screen bg-gradient-main flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-primary-500 animate-spin mx-auto" />
+          <p className="mt-3 text-gray-500 text-sm">טוען...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (auth.status === "anon") {
+    return null;
+  }
 
   const needsCompanySelection =
     auth.status === "authed" &&
