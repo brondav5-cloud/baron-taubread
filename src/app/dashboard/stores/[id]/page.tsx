@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
+import dynamic from "next/dynamic";
 import { Users } from "lucide-react";
 import { useStoreDetailSupabase } from "@/hooks/useStoreDetailSupabase";
 import { useStoreCityComparison } from "@/hooks/useStoreCityComparison";
@@ -12,13 +13,17 @@ import {
   StoreDetailHeader,
   StoreMetricsCards,
   StoreSummaryCards,
-  StoreSalesChart,
   StoreMonthlyTable,
   StoreTabs,
   TabPlaceholder,
   StoreCityComparison,
   StoreProductsTab,
 } from "@/components/store-detail-supabase";
+
+const StoreSalesChart = dynamic(
+  () => import("@/components/store-detail-supabase/StoreSalesChart").then((m) => m.StoreSalesChart),
+  { ssr: false },
+);
 import { StorePricingTab } from "@/components/store-detail";
 import { StoreDeliverySummary } from "@/components/deliveries";
 import type { StoreTabType } from "@/components/store-detail-supabase";

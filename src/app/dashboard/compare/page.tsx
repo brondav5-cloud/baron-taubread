@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { GitCompare } from "lucide-react";
 import { Card, CardContent, PageHeader } from "@/components/ui";
 import { LoadingState } from "@/components/common";
@@ -9,13 +10,17 @@ import {
   SelectedStoresTags,
   CityStatsCards,
   SelectedStoresSection,
-  CompareCharts,
   CompareTable,
   StoresByCriteriaList,
   StoreSelectorModal,
   ComparisonSummary,
   CompareFiltersPanel,
 } from "@/components/compare";
+
+const CompareCharts = dynamic(
+  () => import("@/components/compare/CompareCharts").then((m) => m.CompareCharts),
+  { ssr: false },
+);
 
 export default function ComparePage() {
   const {

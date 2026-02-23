@@ -4,7 +4,7 @@
 - **Framework:** Next.js 14 (App Router)
 - **UI:** React 18, Tailwind CSS
 - **Data:** Supabase (PostgreSQL + RLS)
-- **Auth:** Firebase Auth, נתוני משתמש מ-Firestore
+- **Auth:** Supabase Auth (cookie-based via @supabase/ssr)
 - **State:** TanStack React Query, React Context
 - **Charts:** Recharts
 - **Excel:** xlsx
@@ -22,11 +22,10 @@ src/
 ├── context/                # React Context providers
 ├── hooks/                  # Custom hooks
 ├── lib/                    # לוגיקה עסקית, גישה לנתונים
-├── services/               # Firebase (auth, Firestore, storage)
+├── services/               # Firebase (legacy, migration in progress)
 ├── types/                  # ממשקים TypeScript
 ├── validations/            # סכמות Zod
-├── providers/              # ספקי providers גלובליים
-└── legacy/                 # קוד legacy (deprecated)
+└── providers/              # ספקי providers גלובליים
 ```
 
 ---

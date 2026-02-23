@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { BarChart3, ArrowRight } from "lucide-react";
 import { useTasks } from "@/context/TasksContext";
 import { useUsers } from "@/context/UsersContext";
@@ -10,10 +11,14 @@ import {
   AnalyticsFilters,
   AnalyticsSummary,
   CategoryBreakdown,
-  TasksTrendChart,
   type CategoryStats,
   type MonthlyData,
 } from "@/components/tasks/analytics";
+
+const TasksTrendChart = dynamic(
+  () => import("@/components/tasks/analytics/TasksTrendChart").then((m) => m.TasksTrendChart),
+  { ssr: false },
+);
 import {
   createDateRange,
   type DateRange,

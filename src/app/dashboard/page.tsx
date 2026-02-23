@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useDashboardSupabase } from "@/hooks/useDashboardSupabase";
 import {
   DashboardHeader,
@@ -8,12 +9,19 @@ import {
   YearComparison,
   HalfYearComparison,
   MonthlySalesTable,
-  MonthlySalesChart,
   TopBottomStores,
   CitySalesCards,
-  StatusDistributionPie,
 } from "@/components/dashboard";
 import { LoadingSpinner } from "@/components/common";
+
+const MonthlySalesChart = dynamic(
+  () => import("@/components/dashboard/MonthlySalesChart").then((m) => m.MonthlySalesChart),
+  { ssr: false },
+);
+const StatusDistributionPie = dynamic(
+  () => import("@/components/dashboard/StatusDistributionPie").then((m) => m.StatusDistributionPie),
+  { ssr: false },
+);
 
 export default function DashboardPage() {
   const {

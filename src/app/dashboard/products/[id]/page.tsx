@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useProductDetail } from "@/hooks/useProductDetail";
 import { Button, EmptyState } from "@/components/ui";
 import {
@@ -7,10 +8,17 @@ import {
   ProductMetricsRow,
   ProductSummaryCards,
   ProductMonthlySalesTable,
-  ProductSalesChart,
-  ProductStoresDonut,
   ProductStoresTable,
 } from "@/components/product-detail";
+
+const ProductSalesChart = dynamic(
+  () => import("@/components/product-detail/ProductSalesChart").then((m) => m.ProductSalesChart),
+  { ssr: false },
+);
+const ProductStoresDonut = dynamic(
+  () => import("@/components/product-detail/ProductStoresDonut").then((m) => m.ProductStoresDonut),
+  { ssr: false },
+);
 
 export default function ProductDetailPage() {
   const {
