@@ -5,6 +5,7 @@
 
 import { StoreWithStatus, ProductWithStatus, StatusLong } from "@/types/data";
 import { STATUS_DISPLAY_LONG } from "@/types/data";
+import { loadXlsx } from "./loadXlsx";
 
 // ============================================
 // TYPES
@@ -39,8 +40,7 @@ export async function exportStoresToExcel(
   stores: StoreWithStatus[],
   options: ExportOptions = {},
 ): Promise<void> {
-  // Dynamic import - only loads when function is called
-  const XLSX = await import("xlsx");
+  const XLSX = await loadXlsx();
 
   const { filename = "חנויות", sheetName = "חנויות" } = options;
 
@@ -105,7 +105,7 @@ export async function exportProductsToExcel(
   products: ProductWithStatus[],
   options: ExportOptions = {},
 ): Promise<void> {
-  const XLSX = await import("xlsx");
+  const XLSX = await loadXlsx();
 
   const { filename = "מוצרים", sheetName = "מוצרים" } = options;
 
@@ -162,7 +162,7 @@ export async function exportStoreDetailToExcel(
   store: StoreWithStatus,
   options: ExportOptions = {},
 ): Promise<void> {
-  const XLSX = await import("xlsx");
+  const XLSX = await loadXlsx();
 
   const { filename = `חנות_${store.name}` } = options;
   const wb = XLSX.utils.book_new();
@@ -251,7 +251,7 @@ export async function exportDashboardSummaryToExcel(
   products: ProductWithStatus[],
   options: ExportOptions = {},
 ): Promise<void> {
-  const XLSX = await import("xlsx");
+  const XLSX = await loadXlsx();
 
   const { filename = "סיכום_דאשבורד" } = options;
   const wb = XLSX.utils.book_new();

@@ -77,7 +77,8 @@ function isHeaderRow(row: unknown[]): boolean {
 
 export async function parseExcelPricing(file: File): Promise<ExcelParseResult> {
   try {
-    const XLSX = await import("xlsx");
+    const { loadXlsx } = await import("./loadXlsx");
+    const XLSX = await loadXlsx();
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array" });
 

@@ -3,7 +3,7 @@
 // מעבד קבצי Excel של תעודות משלוח
 // ============================================
 
-import * as XLSX from "xlsx";
+import { loadXlsx } from "./loadXlsx";
 import type {
   AggregatedDelivery,
   DeliveryProcessingResult,
@@ -43,6 +43,8 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 
 function parseDocumentDate(
   dateValue: unknown,
+  // eslint-disable-next-line
+  XLSX?: { SSF?: { parse_date_code?: (v: number) => unknown } },
 ): { year: number; month: number; week: number } | null {
   if (!dateValue) return null;
 
@@ -54,7 +56,12 @@ function parseDocumentDate(
   }
   // Handle Excel serial number
   else if (typeof dateValue === "number") {
-    date = XLSX.SSF.parse_date_code(dateValue) as unknown as Date;
+    if (XLSX?.SSF?.parse_date_code) {
+      date = XLSX.SSF.parse_date_code(dateValue) as unknown as Date;
+    } else {
+      const epoch = new Date(1899, 11, 30);
+      date = new Date(epoch.getTime() + dateValue * 86400000);
+    }
     if (date && typeof date === "object" && "y" in date) {
       const excelDate = date as unknown as { y: number; m: number; d: number };
       date = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
@@ -115,7 +122,7 @@ export async function processDeliveryExcel(
   const startTime = performance.now();
 
   try {
-    // Read file
+    const XLSX = await loadXlsx();
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
 

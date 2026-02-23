@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import * as XLSX from "xlsx";
+import { loadXlsx } from "@/lib/loadXlsx";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
 // ============================================
@@ -190,6 +190,7 @@ export function useExcelUpload(companyId: string) {
     }));
 
     try {
+      const XLSX = await loadXlsx();
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
 

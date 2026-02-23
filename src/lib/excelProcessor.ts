@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { loadXlsx } from "./loadXlsx";
 import {
   buildRolling24Window,
   buildRollingPairWindow,
@@ -326,7 +326,7 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
   const startTime = Date.now();
 
   try {
-    // Read Excel file
+    const XLSX = await loadXlsx();
     const arrayBuffer = await file.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: "array" });
 
