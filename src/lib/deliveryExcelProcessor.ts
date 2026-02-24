@@ -337,16 +337,15 @@ function aggregateDeliveries(
   for (const row of rows) {
     const value = Number(row.value) || 0;
 
-    // Filter: only positive values (actual deliveries)
-    if (value <= 0) {
-      rowsFiltered++;
-      continue;
-    }
-
     const customerId = Number(row.customerId);
     const customerName = String(row.customerName || "");
 
     if (!customerId || !customerName) {
+      rowsFiltered++;
+      continue;
+    }
+
+    if (value === 0) {
       rowsFiltered++;
       continue;
     }
