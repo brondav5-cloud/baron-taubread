@@ -21,6 +21,8 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [notifyEmail, setNotifyEmail] = useState(false);
+  const [notifySms, setNotifySms] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const activeTypes = faultTypes
@@ -36,6 +38,8 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
     setTitle("");
     setDescription("");
     setPhotos([]);
+    setNotifyEmail(false);
+    setNotifySms(false);
     setAssignedTo(firstType?.default_assignee_id || allUsers[0]?.id || "");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when modal opens
   }, [isOpen]);
@@ -60,6 +64,8 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
       assignedTo: assignee.id,
       assignedToName: assignee.name,
       photos,
+      notifyEmail,
+      notifySms,
     });
     setSaving(false);
     if (fault) onClose();
@@ -157,6 +163,36 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
             maxPhotos={2}
             onPhotosChange={setPhotos}
           />
+
+          {/* Notification Toggles */}
+          {assignedTo && (
+            <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-medium text-gray-500">שלח התראה למוקצה</p>
+              <div className="flex gap-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifyEmail}
+                    onChange={(e) => setNotifyEmail(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm">✉️</span>
+                  <span className="text-sm text-gray-700">מייל</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifySms}
+                    onChange={(e) => setNotifySms(e.target.checked)}
+                    className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <span className="text-sm">📱</span>
+                  <span className="text-sm text-gray-700">SMS</span>
+                </label>
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 pt-2">
             <button
               type="button"

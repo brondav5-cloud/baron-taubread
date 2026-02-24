@@ -103,6 +103,8 @@ interface CreateFaultInput {
   assignedTo: string;
   assignedToName: string;
   photos?: string[];
+  notifyEmail?: boolean;
+  notifySms?: boolean;
 }
 
 // ============================================
@@ -308,6 +310,8 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
           url: `/dashboard/faults`,
           referenceId: data.id,
           referenceType: "fault",
+          sendEmail: input.notifyEmail,
+          sendSms: input.notifySms,
         });
       }
 

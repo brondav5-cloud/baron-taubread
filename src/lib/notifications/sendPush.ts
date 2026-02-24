@@ -2,6 +2,7 @@ import webpush from "web-push";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 import { sendEmail } from "./sendEmail";
+import { sendSms } from "./sendSms";
 
 const VAPID_PUBLIC_KEY = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!;
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY!;
@@ -27,17 +28,21 @@ export interface NotificationPayload {
   referenceId?: string;
   referenceType?: "task" | "fault" | "treatment";
   tag?: string;
+  sendEmail?: boolean;
+  sendSms?: boolean;
 }
 
 export async function sendPushToUsers(payload: NotificationPayload): Promise<{
   sent: number;
   failed: number;
   emailsSent: number;
+  smsSent: number;
 }> {
   const admin = getAdmin();
   let sent = 0;
   let failed = 0;
   let emailsSent = 0;
+  let smsSent = 0;
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL
     ?? process.env.VERCEL_PROJECT_PRODUCTION_URL
@@ -45,10 +50,9 @@ export async function sendPushToUsers(payload: NotificationPayload): Promise<{
       : "https://bakery-analytics.vercel.app";
 
   for (const recipientId of payload.recipientUserIds) {
-    // Get user info for email
     const { data: userRow } = await admin
       .from("users")
-      .select("email, name")
+      .select("email, name, phone")
       .eq("id", recipientId)
       .single();
 
@@ -105,13 +109,13 @@ export async function sendPushToUsers(payload: NotificationPayload): Promise<{
       }
     }
 
-    // --- Email ---
-    if (userRow?.email) {
+    // --- Email (opt-in) ---
+    if (payload.sendEmail && userRow?.email) {
       const fullUrl = payload.url
         ? `${baseUrl}${payload.url}`
         : `${baseUrl}/dashboard`;
 
-      const emailSent = await sendEmail({
+      const emailOk = await sendEmail({
         to: userRow.email,
         recipientName: userRow.name ?? undefined,
         subject: payload.title,
@@ -119,9 +123,18 @@ export async function sendPushToUsers(payload: NotificationPayload): Promise<{
         url: fullUrl,
         type: payload.type,
       });
-      if (emailSent) emailsSent++;
+      if (emailOk) emailsSent++;
+    }
+
+    // --- SMS (opt-in) ---
+    if (payload.sendSms && userRow?.phone) {
+      const smsOk = await sendSms({
+        to: userRow.phone,
+        body: `${payload.title}\n${payload.body}`,
+      });
+      if (smsOk) smsSent++;
     }
   }
 
-  return { sent, failed, emailsSent };
+  return { sent, failed, emailsSent, smsSent };
 }

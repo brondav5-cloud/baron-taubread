@@ -44,7 +44,9 @@ interface CreateTaskInput {
   }[];
   photos?: string[];
   checklist?: { text: string }[];
-  dueDate?: string; // אופציונלי - אם לא נשלח, יחושב לפי priority
+  dueDate?: string;
+  notifyEmail?: boolean;
+  notifySms?: boolean;
 }
 
 interface TasksContextType {
@@ -298,6 +300,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
                 url: `/dashboard/tasks`,
                 referenceId: created.id,
                 referenceType: "task",
+                sendEmail: input.notifyEmail,
+                sendSms: input.notifySms,
               });
             }
           }

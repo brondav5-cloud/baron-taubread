@@ -148,6 +148,35 @@ export function CreateTaskModal({
               onAddItem={form.handleAddChecklistItem}
               onRemoveItem={form.handleRemoveChecklistItem}
             />
+
+            {/* Notification Toggles */}
+            {form.selectedAssignees.length > 0 && (
+              <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-medium text-gray-500">שלח התראה למוקצים</p>
+                <div className="flex gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.notifyEmail}
+                      onChange={(e) => form.setNotifyEmail(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm">✉️</span>
+                    <span className="text-sm text-gray-700">מייל</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.notifySms}
+                      onChange={(e) => form.setNotifySms(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                    />
+                    <span className="text-sm">📱</span>
+                    <span className="text-sm text-gray-700">SMS</span>
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Footer */}

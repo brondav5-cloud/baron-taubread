@@ -60,6 +60,7 @@ export async function GET(request: NextRequest) {
           url: "/dashboard/tasks",
           referenceId: task.id,
           referenceType: "task",
+          sendEmail: true,
         });
         taskReminders++;
       }
@@ -105,6 +106,7 @@ export async function GET(request: NextRequest) {
           url: "/dashboard/work-plan",
           referenceId: wf.id,
           referenceType: "task",
+          sendEmail: true,
         });
         workflowReminders++;
       }
@@ -146,6 +148,7 @@ export async function GET(request: NextRequest) {
           url: "/dashboard/faults",
           referenceId: fault.id,
           referenceType: "fault",
+          sendEmail: true,
         });
         faultReminders++;
       }

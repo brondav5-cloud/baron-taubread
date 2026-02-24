@@ -114,6 +114,8 @@ export function useCreateTaskForm({
   const [checklistItems, setChecklistItems] = useState<string[]>([]);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState(false);
+  const [notifySms, setNotifySms] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -130,6 +132,8 @@ export function useCreateTaskForm({
       setDescription("");
       setChecklistItems([]);
       setNewChecklistItem("");
+      setNotifyEmail(false);
+      setNotifySms(false);
     }
   }, [isOpen, initialStoreId, initialStoreName]);
 
@@ -210,6 +214,8 @@ export function useCreateTaskForm({
           assignees: selectedAssignees,
           checklist: checklistItems.map((text) => ({ text })),
           dueDate: calculateDueDate(dueOption, customDueDate),
+          notifyEmail,
+          notifySms,
         },
         currentUser.id,
         currentUser.name,
@@ -231,6 +237,8 @@ export function useCreateTaskForm({
       checklistItems,
       dueOption,
       customDueDate,
+      notifyEmail,
+      notifySms,
       currentUser,
       createTask,
       onClose,
@@ -263,6 +271,8 @@ export function useCreateTaskForm({
     checklistItems,
     newChecklistItem,
     showAddCategoryModal,
+    notifyEmail,
+    notifySms,
 
     // Setters
     setTaskType: handleTaskTypeChange,
@@ -276,6 +286,8 @@ export function useCreateTaskForm({
     setDescription,
     setNewChecklistItem,
     setShowAddCategoryModal,
+    setNotifyEmail,
+    setNotifySms,
 
     // Handlers
     handleAddAssignee,

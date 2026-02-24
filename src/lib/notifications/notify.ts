@@ -19,6 +19,8 @@ export interface SendNotificationInput {
   url?: string;
   referenceId?: string;
   referenceType?: "task" | "fault" | "treatment";
+  sendEmail?: boolean;
+  sendSms?: boolean;
 }
 
 export function sendNotification(input: SendNotificationInput): void {
