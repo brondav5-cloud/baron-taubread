@@ -483,7 +483,7 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
 
     const periodsSet = new Set<string>();
     for (const row of rows) {
-      const p = parsePeriod(String(getVal(row, ["חודש ושנה"]) ?? ""));
+      const p = parsePeriod(String(getVal(row, ["חודש ושנה", "חודש"]) ?? ""));
       if (p) periodsSet.add(p.key);
     }
     const periods = Array.from(periodsSet).sort();
@@ -559,10 +559,15 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
       if (driver) drivers.add(driver);
       if (agent) agents.add(agent);
       if (category) categories.add(category);
-      const qtyNet = Number(getVal(row, qtyNetKeys) ?? 0) || 0;
-      const sales = Number(getVal(row, salesKeys) ?? 0) || 0;
-      const qtySupplied = Number(getVal(row, qtySuppliedKeys) ?? 0) || 0;
-      const returnsVal = Number(getVal(row, ["חזרות"]) ?? 0) || 0;
+      const parseNum = (v: unknown): number => {
+        if (typeof v === "number") return v;
+        if (typeof v === "string") return Number(v.replace(/[₪,\s]/g, "")) || 0;
+        return 0;
+      };
+      const qtyNet = parseNum(getVal(row, qtyNetKeys));
+      const sales = parseNum(getVal(row, salesKeys));
+      const qtySupplied = parseNum(getVal(row, qtySuppliedKeys));
+      const returnsVal = parseNum(getVal(row, ["חזרות"]));
       if (!storesMap.has(storeId)) {
         storesMap.set(storeId, {
           external_id: storeId,
