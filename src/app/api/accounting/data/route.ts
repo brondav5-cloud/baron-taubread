@@ -1,11 +1,44 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-// GET /api/accounting/data?year=2024&prevYear=2023
+const PAGE = 5000;
+
+/** Fetch all rows bypassing the default 1000-row limit with pagination. */
+async function fetchAllTransactions(
+  supabase: SupabaseClient,
+  uid: string,
+  startDate: string,
+  endDate: string,
+  columns = "*",
+) {
+  const all: unknown[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("transactions")
+      .select(columns)
+      .eq("user_id", uid)
+      .gte("transaction_date", startDate)
+      .lte("transaction_date", endDate)
+      .order("transaction_date", { ascending: true })
+      .range(from, from + PAGE - 1);
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+
+  return all;
+}
+
+// GET /api/accounting/data?year=2024
 // Returns all data needed for the P&L dashboard for the given year.
-// Also fetches previous year transactions (aggregated) for YoY comparison.
+// Also fetches previous year transactions for YoY comparison.
 export async function GET(request: Request) {
   try {
     const authClient = createServerSupabaseClient();
@@ -21,11 +54,9 @@ export async function GET(request: Request) {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const uid = user.id;
 
-    // Fetch everything in parallel
+    // Fetch metadata in parallel (small tables — no pagination needed)
     const [
       accountsRes,
-      txCurrentRes,
-      txPrevRes,
       groupsRes,
       classificationsRes,
       overridesRes,
@@ -36,18 +67,6 @@ export async function GET(request: Request) {
       filesRes,
     ] = await Promise.all([
       supabase.from("accounts").select("*").eq("user_id", uid),
-      supabase
-        .from("transactions")
-        .select("*")
-        .eq("user_id", uid)
-        .gte("transaction_date", `${year}-01-01`)
-        .lte("transaction_date", `${year}-12-31`),
-      supabase
-        .from("transactions")
-        .select("id, account_id, group_code, transaction_date, debit, credit")
-        .eq("user_id", uid)
-        .gte("transaction_date", `${prevYear}-01-01`)
-        .lte("transaction_date", `${prevYear}-12-31`),
       supabase.from("custom_groups").select("*").eq("user_id", uid).order("display_order"),
       supabase.from("account_classification_overrides").select("*").eq("user_id", uid),
       supabase.from("transaction_overrides").select("*").eq("user_id", uid),
@@ -55,37 +74,50 @@ export async function GET(request: Request) {
       supabase.from("account_tags").select("*"),
       supabase.from("counter_account_names").select("*").eq("user_id", uid),
       supabase.from("alert_rules").select("*").eq("user_id", uid),
-      supabase.from("uploaded_files").select("*").eq("user_id", uid).order("year", { ascending: false }),
+      supabase
+        .from("uploaded_files")
+        .select("*")
+        .eq("user_id", uid)
+        .order("year", { ascending: false }),
     ]);
 
-    // Collect errors
-    const errors = [
-      accountsRes, txCurrentRes, txPrevRes, groupsRes, classificationsRes,
-      overridesRes, tagsRes, accountTagsRes, counterNamesRes, alertRulesRes, filesRes,
+    const metaErrors = [
+      accountsRes, groupsRes, classificationsRes, overridesRes,
+      tagsRes, accountTagsRes, counterNamesRes, alertRulesRes, filesRes,
     ]
       .filter((r) => r.error)
       .map((r) => r.error!.message);
 
-    if (errors.length > 0) {
-      return NextResponse.json({ error: errors.join("; ") }, { status: 500 });
+    if (metaErrors.length > 0) {
+      return NextResponse.json({ error: metaErrors.join("; ") }, { status: 500 });
     }
+
+    // Fetch transactions with pagination (can be 10k–50k rows)
+    const [txCurrent, txPrev] = await Promise.all([
+      fetchAllTransactions(supabase, uid, `${year}-01-01`, `${year}-12-31`),
+      fetchAllTransactions(
+        supabase, uid, `${prevYear}-01-01`, `${prevYear}-12-31`,
+        "id, account_id, group_code, transaction_date, debit, credit",
+      ),
+    ]);
 
     return NextResponse.json({
       year,
       prevYear,
-      accounts: accountsRes.data ?? [],
-      transactions: txCurrentRes.data ?? [],
-      prevTransactions: txPrevRes.data ?? [],
-      customGroups: groupsRes.data ?? [],
+      accounts:                accountsRes.data ?? [],
+      transactions:            txCurrent,
+      prevTransactions:        txPrev,
+      customGroups:            groupsRes.data ?? [],
       classificationOverrides: classificationsRes.data ?? [],
-      transactionOverrides: overridesRes.data ?? [],
-      tags: tagsRes.data ?? [],
-      accountTags: accountTagsRes.data ?? [],
-      counterNames: counterNamesRes.data ?? [],
-      alertRules: alertRulesRes.data ?? [],
-      files: filesRes.data ?? [],
+      transactionOverrides:    overridesRes.data ?? [],
+      tags:                    tagsRes.data ?? [],
+      accountTags:             accountTagsRes.data ?? [],
+      counterNames:            counterNamesRes.data ?? [],
+      alertRules:              alertRulesRes.data ?? [],
+      files:                   filesRes.data ?? [],
     });
   } catch (err) {
+    console.error("Data API error:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
