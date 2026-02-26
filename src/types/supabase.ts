@@ -408,21 +408,32 @@ export type UploadInsert = Omit<DbUpload, "id" | "uploaded_at">;
 // ============================================
 
 export interface ExcelRow {
-  "חודש ושנה": string;
+  // Old column names
+  "חודש ושנה"?: string;
+  "שם לקוח"?: string;
+  "כמות שסופק"?: number;
+  "כמות נטו "?: number;
+  "כמות נטו"?: number;
+  "סך מחזור מכירות "?: number;
+  "סך מחזור מכירות"?: number;
+  // New column names
+  "חודש"?: string;
+  "לקוח"?: string;
+  "כמות"?: number;
+  "סה\"כ כמות"?: number;
+  "סהכ"?: number;
+  // Common columns
   "מזהה לקוח": number;
-  "שם לקוח": string;
   רשת: string | null;
   עיר: string;
   "מזהה מוצר": number;
   מוצר: string;
   "קטגורית מוצרים": string;
-  "כמות שסופק": number;
   חזרות: number;
-  "חזרות(%)": number;
-  "כמות נטו ": number;
-  "סך מחזור מכירות ": number;
+  "חזרות(%)"?: number;
   נהג: string;
   סוכן: string;
+  [key: string]: unknown;
 }
 
 export interface ParsedPeriod {

@@ -55,7 +55,8 @@ export function extractPeriods(rows: ExcelRow[]): string[] {
   const periodsSet = new Set<string>();
 
   for (const row of rows) {
-    const period = parsePeriod(row["חודש ושנה"]);
+    const periodVal = row["חודש ושנה"] ?? row["חודש"] ?? "";
+    const period = parsePeriod(String(periodVal));
     if (period) {
       periodsSet.add(period.key);
     }
@@ -439,8 +440,17 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
       }
       return undefined;
     };
-    const required = ["חודש ושנה", "מזהה לקוח", "שם לקוח", "מזהה מוצר", "מוצר"];
-    const missing = required.filter((k) => !columnMap[k]);
+    // Support multiple column name variants (old and new formats)
+    const requiredGroups: string[][] = [
+      ["חודש ושנה", "חודש"],
+      ["מזהה לקוח"],
+      ["שם לקוח", "לקוח"],
+      ["מזהה מוצר"],
+      ["מוצר"],
+    ];
+    const missing = requiredGroups.filter((group) =>
+      group.every((k) => !columnMap[k.trim()]),
+    ).map((group) => group[0]);
     if (missing.length > 0) {
       return {
         success: false,
@@ -519,11 +529,14 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
     const drivers = new Set<string>();
     const agents = new Set<string>();
     const categories = new Set<string>();
-    const qtyNetKeys = ["כמות נטו", "כמות נטו "];
-    const salesKeys = ["סך מחזור מכירות", "סך מחזור מכירות "];
+    const qtyNetKeys = ["כמות נטו", "כמות נטו ", "סה\"כ כמות", "סהכ כמות"];
+    const salesKeys = ["סך מחזור מכירות", "סך מחזור מכירות ", "סהכ", "סה\"כ"];
+    const qtySuppliedKeys = ["כמות שסופק", "כמות שסופק ", "כמות"];
+    const periodKeys = ["חודש ושנה", "חודש"];
+    const storeNameKeys = ["שם לקוח", "לקוח"];
 
     for (const row of rows) {
-      const period = parsePeriod(String(getVal(row, ["חודש ושנה"]) ?? ""));
+      const period = parsePeriod(String(getVal(row, periodKeys) ?? ""));
       if (!period) continue;
       const storeIdRaw = getVal(row, ["מזהה לקוח"]);
       const productIdRaw = getVal(row, ["מזהה מוצר"]);
@@ -548,12 +561,12 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
       if (category) categories.add(category);
       const qtyNet = Number(getVal(row, qtyNetKeys) ?? 0) || 0;
       const sales = Number(getVal(row, salesKeys) ?? 0) || 0;
-      const qtySupplied = Number(getVal(row, ["כמות שסופק"]) ?? 0) || 0;
+      const qtySupplied = Number(getVal(row, qtySuppliedKeys) ?? 0) || 0;
       const returnsVal = Number(getVal(row, ["חזרות"]) ?? 0) || 0;
       if (!storesMap.has(storeId)) {
         storesMap.set(storeId, {
           external_id: storeId,
-          name: String(getVal(row, ["שם לקוח"]) ?? `לקוח ${storeId}`),
+          name: String(getVal(row, storeNameKeys) ?? `לקוח ${storeId}`),
           city,
           network,
           driver,
