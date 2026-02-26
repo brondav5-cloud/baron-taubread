@@ -1,11 +1,8 @@
 "use client";
 
 import { useState } from "react";
-// Chevron icons available but used inline as text chars for RTL compatibility
 import { clsx } from "clsx";
-import type {
-  YearlyPnl, DbCustomGroup, MonthlyPnl,
-} from "@/types/accounting";
+import type { YearlyPnl, DbCustomGroup, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
 
 interface Props {
@@ -21,154 +18,34 @@ type ViewMode = "yearly" | "compare";
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 const MONTH_SHORT = ["ינו","פבר","מרץ","אפר","מאי","יוני","יולי","אוג","ספט","אוק","נוב","דצמ"];
 
-function fmtK(val: number): string {
+function fmt(val: number): string {
+  if (val === 0) return "";
   const abs = Math.abs(val);
-  if (abs === 0) return "";
   if (abs >= 1_000_000) return `${(val / 1_000_000).toFixed(1)}M`;
-  if (abs >= 10_000) return `${(val / 1_000).toFixed(0)}K`;
-  if (abs >= 1_000) return `${(val / 1_000).toFixed(1)}K`;
-  return new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", maximumFractionDigits: 0 }).format(val);
+  if (abs >= 10_000)    return `${(val / 1_000).toFixed(0)}K`;
+  if (abs >= 1_000)     return `${(val / 1_000).toFixed(1)}K`;
+  return new Intl.NumberFormat("he-IL", { maximumFractionDigits: 0 }).format(val);
 }
 
-function fmtC(val: number): string {
+function fmtFull(val: number): string {
   return new Intl.NumberFormat("he-IL", {
     style: "currency", currency: "ILS", maximumFractionDigits: 0,
   }).format(val);
 }
 
-function pctStr(val: number, revenue: number): string {
-  if (revenue === 0) return "-";
-  return `${((val / revenue) * 100).toFixed(1)}%`;
+function pctOfRev(val: number, rev: number): string {
+  if (rev === 0) return "—";
+  return `${Math.abs((val / rev) * 100).toFixed(1)}%`;
 }
 
-// Single P&L row
-function PnlRow({
-  label, indent = 0, isSection = false, isSubtotal = false, isFinal = false,
-  isExpense = false, getValue, yearlyPnl, viewMode, compareA, compareB,
-  onClick,
-}: {
-  label: string;
-  indent?: number;
-  isSection?: boolean;
-  isSubtotal?: boolean;
-  isFinal?: boolean;
-  isExpense?: boolean;
-  getValue: (md: MonthlyPnl) => number;
-  yearlyPnl: YearlyPnl;
-  viewMode: ViewMode;
-  compareA: number;
-  compareB: number;
-  onClick?: (month?: number) => void;
-}) {
-  const totalVal = getValue(yearlyPnl.total);
-  const revTotal = yearlyPnl.total.revenue;
-
-  const baseRowCls = clsx(
-    "border-b border-gray-50 transition-colors",
-    isFinal && "bg-gradient-to-l from-blue-50/30 to-green-50/30",
-    isSubtotal && !isFinal && "bg-gray-50/70",
-    onClick && "cursor-pointer hover:bg-blue-50/30",
-  );
-
-  const labelCls = clsx(
-    "py-2.5 sticky right-0 z-10",
-    indent === 0 ? "px-4" : `pl-4 pr-${4 + indent * 4}`,
-    isFinal ? "font-bold text-gray-900 bg-gradient-to-l from-blue-50/30 to-green-50/30" :
-    isSubtotal ? "font-bold text-gray-800 bg-gray-50/70" :
-    isSection ? "font-semibold text-gray-700 bg-white" :
-    "text-gray-500 bg-white",
-    indent > 0 && "text-[12px]",
-  );
-
-  if (viewMode === "yearly") {
-    return (
-      <tr className={baseRowCls} onClick={() => onClick?.()}>
-        <td className={labelCls} style={{ paddingRight: `${16 + indent * 16}px` }}>{label}</td>
-        {MONTHS.map((m) => {
-          const val = getValue(yearlyPnl.months[m - 1]!);
-          return (
-            <td
-              key={m}
-              className={clsx("py-2 px-2 text-center tabular-nums text-xs",
-                isFinal && "bg-gradient-to-l from-blue-50/30 to-green-50/30",
-                isSubtotal && !isFinal && "bg-gray-50/70",
-                onClick && "hover:underline"
-              )}
-              onClick={(e) => { e.stopPropagation(); onClick?.(m); }}
-            >
-              {val !== 0 ? (
-                <span className={clsx(
-                  isFinal || isSubtotal ? `font-bold ${val >= 0 ? "text-green-700" : "text-red-600"}` :
-                  isSection ? "font-semibold text-gray-700" :
-                  isExpense ? "text-red-600" : "text-gray-600",
-                )}>
-                  {fmtK(val)}
-                </span>
-              ) : <span className="text-gray-200">—</span>}
-            </td>
-          );
-        })}
-        {/* Total column */}
-        <td className={clsx("py-2 px-3 text-center tabular-nums bg-gray-100 font-medium text-xs",
-          isFinal || isSubtotal ? "font-bold" : isSection ? "font-semibold" : "",
-        )}>
-          <span className={clsx(
-            isFinal || isSubtotal ? totalVal >= 0 ? "text-green-700" : "text-red-600" :
-            isExpense ? "text-red-700" : "text-gray-900",
-          )}>
-            {totalVal !== 0 ? fmtC(totalVal) : "—"}
-          </span>
-        </td>
-        {/* % of revenue */}
-        <td className="py-2 px-3 text-center tabular-nums bg-gray-50 text-[10px] text-gray-500">
-          {totalVal !== 0 && !isSubtotal ? pctStr(Math.abs(totalVal), revTotal) : ""}
-        </td>
-      </tr>
-    );
-  }
-
-  // Compare mode
-  const valA = getValue(yearlyPnl.months[compareA - 1]!);
-  const valB = getValue(yearlyPnl.months[compareB - 1]!);
-  const diff = valB - valA;
-  const pct = valA !== 0 ? ((valB - valA) / Math.abs(valA)) * 100 : 0;
-
-  return (
-    <tr className={baseRowCls}>
-      <td className={labelCls}>{label}</td>
-      <td className="py-2 px-4 text-center tabular-nums text-xs bg-blue-50/20 font-medium">
-        {valA !== 0 ? fmtC(valA) : "—"}
-      </td>
-      <td className="py-2 px-4 text-center tabular-nums text-xs bg-blue-50/20 font-medium">
-        {valB !== 0 ? fmtC(valB) : "—"}
-      </td>
-      <td className="py-2 px-4 text-center tabular-nums text-xs">
-        {diff !== 0 ? (
-          <span className={clsx("font-medium", isExpense
-            ? diff > 0 ? "text-red-600" : "text-green-600"
-            : diff > 0 ? "text-green-600" : "text-red-600"
-          )}>
-            {diff > 0 ? "+" : ""}{fmtC(diff)}
-          </span>
-        ) : "—"}
-      </td>
-      <td className="py-2 px-4 text-center text-xs">
-        {valA !== 0 && diff !== 0 ? (
-          <span className={clsx(
-            "inline-flex items-center gap-0.5 font-bold px-1.5 py-0.5 rounded-md",
-            isExpense
-              ? pct > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
-              : pct > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
-          )}>
-            {pct > 0 ? "▲" : "▼"}{Math.abs(pct).toFixed(1)}%
-          </span>
-        ) : "—"}
-      </td>
-    </tr>
-  );
-}
-
-// Section header with expand/collapse — used inline via PnlRow onClick
+// ── Section color bands ──────────────────────────────────────
+const SECTION_STYLES: Partial<Record<string, { bg: string; text: string; border: string }>> & { other: { bg: string; text: string; border: string } } = {
+  cost_of_goods: { bg: "bg-red-50/60",    text: "text-red-800",    border: "border-red-100" },
+  operating:     { bg: "bg-orange-50/60", text: "text-orange-800", border: "border-orange-100" },
+  admin:         { bg: "bg-purple-50/60", text: "text-purple-800", border: "border-purple-100" },
+  finance:       { bg: "bg-blue-50/60",   text: "text-blue-800",   border: "border-blue-100" },
+  other:         { bg: "bg-gray-50/60",   text: "text-gray-700",   border: "border-gray-100" },
+};
 
 export default function PnlTableTab({
   yearlyPnl, customGroups, year,
@@ -187,12 +64,15 @@ export default function PnlTableTab({
 
   if (!yearlyPnl) {
     return (
-      <div className="text-center py-16 text-gray-400">
-        <p className="text-sm">אין נתונים לשנת {year}.</p>
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+        <div className="text-5xl">📊</div>
+        <p className="text-base font-medium text-gray-500">אין נתונים לשנת {year}</p>
+        <p className="text-sm">העלה קובץ כרטסת בטאב &quot;קבצים&quot;</p>
       </div>
     );
   }
 
+  const revTotal = yearlyPnl.total.revenue;
   const groupsBySection = new Map<string, DbCustomGroup[]>();
   for (const g of customGroups) {
     const list = groupsBySection.get(g.parent_section) ?? [];
@@ -204,185 +84,343 @@ export default function PnlTableTab({
     new Date(2000, m - 1).toLocaleString("he-IL", { month: "long" }),
   );
 
-  return (
-    <div className="space-y-4" dir="rtl">
-      {/* Controls */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex bg-gray-100 rounded-xl p-0.5">
-          {(["yearly", "compare"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              className={clsx(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                viewMode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500",
-              )}
-            >
-              {mode === "yearly" ? "שנתי" : "השוואת חודשים"}
-            </button>
-          ))}
-        </div>
+  const getVal = (fn: (m: MonthlyPnl) => number, month: number) =>
+    fn(yearlyPnl.months[month - 1]!);
+  const getTot = (fn: (m: MonthlyPnl) => number) => fn(yearlyPnl.total);
 
-        {viewMode === "compare" && (
-          <div className="flex items-center gap-3">
-            <select value={compareA} onChange={(e) => setCompareA(Number(e.target.value))}
-              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs bg-white">
-              {MONTHS.map((m) => <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>)}
+  // ── Yearly view rows ─────────────────────────────────────────
+
+  if (viewMode === "compare") {
+    const mA = yearlyPnl.months[compareA - 1]!;
+    const mB = yearlyPnl.months[compareB - 1]!;
+
+    const rows: Array<{
+      label: string; indent?: boolean; section?: boolean; subtotal?: boolean; final?: boolean;
+      isExpense?: boolean; getA: (m: MonthlyPnl) => number; getB: (m: MonthlyPnl) => number;
+    }> = [
+      { label: "הכנסות", section: true, getA: m => m.revenue, getB: m => m.revenue },
+    ];
+
+    for (const sec of PARENT_SECTION_ORDER) {
+      const sectionLabel = `(-) ${PARENT_SECTION_LABELS[sec]}`;
+      rows.push({ label: sectionLabel, section: true, isExpense: true, getA: m => m.bySection[sec], getB: m => m.bySection[sec] });
+      const groups = (groupsBySection.get(sec) ?? []).filter(
+        g => (yearlyPnl.total.byGroup.get(g.id) ?? 0) !== 0
+      );
+      for (const g of groups) {
+        rows.push({
+          label: g.name, indent: true, isExpense: true,
+          getA: m => m.byGroup.get(g.id) ?? 0,
+          getB: m => m.byGroup.get(g.id) ?? 0,
+        });
+      }
+      if (sec === "cost_of_goods") {
+        rows.push({ label: "= רווח גולמי", subtotal: true, getA: m => m.grossProfit, getB: m => m.grossProfit });
+      }
+    }
+    rows.push({ label: "= רווח תפעולי", subtotal: true, getA: m => m.operatingProfit, getB: m => m.operatingProfit });
+    rows.push({ label: "= רווח נקי", final: true, getA: m => m.netProfit, getB: m => m.netProfit });
+
+    return (
+      <div className="space-y-4" dir="rtl">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex bg-gray-100 rounded-xl p-0.5">
+            {(["yearly", "compare"] as const).map(m => (
+              <button key={m} onClick={() => setViewMode(m)}
+                className={clsx("px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                  viewMode === m ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+                {m === "yearly" ? "שנתי" : "השוואת חודשים"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <select value={compareA} onChange={e => setCompareA(+e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white text-sm font-medium focus:ring-2 focus:ring-primary-300">
+              {MONTHS.map(m => <option key={m} value={m}>{MONTH_LONG[m-1]}</option>)}
             </select>
-            <span className="text-gray-400">⟷</span>
-            <select value={compareB} onChange={(e) => setCompareB(Number(e.target.value))}
-              className="px-3 py-1.5 border border-gray-200 rounded-xl text-xs bg-white">
-              {MONTHS.map((m) => <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>)}
+            <span className="text-gray-400 font-bold">מול</span>
+            <select value={compareB} onChange={e => setCompareB(+e.target.value)}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white text-sm font-medium focus:ring-2 focus:ring-primary-300">
+              {MONTHS.map(m => <option key={m} value={m}>{MONTH_LONG[m-1]}</option>)}
             </select>
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Table */}
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
           <table className="w-full text-xs">
             <thead>
-              {viewMode === "yearly" ? (
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-right py-3 px-4 font-bold text-gray-700 sticky right-0 bg-gray-50 z-10 min-w-[180px]">
-                    סעיף
-                  </th>
-                  {MONTHS.map((m) => (
-                    <th key={m} className="text-center py-3 px-2 font-semibold text-gray-500 min-w-[72px]">
-                      {MONTH_SHORT[m - 1]}
-                    </th>
-                  ))}
-                  <th className="text-center py-3 px-3 font-bold text-gray-900 bg-gray-100 min-w-[90px]">סה&quot;כ</th>
-                  <th className="text-center py-3 px-3 font-semibold text-gray-500 bg-gray-50 min-w-[60px]">%</th>
-                </tr>
-              ) : (
-                <tr className="bg-gray-50 border-b border-gray-200">
-                  <th className="text-right py-3 px-4 font-bold text-gray-700 min-w-[180px]">סעיף</th>
-                  <th className="text-center py-3 px-4 font-semibold text-primary-700 min-w-[100px] bg-blue-50/30">{MONTH_LONG[compareA - 1]}</th>
-                  <th className="text-center py-3 px-4 font-semibold text-primary-700 min-w-[100px] bg-blue-50/30">{MONTH_LONG[compareB - 1]}</th>
-                  <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[90px]">הפרש</th>
-                  <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[70px]">% שינוי</th>
-                </tr>
-              )}
+              <tr className="bg-gradient-to-l from-gray-50 to-gray-100 border-b border-gray-200">
+                <th className="text-right py-3 px-4 font-bold text-gray-700 min-w-[200px]">סעיף</th>
+                <th className="text-center py-3 px-4 font-bold text-primary-700 min-w-[120px] bg-primary-50/40">{MONTH_LONG[compareA-1]}</th>
+                <th className="text-center py-3 px-4 font-bold text-primary-700 min-w-[120px] bg-primary-50/40">{MONTH_LONG[compareB-1]}</th>
+                <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[110px]">הפרש</th>
+                <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[80px]">% שינוי</th>
+              </tr>
             </thead>
             <tbody>
-              {/* Revenue */}
-              <PnlRow label="הכנסות" isSection getValue={(md) => md.revenue}
-                yearlyPnl={yearlyPnl} viewMode={viewMode} compareA={compareA} compareB={compareB}
-                onClick={(m) => onAmountClick?.("revenue", m)} />
+              {rows.map((row, i) => {
+                const vA = row.getA(mA), vB = row.getB(mB);
+                const diff = vB - vA;
+                const pct = vA !== 0 ? ((vB - vA) / Math.abs(vA)) * 100 : null;
+                const isGood = row.isExpense ? diff < 0 : diff > 0;
+                const isBad = row.isExpense ? diff > 0 : diff < 0;
+                return (
+                  <tr key={i} className={clsx("border-b border-gray-50 transition-colors",
+                    row.final && "bg-gradient-to-l from-emerald-50/40 to-blue-50/40",
+                    row.subtotal && !row.final && "bg-gray-50",
+                  )}>
+                    <td className={clsx("py-2.5 px-4",
+                      row.indent ? "pl-8 text-gray-500" :
+                      row.final ? "font-bold text-gray-900" :
+                      row.subtotal ? "font-bold text-gray-800" :
+                      row.section ? "font-semibold text-gray-700" : "text-gray-500"
+                    )}>
+                      {row.label}
+                    </td>
+                    {[vA, vB].map((v, j) => (
+                      <td key={j} className={clsx("py-2.5 px-4 text-center tabular-nums bg-primary-50/20",
+                        row.final || row.subtotal ? "font-bold" : "",
+                        row.final ? (v >= 0 ? "text-emerald-700" : "text-red-600") :
+                        row.isExpense ? "text-red-700" : "text-gray-800",
+                      )}>
+                        {v !== 0 ? fmtFull(v) : "—"}
+                      </td>
+                    ))}
+                    <td className={clsx("py-2.5 px-4 text-center tabular-nums font-medium",
+                      isGood ? "text-emerald-600" : isBad ? "text-red-600" : "text-gray-400",
+                    )}>
+                      {diff !== 0 ? `${diff > 0 ? "+" : ""}${fmtFull(diff)}` : "—"}
+                    </td>
+                    <td className="py-2.5 px-4 text-center">
+                      {pct !== null && Math.abs(pct) < 1000 ? (
+                        <span className={clsx("inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold",
+                          isGood ? "bg-emerald-100 text-emerald-700" :
+                          isBad ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-600",
+                        )}>
+                          {pct > 0 ? "▲" : "▼"}{Math.abs(pct).toFixed(0)}%
+                        </span>
+                      ) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
-              {/* Expense sections */}
-              {PARENT_SECTION_ORDER.map((section) => {
+  // ── Yearly view ──────────────────────────────────────────────
+  return (
+    <div className="space-y-4" dir="rtl">
+      {/* Mode switcher */}
+      <div className="flex bg-gray-100 rounded-xl p-0.5 w-fit">
+        {(["yearly", "compare"] as const).map(m => (
+          <button key={m} onClick={() => setViewMode(m)}
+            className={clsx("px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+              viewMode === m ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700")}>
+            {m === "yearly" ? "שנתי" : "השוואת חודשים"}
+          </button>
+        ))}
+      </div>
+
+      {/* Scrollable table */}
+      <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="text-[11px] border-collapse" style={{ minWidth: "900px" }}>
+            {/* Sticky header */}
+            <thead>
+              <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
+                <th className="text-right py-3 px-4 font-bold text-sm sticky right-0 bg-slate-800 z-20 min-w-[180px] border-b-2 border-slate-600">
+                  סעיף
+                </th>
+                {MONTHS.map(m => (
+                  <th key={m} className="text-center py-3 px-1 font-semibold min-w-[58px] border-b-2 border-slate-600">
+                    {MONTH_SHORT[m - 1]}
+                  </th>
+                ))}
+                <th className="text-center py-3 px-3 font-bold min-w-[90px] bg-slate-900 border-b-2 border-slate-600">
+                  סה&quot;כ
+                </th>
+                <th className="text-center py-3 px-2 font-semibold min-w-[52px] text-slate-300 border-b-2 border-slate-600">
+                  %
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+
+              {/* ── Revenue row ── */}
+              <tr className="bg-gradient-to-l from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
+                <td className="py-3 px-4 font-bold text-emerald-800 text-sm sticky right-0 bg-gradient-to-l from-emerald-50 to-teal-50 z-10">
+                  הכנסות
+                </td>
+                {MONTHS.map(m => (
+                  <td key={m} className="py-3 px-1.5 text-center tabular-nums font-semibold text-emerald-700 cursor-pointer hover:text-emerald-500 transition-colors"
+                    onClick={() => onAmountClick?.("revenue", m)}>
+                    {getVal(md => md.revenue, m) !== 0 ? fmt(getVal(md => md.revenue, m)) : <span className="text-gray-200">—</span>}
+                  </td>
+                ))}
+                <td className="py-3 px-3 text-center tabular-nums font-bold text-emerald-800 bg-emerald-100">
+                  {getTot(md => md.revenue) !== 0 ? fmtFull(getTot(md => md.revenue)) : "—"}
+                </td>
+                <td className="py-3 px-2 text-center text-[10px] text-emerald-600 font-semibold bg-emerald-50">
+                  100%
+                </td>
+              </tr>
+
+              {/* ── Expense sections ── */}
+              {PARENT_SECTION_ORDER.map(section => {
                 const groups = (groupsBySection.get(section) ?? []).filter(
-                  (g) => (yearlyPnl.total.byGroup.get(g.id) ?? 0) > 0,
+                  g => (yearlyPnl.total.byGroup.get(g.id) ?? 0) !== 0
                 );
                 const sectionTotal = yearlyPnl.total.bySection[section];
                 if (sectionTotal === 0 && groups.length === 0) return null;
-
                 const expanded = !!expandedSections[section];
+                const ss = (SECTION_STYLES[section] ?? SECTION_STYLES["other"])!;
 
                 return (
                   <tbody key={section}>
-                    {/* Section header row */}
-                    <PnlRow
-                      label={`${expanded ? "▾" : "▸"} (-) ${PARENT_SECTION_LABELS[section]}`}
-                      isSection
-                      isExpense
-                      getValue={(md) => md.bySection[section]}
-                      yearlyPnl={yearlyPnl}
-                      viewMode={viewMode}
-                      compareA={compareA}
-                      compareB={compareB}
-                      onClick={() => toggleSection(section)}
-                    />
+                    {/* Section header */}
+                    <tr className={clsx("border-b cursor-pointer hover:brightness-95 transition-all", ss.bg, ss.border)}
+                      onClick={() => toggleSection(section)}>
+                      <td className={clsx("py-2.5 px-4 font-semibold text-[12px] sticky right-0 z-10 flex items-center gap-1.5", ss.text, ss.bg)}>
+                        <span className="text-[10px]">{expanded ? "▾" : "▸"}</span>
+                        <span>(-) {PARENT_SECTION_LABELS[section]}</span>
+                      </td>
+                      {MONTHS.map(m => (
+                        <td key={m} className={clsx("py-2.5 px-1.5 text-center tabular-nums font-medium", ss.text)}>
+                          {getVal(md => md.bySection[section], m) !== 0
+                            ? fmt(getVal(md => md.bySection[section], m))
+                            : <span className="text-gray-200 opacity-50">—</span>}
+                        </td>
+                      ))}
+                      <td className={clsx("py-2.5 px-3 text-center tabular-nums font-bold", ss.text, "brightness-90", ss.bg)}>
+                        {sectionTotal !== 0 ? fmtFull(sectionTotal) : "—"}
+                      </td>
+                      <td className={clsx("py-2.5 px-2 text-center text-[10px] font-semibold", ss.text)}>
+                        {pctOfRev(Math.abs(sectionTotal), revTotal)}
+                      </td>
+                    </tr>
 
                     {/* Group rows */}
-                    {expanded && groups.map((g) => (
-                      <PnlRow
-                        key={g.id}
-                        label={`▸ ${g.name}`}
-                        indent={1}
-                        isExpense
-                        getValue={(md) => md.byGroup.get(g.id) ?? 0}
-                        yearlyPnl={yearlyPnl}
-                        viewMode={viewMode}
-                        compareA={compareA}
-                        compareB={compareB}
-                        onClick={(m) => onGroupClick?.(g.id, m)}
-                      />
+                    {expanded && groups.map(g => (
+                      <tr key={g.id}
+                        className="border-b border-gray-50 hover:bg-gray-50/80 cursor-pointer transition-colors"
+                        onClick={() => onGroupClick?.(g.id)}>
+                        <td className="py-2 px-4 pl-10 text-gray-600 sticky right-0 bg-white z-10 flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full inline-block shrink-0" style={{ background: g.color }} />
+                          <span className="text-[11px]">{g.name}</span>
+                        </td>
+                        {MONTHS.map(m => {
+                          const v = getVal(md => md.byGroup.get(g.id) ?? 0, m);
+                          return (
+                            <td key={m} className="py-2 px-1.5 text-center tabular-nums text-gray-600 hover:text-primary-600 transition-colors"
+                              onClick={e => { e.stopPropagation(); onGroupClick?.(g.id, m); }}>
+                              {v !== 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className="py-2 px-3 text-center tabular-nums font-semibold text-red-700 bg-gray-50">
+                          {(yearlyPnl.total.byGroup.get(g.id) ?? 0) !== 0
+                            ? fmtFull(yearlyPnl.total.byGroup.get(g.id) ?? 0) : "—"}
+                        </td>
+                        <td className="py-2 px-2 text-center text-[10px] text-gray-400 bg-gray-50">
+                          {pctOfRev(Math.abs(yearlyPnl.total.byGroup.get(g.id) ?? 0), revTotal)}
+                        </td>
+                      </tr>
                     ))}
 
                     {/* Subtotal after cost_of_goods */}
                     {section === "cost_of_goods" && (
-                      <PnlRow label="= רווח גולמי" isSubtotal
-                        getValue={(md) => md.grossProfit}
-                        yearlyPnl={yearlyPnl} viewMode={viewMode} compareA={compareA} compareB={compareB}
-                      />
+                      <tr className="border-b-2 border-emerald-300 bg-gradient-to-l from-emerald-50 to-teal-50">
+                        <td className="py-3 px-4 font-bold text-emerald-800 text-sm sticky right-0 bg-gradient-to-l from-emerald-50 to-teal-50 z-10">
+                          = רווח גולמי
+                        </td>
+                        {MONTHS.map(m => {
+                          const v = getVal(md => md.grossProfit, m);
+                          return (
+                            <td key={m} className={clsx("py-3 px-1.5 text-center tabular-nums font-bold",
+                              v >= 0 ? "text-emerald-700" : "text-red-600")}>
+                              {v !== 0 ? fmt(v) : <span className="text-gray-200">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className={clsx("py-3 px-3 text-center tabular-nums font-bold text-sm bg-emerald-100",
+                          getTot(md => md.grossProfit) >= 0 ? "text-emerald-800" : "text-red-700")}>
+                          {fmtFull(getTot(md => md.grossProfit))}
+                        </td>
+                        <td className="py-3 px-2 text-center text-[10px] font-bold text-emerald-700 bg-emerald-50">
+                          {pctOfRev(getTot(md => md.grossProfit), revTotal)}
+                        </td>
+                      </tr>
                     )}
 
-                    {/* Subtotal after operating */}
-                    {section === "operating" && (
-                      <PnlRow label="= רווח תפעולי" isSubtotal
-                        getValue={(md) => md.operatingProfit}
-                        yearlyPnl={yearlyPnl} viewMode={viewMode} compareA={compareA} compareB={compareB}
-                      />
+                    {/* Subtotal after operating + admin */}
+                    {section === "admin" && (
+                      <tr className="border-b-2 border-blue-300 bg-gradient-to-l from-blue-50 to-indigo-50">
+                        <td className="py-3 px-4 font-bold text-blue-800 text-sm sticky right-0 bg-gradient-to-l from-blue-50 to-indigo-50 z-10">
+                          = רווח תפעולי
+                        </td>
+                        {MONTHS.map(m => {
+                          const v = getVal(md => md.operatingProfit, m);
+                          return (
+                            <td key={m} className={clsx("py-3 px-1.5 text-center tabular-nums font-bold",
+                              v >= 0 ? "text-blue-700" : "text-red-600")}>
+                              {v !== 0 ? fmt(v) : <span className="text-gray-200">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className={clsx("py-3 px-3 text-center tabular-nums font-bold text-sm bg-blue-100",
+                          getTot(md => md.operatingProfit) >= 0 ? "text-blue-800" : "text-red-700")}>
+                          {fmtFull(getTot(md => md.operatingProfit))}
+                        </td>
+                        <td className="py-3 px-2 text-center text-[10px] font-bold text-blue-700 bg-blue-50">
+                          {pctOfRev(getTot(md => md.operatingProfit), revTotal)}
+                        </td>
+                      </tr>
                     )}
                   </tbody>
                 );
               })}
 
-              {/* Net profit */}
-              <PnlRow
-                label="= רווח נקי"
-                isSubtotal
-                isFinal
-                getValue={(md) => md.netProfit}
-                yearlyPnl={yearlyPnl}
-                viewMode={viewMode}
-                compareA={compareA}
-                compareB={compareB}
-              />
+              {/* ── Net profit ── */}
+              <tr className="bg-gradient-to-l from-slate-800 to-slate-900 border-t-2 border-slate-600">
+                <td className="py-4 px-4 font-bold text-white text-sm sticky right-0 bg-gradient-to-l from-slate-800 to-slate-900 z-10">
+                  = רווח נקי
+                </td>
+                {MONTHS.map(m => {
+                  const v = getVal(md => md.netProfit, m);
+                  return (
+                    <td key={m} className={clsx("py-4 px-1.5 text-center tabular-nums font-bold",
+                      v >= 0 ? "text-emerald-400" : "text-red-400")}>
+                      {v !== 0 ? fmt(v) : <span className="text-slate-600">—</span>}
+                    </td>
+                  );
+                })}
+                <td className={clsx("py-4 px-3 text-center tabular-nums font-bold text-sm",
+                  getTot(md => md.netProfit) >= 0 ? "text-emerald-400" : "text-red-400")}>
+                  {fmtFull(getTot(md => md.netProfit))}
+                </td>
+                <td className={clsx("py-4 px-2 text-center text-[10px] font-bold",
+                  getTot(md => md.netProfit) >= 0 ? "text-emerald-400" : "text-red-400")}>
+                  {pctOfRev(getTot(md => md.netProfit), revTotal)}
+                </td>
+              </tr>
 
-              {/* % net margin row */}
-              {viewMode === "yearly" && (
-                <tr className="border-t border-gray-200 bg-gray-50/50">
-                  <td className="py-2 px-4 text-gray-500 font-medium text-[11px] sticky right-0 bg-gray-50/50">
-                    % רווח נקי מהכנסות
-                  </td>
-                  {MONTHS.map((m) => {
-                    const md = yearlyPnl.months[m - 1]!;
-                    const pct = md.revenue > 0 ? (md.netProfit / md.revenue) * 100 : 0;
-                    return (
-                      <td key={m} className="py-2 px-2 text-center">
-                        <span className={clsx("text-[10px] font-bold",
-                          pct > 0 ? "text-green-600" : pct < 0 ? "text-red-500" : "text-gray-400",
-                        )}>
-                          {md.revenue > 0 ? `${pct.toFixed(1)}%` : "—"}
-                        </span>
-                      </td>
-                    );
-                  })}
-                  <td className="py-2 px-3 text-center bg-gray-100">
-                    <span className={clsx("text-[11px] font-bold",
-                      yearlyPnl.total.revenue > 0 && yearlyPnl.total.netProfit >= 0 ? "text-green-700" : "text-red-600",
-                    )}>
-                      {yearlyPnl.total.revenue > 0
-                        ? `${((yearlyPnl.total.netProfit / yearlyPnl.total.revenue) * 100).toFixed(1)}%`
-                        : "—"}
-                    </span>
-                  </td>
-                  <td className="bg-gray-50" />
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      <p className="text-[11px] text-gray-400 text-left">
-        לחץ על שם קבוצה לפירוט חשבונות · לחץ על סכום לצפייה בתנועות
-      </p>
+      {/* YoY badge row */}
+      <div className="flex items-center gap-2 text-xs text-gray-400 px-1">
+        <span className="w-3 h-0.5 bg-emerald-400 rounded inline-block" />
+        <span>לחץ על שורת קבוצה לפירוט חשבונות</span>
+        <span className="mx-2">·</span>
+        <span className="w-3 h-0.5 bg-blue-400 rounded inline-block" />
+        <span>לחץ על ערך חודשי לסינון</span>
+      </div>
     </div>
   );
 }

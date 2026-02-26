@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Plus, X } from "lucide-react";
 import { clsx } from "clsx";
-import type { YearlyPnl, DbCustomGroup } from "@/types/accounting";
+import type { YearlyPnl, DbCustomGroup, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
 
 interface Props {
@@ -26,45 +26,109 @@ function fmtC(val: number): string {
   }).format(val);
 }
 
-function DiffCell({
-  curr, prev, isExpense = false,
-}: { curr: number; prev: number; isExpense?: boolean }) {
-  if (prev === 0 && curr === 0) return <td className="py-2 px-3 text-center text-gray-300 text-xs">—</td>;
+// ── Column period selector ────────────────────────────────────
 
-  const diff = curr - prev;
-  const pct = prev !== 0 ? ((curr - prev) / Math.abs(prev)) * 100 : null;
-  const isGood = isExpense ? diff < 0 : diff > 0;
-  const isBad = isExpense ? diff > 0 : diff < 0;
+interface Period {
+  id: string;
+  year: number;
+  month: number | null; // null = full year
+}
 
+const PERIOD_HEADER_BG = [
+  "bg-blue-50",
+  "bg-violet-50",
+  "bg-orange-50",
+  "bg-teal-50",
+];
+const PERIOD_TEXT = [
+  "text-blue-700",
+  "text-violet-700",
+  "text-orange-700",
+  "text-teal-700",
+];
+
+function periodLabel(p: Period): string {
+  if (p.month === null) return `${p.year} (שנתי)`;
+  return `${MONTH_LONG[p.month - 1]} ${p.year}`;
+}
+
+function getPeriodData(p: Period, currentYear: number, yearlyPnl: YearlyPnl, prevYearlyPnl: YearlyPnl | null): MonthlyPnl | null {
+  const pnl = p.year === currentYear ? yearlyPnl : prevYearlyPnl;
+  if (!pnl) return null;
+  if (p.month === null) return pnl.total;
+  return pnl.months[p.month - 1] ?? null;
+}
+
+// ── CompRow ──────────────────────────────────────────────────
+
+interface CompRowProps {
+  label: string;
+  values: (number | null)[];
+  isSection?: boolean;
+  isSubtotal?: boolean;
+  isFinal?: boolean;
+  isExpense?: boolean;
+  isBold?: boolean;
+  indent?: boolean;
+  baseIdx?: number; // which column is "base" for diff calculation
+}
+
+function CompRow({ label, values, isSection, isSubtotal, isFinal, isExpense, isBold, indent, baseIdx = 0 }: CompRowProps) {
+  const base = values[baseIdx] ?? 0;
   return (
-    <td className="py-2 px-3 text-center text-xs">
-      <div className="space-y-0.5">
-        <div className={clsx("font-medium tabular-nums",
-          isGood ? "text-green-600" : isBad ? "text-red-600" : "text-gray-500",
-        )}>
-          {diff > 0 ? "+" : ""}{fmtC(diff)}
-        </div>
-        {pct !== null && (
-          <div className={clsx(
-            "inline-flex items-center gap-0.5 text-[10px] font-bold px-1 py-0.5 rounded",
-            isGood ? "bg-green-100 text-green-700" :
-            isBad ? "bg-red-100 text-red-700" :
-            "bg-gray-100 text-gray-500",
+    <tr className={clsx("border-b border-gray-50 transition-colors hover:bg-gray-50/50",
+      isFinal && "bg-gradient-to-l from-slate-50/60 to-emerald-50/40",
+      isSubtotal && !isFinal && "bg-gray-50/70",
+    )}>
+      <td className={clsx("py-2.5 px-4 sticky right-0 z-10 bg-inherit",
+        isFinal ? "font-bold text-gray-900 text-sm bg-white" :
+        isSubtotal ? "font-bold text-gray-800 bg-white" :
+        isSection || isBold ? "font-semibold text-gray-700" :
+        indent ? "text-gray-500 text-[11px] bg-white" : "text-gray-600 bg-white",
+      )} style={indent ? { paddingRight: "24px" } : undefined}>
+        {label}
+      </td>
+      {values.map((v, i) => {
+        if (v === null) return (
+          <td key={i} className="py-2.5 px-3 text-center text-gray-300 text-xs min-w-[110px]">—</td>
+        );
+        const diff = i !== baseIdx ? v - base : null;
+        const pct = diff !== null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
+        const isGood = isExpense ? (diff !== null ? diff < 0 : false) : (diff !== null ? diff > 0 : v > 0);
+        const isBad = isExpense ? (diff !== null ? diff > 0 : false) : (diff !== null ? diff < 0 : v < 0);
+        return (
+          <td key={i} className={clsx("py-2.5 px-3 text-center tabular-nums min-w-[110px]",
+            PERIOD_HEADER_BG[i] || "bg-white",
           )}>
-            {pct > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : pct < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
-            {pct > 0 ? "+" : ""}{pct.toFixed(1)}%
-          </div>
-        )}
-      </div>
-    </td>
+            <div className="space-y-0.5">
+              <div className={clsx("text-xs font-medium",
+                isFinal || isSubtotal ? (v >= 0 ? "text-emerald-700 font-bold" : "text-red-600 font-bold") :
+                isExpense ? "text-red-600" : "text-gray-800",
+              )}>
+                {v !== 0 ? fmtC(v) : "—"}
+              </div>
+              {diff !== null && diff !== 0 && (
+                <div className="flex items-center justify-center gap-0.5">
+                  <span className={clsx("inline-flex items-center gap-0.5 text-[10px] font-bold px-1 py-0.5 rounded",
+                    isGood ? "bg-emerald-100 text-emerald-700" :
+                    isBad ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500",
+                  )}>
+                    {diff > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : diff < 0 ? <TrendingDown className="w-2.5 h-2.5" /> : <Minus className="w-2.5 h-2.5" />}
+                    {pct !== null && Math.abs(pct) < 1000 ? `${pct > 0 ? "+" : ""}${pct.toFixed(0)}%` : ""}
+                  </span>
+                </div>
+              )}
+            </div>
+          </td>
+        );
+      })}
+    </tr>
   );
 }
 
 // ── YoY Table ────────────────────────────────────────────────
 
-function YoyTable({
-  yearlyPnl, prevYearlyPnl, customGroups, year,
-}: {
+function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
   yearlyPnl: YearlyPnl;
   prevYearlyPnl: YearlyPnl | null;
   customGroups: DbCustomGroup[];
@@ -82,80 +146,48 @@ function YoyTable({
   }
 
   return (
-    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full text-xs">
+        <table className="text-xs border-collapse" style={{ minWidth: "520px" }}>
           <thead>
-            <tr className="bg-gray-50 border-b border-gray-200">
-              <th className="text-right py-3 px-4 font-bold text-gray-700 min-w-[200px]">סעיף</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[110px] bg-blue-50/30">{prevYear}</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-900 min-w-[110px]">{year}</th>
-              <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[100px]">הפרש / %</th>
+            <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
+              <th className="text-right py-3 px-4 font-bold text-sm sticky right-0 bg-slate-800 z-20 min-w-[180px]">סעיף</th>
+              <th className={clsx("text-center py-3 px-4 font-semibold min-w-[120px]", PERIOD_HEADER_BG[0], PERIOD_TEXT[0])}>
+                {prevYear}
+              </th>
+              <th className={clsx("text-center py-3 px-4 font-bold min-w-[120px]", PERIOD_HEADER_BG[1], PERIOD_TEXT[1])}>
+                {year} (נוכחי)
+              </th>
             </tr>
           </thead>
           <tbody>
-            {/* Revenue */}
-            <CompRow label="הכנסות נטו" curr={curr.revenue} prev={prev?.revenue ?? 0}
-              isSection isBold />
-
-            {/* Sections */}
+            <CompRow label="הכנסות נטו" values={[prev?.revenue ?? null, curr.revenue]} isBold baseIdx={0} />
             {PARENT_SECTION_ORDER.map((sec) => {
               const currVal = curr.bySection[sec];
               const prevVal = prev?.bySection[sec] ?? 0;
               if (currVal === 0 && prevVal === 0) return null;
-
               const groups = (groupsBySection.get(sec) ?? []).filter(
                 g => (curr.byGroup.get(g.id) ?? 0) > 0 || (prev?.byGroup.get(g.id) ?? 0) > 0,
               );
-
               return (
                 <tbody key={sec}>
-                  <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`} curr={currVal} prev={prevVal}
-                    isSection isExpense />
+                  <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`}
+                    values={[prevVal !== 0 ? prevVal : null, currVal]} isSection isExpense baseIdx={0} />
                   {groups.map((g) => (
-                    <CompRow key={g.id} label={`  ▸ ${g.name}`} isExpense indent
-                      curr={curr.byGroup.get(g.id) ?? 0}
-                      prev={prev?.byGroup.get(g.id) ?? 0} />
+                    <CompRow key={g.id} label={`  ▸ ${g.name}`} isExpense indent baseIdx={0}
+                      values={[(prev?.byGroup.get(g.id) ?? 0) !== 0 ? (prev?.byGroup.get(g.id) ?? 0) : null,
+                               curr.byGroup.get(g.id) ?? 0]} />
                   ))}
                   {sec === "cost_of_goods" && (
-                    <CompRow label="= רווח גולמי" curr={curr.grossProfit} prev={prev?.grossProfit ?? 0}
-                      isSubtotal />
+                    <CompRow label="= רווח גולמי" values={[prev?.grossProfit ?? null, curr.grossProfit]} isSubtotal baseIdx={0} />
                   )}
-                  {sec === "operating" && (
-                    <CompRow label="= רווח תפעולי" curr={curr.operatingProfit} prev={prev?.operatingProfit ?? 0}
-                      isSubtotal />
+                  {sec === "admin" && (
+                    <CompRow label="= רווח תפעולי" values={[prev?.operatingProfit ?? null, curr.operatingProfit]} isSubtotal baseIdx={0} />
                   )}
                 </tbody>
               );
             })}
-
-            {/* Net profit */}
-            <CompRow label="= רווח נקי" curr={curr.netProfit} prev={prev?.netProfit ?? 0} isSubtotal isFinal />
-
-            {/* Margin */}
-            <tr className="bg-gray-50 border-t border-gray-200">
-              <td className="py-2 px-4 text-gray-500 text-[11px]">% רווח נקי</td>
-              <td className="py-2 px-4 text-center bg-blue-50/30">
-                <span className={clsx("text-[10px] font-bold", (prev?.revenue ?? 0) > 0 ? "text-gray-700" : "text-gray-300")}>
-                  {(prev?.revenue ?? 0) > 0 ? `${(((prev?.netProfit ?? 0) / (prev?.revenue ?? 1)) * 100).toFixed(1)}%` : "—"}
-                </span>
-              </td>
-              <td className="py-2 px-4 text-center">
-                <span className={clsx("text-[10px] font-bold", curr.revenue > 0 ? "text-gray-700" : "text-gray-300")}>
-                  {curr.revenue > 0 ? `${((curr.netProfit / curr.revenue) * 100).toFixed(1)}%` : "—"}
-                </span>
-              </td>
-              <td className="py-2 px-4 text-center">
-                {curr.revenue > 0 && (prev?.revenue ?? 0) > 0 ? (
-                  <span className={clsx("text-[10px] font-bold",
-                    curr.netProfit / curr.revenue > (prev?.netProfit ?? 0) / (prev?.revenue ?? 1)
-                      ? "text-green-600" : "text-red-600",
-                  )}>
-                    {(((curr.netProfit / curr.revenue) - ((prev?.netProfit ?? 0) / (prev?.revenue ?? 1))) * 100).toFixed(1)}נ&quot;נ
-                  </span>
-                ) : "—"}
-              </td>
-            </tr>
+            <CompRow label="= רווח נקי" values={[prev?.netProfit ?? null, curr.netProfit]} isSubtotal isFinal baseIdx={0} />
           </tbody>
         </table>
       </div>
@@ -163,57 +195,41 @@ function YoyTable({
   );
 }
 
-function CompRow({
-  label, curr, prev, isSection, isSubtotal, isFinal, isExpense, isBold, indent,
-}: {
-  label: string; curr: number; prev: number;
-  isSection?: boolean; isSubtotal?: boolean; isFinal?: boolean;
-  isExpense?: boolean; isBold?: boolean; indent?: boolean;
-}) {
-  return (
-    <tr className={clsx("border-b border-gray-50",
-      isFinal && "bg-gradient-to-l from-blue-50/20 to-green-50/20",
-      isSubtotal && !isFinal && "bg-gray-50/70",
-    )}>
-      <td className={clsx("py-2 px-4",
-        isFinal ? "font-bold text-gray-900" :
-        isSubtotal ? "font-bold text-gray-800" :
-        isSection || isBold ? "font-semibold text-gray-700" :
-        indent ? "text-gray-500 text-[11px]" : "text-gray-600",
-      )}
-        style={indent ? { paddingRight: 24 } : undefined}
-      >
-        {label}
-      </td>
-      <td className="py-2 px-4 text-center tabular-nums bg-blue-50/20 text-xs text-gray-600">
-        {prev !== 0 ? fmtC(prev) : "—"}
-      </td>
-      <td className="py-2 px-4 text-center tabular-nums text-xs">
-        <span className={clsx(
-          isFinal || isSubtotal ? `font-bold ${curr >= 0 ? "text-green-700" : "text-red-600"}` :
-          isExpense ? "text-red-600" : "text-gray-800",
-        )}>
-          {curr !== 0 ? fmtC(curr) : "—"}
-        </span>
-      </td>
-      <DiffCell curr={curr} prev={prev} isExpense={isExpense} />
-    </tr>
-  );
-}
+// ── Flexible Multi-Period Comparison ────────────────────────────
 
-// ── Month vs Month ───────────────────────────────────────────
-
-function MonthCompTable({
-  yearlyPnl, customGroups,
-}: {
+function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
   yearlyPnl: YearlyPnl;
+  prevYearlyPnl: YearlyPnl | null;
   customGroups: DbCustomGroup[];
+  year: number;
 }) {
-  const [monthA, setMonthA] = useState(1);
-  const [monthB, setMonthB] = useState(Math.min(new Date().getMonth() + 1, 12));
+  const prevYear = year - 1;
 
-  const mdA = yearlyPnl.months[monthA - 1]!;
-  const mdB = yearlyPnl.months[monthB - 1]!;
+  const [periods, setPeriods] = useState<Period[]>([
+    { id: "a", year, month: 1 },
+    { id: "b", year, month: 2 },
+  ]);
+
+  const addPeriod = () => {
+    if (periods.length >= 4) return;
+    const nextMonth = (periods[periods.length - 1]?.month ?? 0) + 1;
+    setPeriods(prev => [...prev, {
+      id: crypto.randomUUID(),
+      year,
+      month: nextMonth <= 12 ? nextMonth : null,
+    }]);
+  };
+
+  const removePeriod = (id: string) => {
+    if (periods.length <= 2) return;
+    setPeriods(prev => prev.filter(p => p.id !== id));
+  };
+
+  const updatePeriod = (id: string, field: keyof Period, value: number | null) => {
+    setPeriods(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  };
+
+  const availableYears = [year, ...(prevYearlyPnl ? [prevYear] : [])];
 
   const groupsBySection = new Map<string, DbCustomGroup[]>();
   for (const g of customGroups) {
@@ -222,66 +238,99 @@ function MonthCompTable({
     groupsBySection.set(g.parent_section, list);
   }
 
+  const periodData = periods.map(p => getPeriodData(p, year, yearlyPnl, prevYearlyPnl));
+
   return (
     <div className="space-y-4">
-      {/* Selectors */}
-      <div className="flex items-center justify-center gap-4 bg-gray-50 rounded-xl p-3">
-        <select value={monthA} onChange={(e) => setMonthA(Number(e.target.value))}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white font-medium">
-          {MONTHS.map((m) => <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>)}
-        </select>
-        <span className="text-gray-400 font-bold text-lg">⟷</span>
-        <select value={monthB} onChange={(e) => setMonthB(Number(e.target.value))}
-          className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white font-medium">
-          {MONTHS.map((m) => <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>)}
-        </select>
+      {/* Period pickers */}
+      <div className="flex flex-wrap gap-3 items-start">
+        {periods.map((p, i) => (
+          <div key={p.id}
+            className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            <div className={clsx("w-3 h-3 rounded-full shrink-0", ["bg-blue-500","bg-violet-500","bg-orange-500","bg-teal-500"][i])} />
+            <select value={p.year}
+              onChange={e => updatePeriod(p.id, "year", +e.target.value)}
+              className="text-xs font-semibold border-0 bg-transparent focus:ring-0 pr-0 text-gray-800 cursor-pointer">
+              {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <select value={p.month ?? "full"}
+              onChange={e => updatePeriod(p.id, "month", e.target.value === "full" ? null : +e.target.value)}
+              className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-1 focus:ring-primary-300">
+              <option value="full">שנתי</option>
+              {MONTHS.map(m => <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>)}
+            </select>
+            {periods.length > 2 && (
+              <button onClick={() => removePeriod(p.id)}
+                className="text-gray-300 hover:text-red-400 transition-colors">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        ))}
+        {periods.length < 4 && (
+          <button onClick={addPeriod}
+            className="flex items-center gap-1.5 px-3 py-2 border-2 border-dashed border-gray-200 rounded-xl text-xs text-gray-400 hover:border-primary-300 hover:text-primary-600 transition-colors">
+            <Plus className="w-3.5 h-3.5" />
+            הוסף תקופה
+          </button>
+        )}
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+      {/* Table */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="text-xs border-collapse" style={{ minWidth: `${340 + periods.length * 130}px` }}>
             <thead>
-              <tr className="bg-gray-50 border-b border-gray-200">
-                <th className="text-right py-3 px-4 font-bold text-gray-700 min-w-[200px]">סעיף</th>
-                <th className="text-center py-3 px-4 font-semibold text-primary-700 min-w-[110px] bg-primary-50/30">{MONTH_LONG[monthA - 1]}</th>
-                <th className="text-center py-3 px-4 font-semibold text-primary-700 min-w-[110px] bg-primary-50/30">{MONTH_LONG[monthB - 1]}</th>
-                <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[100px]">הפרש / %</th>
+              <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
+                <th className="text-right py-3 px-4 font-bold text-sm sticky right-0 bg-slate-800 z-20 min-w-[180px]">סעיף</th>
+                {periods.map((p, i) => (
+                  <th key={p.id} className={clsx("text-center py-3 px-4 font-semibold min-w-[120px]", PERIOD_HEADER_BG[i], PERIOD_TEXT[i])}>
+                    <div>{periodLabel(p)}</div>
+                    {i > 0 && <div className="text-[10px] font-normal opacity-70">מול {periodLabel(periods[0]!)}</div>}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
-              <CompRow label="הכנסות" curr={mdB.revenue} prev={mdA.revenue} isSection isBold />
+              <CompRow label="הכנסות נטו" isBold baseIdx={0}
+                values={periodData.map(d => d?.revenue ?? null)} />
 
               {PARENT_SECTION_ORDER.map((sec) => {
-                const a = mdA.bySection[sec];
-                const b = mdB.bySection[sec];
-                if (a === 0 && b === 0) return null;
-
+                const hasAny = periodData.some(d => (d?.bySection[sec] ?? 0) !== 0);
+                if (!hasAny) return null;
                 const groups = (groupsBySection.get(sec) ?? []).filter(
-                  g => (mdA.byGroup.get(g.id) ?? 0) > 0 || (mdB.byGroup.get(g.id) ?? 0) > 0,
+                  g => periodData.some(d => (d?.byGroup.get(g.id) ?? 0) !== 0)
                 );
-
                 return (
                   <tbody key={sec}>
-                    <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`} curr={b} prev={a} isSection isExpense />
-                    {groups.map((g) => (
-                      <CompRow key={g.id} label={`  ▸ ${g.name}`} isExpense indent
-                        curr={mdB.byGroup.get(g.id) ?? 0} prev={mdA.byGroup.get(g.id) ?? 0} />
+                    <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`} isSection isExpense baseIdx={0}
+                      values={periodData.map(d => d?.bySection[sec] ?? null)} />
+                    {groups.map(g => (
+                      <CompRow key={g.id} label={`  ▸ ${g.name}`} isExpense indent baseIdx={0}
+                        values={periodData.map(d => d?.byGroup.get(g.id) ?? null)} />
                     ))}
                     {sec === "cost_of_goods" && (
-                      <CompRow label="= רווח גולמי" curr={mdB.grossProfit} prev={mdA.grossProfit} isSubtotal />
+                      <CompRow label="= רווח גולמי" isSubtotal baseIdx={0}
+                        values={periodData.map(d => d?.grossProfit ?? null)} />
                     )}
-                    {sec === "operating" && (
-                      <CompRow label="= רווח תפעולי" curr={mdB.operatingProfit} prev={mdA.operatingProfit} isSubtotal />
+                    {sec === "admin" && (
+                      <CompRow label="= רווח תפעולי" isSubtotal baseIdx={0}
+                        values={periodData.map(d => d?.operatingProfit ?? null)} />
                     )}
                   </tbody>
                 );
               })}
 
-              <CompRow label="= רווח נקי" curr={mdB.netProfit} prev={mdA.netProfit} isSubtotal isFinal />
+              <CompRow label="= רווח נקי" isSubtotal isFinal baseIdx={0}
+                values={periodData.map(d => d?.netProfit ?? null)} />
             </tbody>
           </table>
         </div>
       </div>
+
+      <p className="text-xs text-gray-400 px-1">
+        * חיצי האחוז מראים שינוי ביחס לתקופה הראשונה (הכחולה)
+      </p>
     </div>
   );
 }
@@ -293,8 +342,10 @@ export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups,
 
   if (!yearlyPnl) {
     return (
-      <div className="text-center py-16 text-gray-400">
-        <p className="text-sm">אין נתונים לשנת {year}.</p>
+      <div className="flex flex-col items-center justify-center py-20 text-gray-400 gap-3">
+        <div className="text-5xl">📊</div>
+        <p className="text-base font-medium text-gray-500">אין נתונים לשנת {year}</p>
+        <p className="text-sm">העלה קובץ כרטסת בטאב &quot;קבצים&quot;</p>
       </div>
     );
   }
@@ -303,16 +354,16 @@ export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups,
     <div className="space-y-4" dir="rtl">
       <div className="flex gap-1 bg-gray-100 rounded-xl p-0.5 w-fit">
         <button onClick={() => setMode("yoy")}
-          className={clsx("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-            mode === "yoy" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500",
+          className={clsx("px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+            mode === "yoy" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700",
           )}>
-          השוואה שנתית ({year} מול {year - 1})
+          השוואה שנתית {year} מול {year - 1}
         </button>
         <button onClick={() => setMode("months")}
-          className={clsx("px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-            mode === "months" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500",
+          className={clsx("px-4 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+            mode === "months" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700",
           )}>
-          השוואת חודשים
+          השוואת תקופות גמישה
         </button>
       </div>
 
@@ -321,12 +372,18 @@ export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups,
           <YoyTable yearlyPnl={yearlyPnl} prevYearlyPnl={prevYearlyPnl} customGroups={customGroups} year={year} />
         ) : (
           <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-2xl text-gray-400">
-            <p className="text-sm">אין נתונים לשנת {year - 1}.</p>
+            <div className="text-4xl mb-3">📁</div>
+            <p className="text-sm font-medium text-gray-500">אין נתונים לשנת {year - 1}</p>
             <p className="text-xs mt-1">העלה קובץ כרטסת עבור {year - 1} לקבלת השוואה שנתית</p>
           </div>
         )
       ) : (
-        <MonthCompTable yearlyPnl={yearlyPnl} customGroups={customGroups} />
+        <FlexComparison
+          yearlyPnl={yearlyPnl}
+          prevYearlyPnl={prevYearlyPnl}
+          customGroups={customGroups}
+          year={year}
+        />
       )}
     </div>
   );

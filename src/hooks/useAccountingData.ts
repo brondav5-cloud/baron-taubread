@@ -86,11 +86,19 @@ function buildClassifier(
   const accountById = new Map<string, DbAccount>();
   for (const a of accounts) accountById.set(a.id, a);
 
-  // Build group_code → group mapping for fast lookup
+  // account_code → group (highest precision — per account-mapping.md)
+  const acToGroup = new Map<string, DbCustomGroup>();
+  for (const g of customGroups) {
+    for (const ac of (g.account_codes ?? [])) {
+      if (!acToGroup.has(ac)) acToGroup.set(ac, g);
+    }
+  }
+
+  // group_code → group (fallback when account_codes is empty)
   const gcToGroup = new Map<string, DbCustomGroup>();
   for (const g of customGroups) {
     for (const gc of g.group_codes) {
-      gcToGroup.set(gc, g);
+      if (!gcToGroup.has(gc)) gcToGroup.set(gc, g);
     }
   }
 
@@ -101,10 +109,17 @@ function buildClassifier(
       return groupById.get(overrideGroupId) ?? null;
     }
 
-    // Layer 2: custom_groups by effective group_code
+    // Layer 2a: match by individual account code (precise, per mapping doc)
+    const account = accountById.get(accountId);
+    if (account) {
+      const byCode = acToGroup.get(account.code);
+      if (byCode) return byCode;
+    }
+
+    // Layer 2b: match by effective group_code (fallback)
     const effectiveGc =
       mode === "latest"
-        ? (accountById.get(accountId)?.latest_group_code ?? txGroupCode)
+        ? (account?.latest_group_code ?? txGroupCode)
         : txGroupCode;
 
     return gcToGroup.get(effectiveGc) ?? null;

@@ -90,6 +90,7 @@ export interface DbCustomGroup {
   display_order: number;
   color: string;
   group_codes: string[];
+  account_codes: string[]; // individual account codes (higher priority than group_codes)
   parent_section: ParentSection;
 }
 

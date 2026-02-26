@@ -10,19 +10,19 @@ import { useAccountingData } from "@/hooks/useAccountingData";
 import FilesTab from "@/components/accounting/FilesTab";
 import DashboardTab from "@/components/accounting/DashboardTab";
 import PnlTableTab from "@/components/accounting/PnlTableTab";
-import ClassificationTab from "@/components/accounting/ClassificationTab";
 import AlertsTab from "@/components/accounting/AlertsTab";
 import ComparisonsTab from "@/components/accounting/ComparisonsTab";
 import CategoryPanel from "@/components/accounting/CategoryPanel";
 import TransactionModal from "@/components/accounting/TransactionModal";
+import AccountMappingTab from "@/components/accounting/AccountMappingTab";
 
 const TABS = [
-  { id: "files",       label: "קבצים",        icon: FolderOpen },
-  { id: "dashboard",   label: "דשבורד",        icon: LayoutDashboard },
-  { id: "pnl",         label: "רווח והפסד",    icon: FileSpreadsheet },
-  { id: "classify",    label: "הגדרות סיווג",   icon: Settings },
-  { id: "alerts",      label: "התראות",         icon: Bell },
-  { id: "compare",     label: "השוואות",        icon: BarChart3 },
+  { id: "files",        label: "קבצים",          icon: FolderOpen },
+  { id: "dashboard",    label: "דשבורד",          icon: LayoutDashboard },
+  { id: "pnl",          label: "רווח והפסד",      icon: FileSpreadsheet },
+  { id: "accounts",     label: "חשבונות נגדיים",  icon: Settings },
+  { id: "alerts",       label: "התראות",           icon: Bell },
+  { id: "compare",      label: "השוואות",          icon: BarChart3 },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -170,23 +170,17 @@ export default function ExpensesPage() {
                 />
               )}
 
-              {activeTab === "classify" && (
-                <ClassificationTab
-                  customGroups={data.customGroups}
+              {activeTab === "accounts" && (
+                <AccountMappingTab
                   accounts={data.accounts}
+                  customGroups={data.customGroups}
                   classificationOverrides={data.classificationOverrides}
                   tags={data.tags}
                   accountTags={data.accountTags}
-                  counterNames={data.counterNames}
-                  onSaveGroup={data.saveGroup}
-                  onDeleteGroup={data.deleteGroup}
                   onSaveClassification={data.saveClassificationOverride}
                   onDeleteClassification={data.deleteClassificationOverride}
-                  onSaveTag={data.saveTag}
-                  onDeleteTag={data.deleteTag}
                   onAssignTag={data.assignTag}
                   onRemoveTag={data.removeTag}
-                  onSaveCounterName={data.saveCounterName}
                 />
               )}
 
