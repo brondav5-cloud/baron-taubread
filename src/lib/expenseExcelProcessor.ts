@@ -59,7 +59,8 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
   balance: ["יתרה (שקל)", "יתרה"],
 };
 
-const SKIP_PATTERNS = ["סה\"כ", "סה״כ", "יתרת פתיחה", "מספר תנועות"];
+const SUMMARY_END_PATTERNS = ["סה\"כ", "סה״כ", "מספר תנועות"];
+const SKIP_ROW_PATTERNS = ["יתרת פתיחה"];
 
 function findColumnIndex(
   headers: string[],
@@ -109,11 +110,14 @@ function parseExcelDate(val: unknown): string | null {
   return null;
 }
 
-function isSkipRow(row: unknown[]): boolean {
+function isSummaryEndRow(row: unknown[]): boolean {
   const first = String(row[0] ?? "").trim();
+  return SUMMARY_END_PATTERNS.some((p) => first.includes(p));
+}
+
+function isSkipRow(row: unknown[]): boolean {
   const third = String(row[2] ?? "").trim();
-  const combined = first + " " + third;
-  return SKIP_PATTERNS.some((p) => combined.includes(p));
+  return SKIP_ROW_PATTERNS.some((p) => third.includes(p));
 }
 
 function isSupplierHeaderRow(row: unknown[], nameIdx: number, keyIdx: number): boolean {
@@ -209,6 +213,12 @@ export async function processExpenseExcel(
       if (!row || row.every((c) => c == null || String(c).trim() === ""))
         continue;
 
+      if (isSummaryEndRow(row)) {
+        currentSupplierName = "";
+        currentAccountKey = "";
+        continue;
+      }
+
       if (isSkipRow(row)) continue;
 
       if (isSupplierHeaderRow(row, colIdx.name, colIdx.key)) {
@@ -229,9 +239,11 @@ export async function processExpenseExcel(
       const debits = parseNumber(colIdx.debits >= 0 ? row[colIdx.debits] : 0);
       const balance = parseNumber(colIdx.balance >= 0 ? row[colIdx.balance] : 0);
 
-      if (credits === 0 && debits === 0 && balance === 0) continue;
-
       const refDate = colIdx.date >= 0 ? parseExcelDate(row[colIdx.date]) : null;
+
+      if (!refDate) continue;
+
+      if (credits === 0 && debits === 0 && balance === 0) continue;
 
       const parsed: ParsedExpenseRow = {
         supplierName: currentSupplierName,
