@@ -52,6 +52,7 @@ export interface AccountingData extends AccountingApiData {
   // Mutation helpers
   saveClassificationOverride: (accountId: string, groupId: string, note?: string) => Promise<boolean>;
   deleteClassificationOverride: (accountId: string) => Promise<boolean>;
+  batchSaveClassificationOverrides: (changes: Array<{ accountId: string; groupId: string | null; note?: string }>) => Promise<boolean>;
   saveTransactionOverride: (txId: string, type: DbTransactionOverride["override_type"], newValue?: string, note?: string) => Promise<boolean>;
   deleteTransactionOverride: (id: string) => Promise<boolean>;
   saveGroup: (group: Partial<DbCustomGroup> & { name: string; parent_section: ParentSection; group_codes: string[] }) => Promise<boolean>;
@@ -504,6 +505,25 @@ export function useAccountingData(year: number): AccountingData {
     [fetchData],
   );
 
+  const batchSaveClassificationOverrides = useCallback(
+    async (changes: Array<{ accountId: string; groupId: string | null; note?: string }>): Promise<boolean> => {
+      const res = await fetch("/api/accounting/classifications", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          changes: changes.map((c) => ({
+            account_id: c.accountId,
+            custom_group_id: c.groupId,
+            note: c.note,
+          })),
+        }),
+      });
+      if (res.ok) await fetchData();
+      return res.ok;
+    },
+    [fetchData],
+  );
+
   const saveTransactionOverride = useCallback(
     async (txId: string, type: DbTransactionOverride["override_type"], newValue?: string, note?: string): Promise<boolean> => {
       const res = await fetch("/api/accounting/overrides", {
@@ -659,6 +679,7 @@ export function useAccountingData(year: number): AccountingData {
     getEffectiveGroup,
     saveClassificationOverride,
     deleteClassificationOverride,
+    batchSaveClassificationOverrides,
     saveTransactionOverride,
     deleteTransactionOverride,
     saveGroup,

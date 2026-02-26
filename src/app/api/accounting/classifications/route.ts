@@ -46,6 +46,53 @@ export async function POST(request: Request) {
   return NextResponse.json({ classification: data });
 }
 
+// PATCH /api/accounting/classifications — batch upsert + delete in one round trip
+// Body: { changes: Array<{ account_id: string; custom_group_id: string | null; note?: string }> }
+export async function PATCH(request: Request) {
+  const user = await getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body: { changes: Array<{ account_id: string; custom_group_id: string | null; note?: string }> } =
+    await request.json();
+  if (!Array.isArray(body.changes) || body.changes.length === 0) {
+    return NextResponse.json({ success: true });
+  }
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+  const toUpsert = body.changes.filter((c) => c.custom_group_id !== null);
+  const toDelete = body.changes.filter((c) => c.custom_group_id === null).map((c) => c.account_id);
+
+  const errors: string[] = [];
+
+  if (toUpsert.length > 0) {
+    const { error } = await supabase
+      .from("account_classification_overrides")
+      .upsert(
+        toUpsert.map((c) => ({
+          user_id: user.id,
+          account_id: c.account_id,
+          custom_group_id: c.custom_group_id!,
+          note: c.note ?? null,
+        })),
+        { onConflict: "user_id,account_id" },
+      );
+    if (error) errors.push(error.message);
+  }
+
+  if (toDelete.length > 0) {
+    const { error } = await supabase
+      .from("account_classification_overrides")
+      .delete()
+      .eq("user_id", user.id)
+      .in("account_id", toDelete);
+    if (error) errors.push(error.message);
+  }
+
+  if (errors.length > 0) return NextResponse.json({ error: errors.join("; ") }, { status: 500 });
+  return NextResponse.json({ success: true });
+}
+
 // DELETE /api/accounting/classifications?account_id=xxx
 export async function DELETE(request: Request) {
   const user = await getUser();

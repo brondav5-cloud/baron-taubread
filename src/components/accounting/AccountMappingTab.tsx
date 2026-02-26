@@ -22,6 +22,7 @@ interface Props {
   transactions?: { counter_account: string | null }[];
   onSaveClassification: (accountId: string, groupId: string, note?: string) => Promise<boolean>;
   onDeleteClassification: (accountId: string) => Promise<boolean>;
+  onBatchSaveClassifications: (changes: Array<{ accountId: string; groupId: string | null }>) => Promise<boolean>;
   onSaveGroup: (group: Partial<DbCustomGroup> & { name: string; parent_section: ParentSection; group_codes: string[] }) => Promise<boolean>;
   onDeleteGroup: (id: string) => Promise<boolean>;
   onSaveTag: (tag: Partial<DbCustomTag> & { name: string; color: string }) => Promise<boolean>;
@@ -438,26 +439,40 @@ function GroupsTab({ accounts, customGroups, classificationOverrides, onSaveGrou
 // TAB 2 — Classification Key (existing, enhanced)
 // ══════════════════════════════════════════════════════════════
 
-function ClassificationTab({ accounts, customGroups, classificationOverrides, onSaveClassification, onDeleteClassification }: {
+function ClassificationTab({ accounts, customGroups, classificationOverrides, onBatchSave }: {
   accounts: DbAccount[];
   customGroups: DbCustomGroup[];
   classificationOverrides: DbAccountClassificationOverride[];
   tags?: DbCustomTag[];
   accountTags?: DbAccountTag[];
-  onSaveClassification: Props["onSaveClassification"];
-  onDeleteClassification: Props["onDeleteClassification"];
+  onBatchSave: (changes: Array<{ accountId: string; groupId: string | null }>) => Promise<boolean>;
+  onSaveClassification?: Props["onSaveClassification"];
+  onDeleteClassification?: Props["onDeleteClassification"];
   onAssignTag?: Props["onAssignTag"];
   onRemoveTag?: Props["onRemoveTag"];
 }) {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<"all" | "overridden" | "unclassified">("all");
   const [sortField, setSortField] = useState<"code" | "name">("code");
-  const [savingId, setSavingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  // pending: accountId → groupId (null = delete override / reset to auto)
+  const [pending, setPending] = useState<Map<string, string | null>>(new Map());
 
   const overrideMap = useMemo(() =>
     new Map(classificationOverrides.map(o => [o.account_id, o])),
     [classificationOverrides],
   );
+
+  const groupMap = useMemo(() => new Map(customGroups.map(g => [g.id, g])), [customGroups]);
+
+  // Get the effective group considering pending changes
+  const getDisplayGroup = (acct: DbAccount) => {
+    if (pending.has(acct.id)) {
+      const pendingGroupId = pending.get(acct.id);
+      return pendingGroupId ? (groupMap.get(pendingGroupId) ?? null) : null;
+    }
+    return getEffectiveGroup(acct, customGroups, classificationOverrides);
+  };
 
   const filtered = useMemo(() => {
     let list = accounts.filter(a => a.account_type === "expense");
@@ -481,6 +496,7 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
         : a.account.name.localeCompare(b.account.name, "he")
     );
     return filtered;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accounts, customGroups, classificationOverrides, overrideMap, search, filterType, sortField]);
 
   const stats = useMemo(() => {
@@ -492,8 +508,47 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
     };
   }, [accounts, customGroups, classificationOverrides]);
 
+  const handleBatchSave = async () => {
+    if (pending.size === 0) return;
+    setSaving(true);
+    const changes = Array.from(pending.entries()).map(([accountId, groupId]) => ({ accountId, groupId }));
+    const ok = await onBatchSave(changes);
+    if (ok) setPending(new Map());
+    setSaving(false);
+  };
+
   return (
     <div className="space-y-4">
+      {/* Pending-changes save banner */}
+      {pending.size > 0 && (
+        <div className="flex items-center justify-between bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3">
+          <div className="flex items-center gap-2 text-amber-800 text-xs font-medium">
+            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+            {pending.size} שינוי{pending.size > 1 ? "ים" : ""} ממתינ{pending.size > 1 ? "ים" : ""} — טרם נשמרו
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setPending(new Map())}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs text-amber-700 border border-amber-300 rounded-xl hover:bg-amber-100 transition-colors"
+            >
+              בטל שינויים
+            </button>
+            <button
+              onClick={() => void handleBatchSave()}
+              disabled={saving}
+              className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-colors disabled:opacity-60"
+            >
+              {saving ? (
+                <><span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> שומר...</>
+              ) : (
+                <><Check className="w-3.5 h-3.5" /> שמור {pending.size} שינויים</>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-3 gap-3">
         {[
           { label: "סה\"כ חשבונות", value: stats.total, color: "text-gray-800", bg: "bg-gray-50" },
@@ -559,14 +614,16 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
                     <p className="text-sm">לא נמצאו חשבונות</p>
                   </td>
                 </tr>
-              ) : filtered.map(({ account, group, override }) => {
-                const isSaving = savingId === account.id;
+              ) : filtered.map(({ account, override }) => {
+                const isPending = pending.has(account.id);
+                const displayGroup = getDisplayGroup(account);
+                const hasOverrideOrPending = !!override || isPending;
                 return (
                   <tr key={account.id}
                     className={clsx("border-b border-gray-50 hover:bg-gray-50/60 transition-colors",
-                      isSaving && "opacity-60",
-                      !group && "bg-red-50/30",
-                      !!override && "bg-amber-50/20",
+                      !displayGroup && "bg-red-50/30",
+                      isPending && "bg-amber-50/40",
+                      !!override && !isPending && "bg-amber-50/20",
                     )}>
                     <td className="py-2.5 px-4">
                       <code className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono text-[11px]">
@@ -575,23 +632,25 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
                     </td>
                     <td className="py-2.5 px-4 font-medium text-gray-800 text-[12px]">
                       {account.name}
-                      {!group && <span className="mr-2 text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-bold">ללא שיוך</span>}
+                      {!displayGroup && !isPending && <span className="mr-2 text-[9px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-bold">ללא שיוך</span>}
+                      {isPending && <span className="mr-2 text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded font-bold">✎ ממתין</span>}
                     </td>
                     <td className="py-2 px-4">
                       <GroupSelectCell
                         customGroups={customGroups}
-                        currentGroup={group}
-                        override={override}
-                        saving={isSaving}
+                        currentGroup={displayGroup}
+                        override={hasOverrideOrPending ? (override ?? { account_id: account.id, custom_group_id: "" } as DbAccountClassificationOverride) : undefined}
+                        saving={false}
                         onSave={async gId => {
-                          setSavingId(account.id);
-                          await onSaveClassification(account.id, gId);
-                          setSavingId(null);
+                          setPending(prev => { const m = new Map(prev); m.set(account.id, gId); return m; });
                         }}
                         onDelete={async () => {
-                          setSavingId(account.id);
-                          await onDeleteClassification(account.id);
-                          setSavingId(null);
+                          setPending(prev => {
+                            const m = new Map(prev);
+                            // null = reset to default (no override)
+                            if (override) { m.set(account.id, null); } else { m.delete(account.id); }
+                            return m;
+                          });
                         }}
                       />
                     </td>
@@ -842,7 +901,8 @@ function CounterNamesTab({ counterNames, transactions, onSaveCounterName }: {
 export default function AccountMappingTab({
   accounts, customGroups, classificationOverrides, tags, accountTags, counterNames,
   transactions: txProp,
-  onSaveClassification, onDeleteClassification, onSaveGroup, onDeleteGroup,
+  onSaveClassification, onDeleteClassification, onBatchSaveClassifications,
+  onSaveGroup, onDeleteGroup,
   onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName,
 }: Props) {
   const [activeTab, setActiveTab] = useState<InnerTab>("classification");
@@ -905,6 +965,7 @@ export default function AccountMappingTab({
             classificationOverrides={classificationOverrides}
             tags={tags}
             accountTags={accountTags}
+            onBatchSave={onBatchSaveClassifications}
             onSaveClassification={onSaveClassification}
             onDeleteClassification={onDeleteClassification}
             onAssignTag={onAssignTag}

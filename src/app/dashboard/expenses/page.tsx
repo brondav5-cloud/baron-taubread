@@ -15,6 +15,7 @@ import ComparisonsTab from "@/components/accounting/ComparisonsTab";
 import CategoryPanel from "@/components/accounting/CategoryPanel";
 import TransactionModal from "@/components/accounting/TransactionModal";
 import AccountMappingTab from "@/components/accounting/AccountMappingTab";
+import AccountDetailPanel from "@/components/accounting/AccountDetailPanel";
 
 // ── Toast system ──────────────────────────────────────────────
 
@@ -86,6 +87,7 @@ export default function ExpensesPage() {
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openAccountId, setOpenAccountId] = useState<string | null>(null);
   const [openAccountMonth, setOpenAccountMonth] = useState<number | undefined>(undefined);
+  const [detailAccountId, setDetailAccountId] = useState<string | null>(null);
 
   const { toasts, addToast, removeToast } = useToast();
 
@@ -269,6 +271,7 @@ export default function ExpensesPage() {
                     setOpenAccountId(accountId === "revenue" ? null : accountId);
                     setOpenAccountMonth(month);
                   }}
+                  onAccountClick={(accountId) => setDetailAccountId(accountId)}
                 />
               )}
 
@@ -291,6 +294,12 @@ export default function ExpensesPage() {
                     withToast(
                       () => data.deleteClassificationOverride(accountId),
                       "הסיווג אופס לברירת מחדל",
+                    )
+                  }
+                  onBatchSaveClassifications={(changes) =>
+                    withToast(
+                      () => data.batchSaveClassificationOverrides(changes),
+                      `${changes.length} סיווג${changes.length > 1 ? "ים" : ""} נשמרו בהצלחה`,
                     )
                   }
                   onSaveGroup={(group) =>
@@ -391,6 +400,23 @@ export default function ExpensesPage() {
           withToast(() => data.deleteTransactionOverride(id), "שינוי הוסר")
         }
       />
+
+      {/* Account detail panel */}
+      {detailAccountId && (() => {
+        const account = data.accounts.find(a => a.id === detailAccountId);
+        if (!account) return null;
+        const availableYears = Array.from(new Set(data.transactions.map(t => new Date(t.transaction_date).getFullYear()))).sort((a, b) => b - a);
+        return (
+          <AccountDetailPanel
+            account={account}
+            transactions={data.transactions}
+            counterNames={data.counterNames}
+            years={availableYears.length > 0 ? availableYears : [year]}
+            initialYear={year}
+            onClose={() => setDetailAccountId(null)}
+          />
+        );
+      })()}
 
       {/* Toast notifications */}
       <ToastContainer toasts={toasts} onRemove={removeToast} />

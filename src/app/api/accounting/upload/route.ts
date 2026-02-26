@@ -60,28 +60,44 @@ export async function POST(request: Request) {
 
     const fileId = uploadRecord.id as string;
 
-    // 2. Upsert accounts
-    const { error: accountsErr } = await supabase.from("accounts").upsert(
-      accounts.map((a) => ({
-        user_id: user.id,
-        code: a.code,
-        name: a.name,
-        latest_group_code: a.group_code,
-        account_type: a.account_type,
-      })),
-      { onConflict: "user_id,code", ignoreDuplicates: false },
-    );
+    // 2. Upsert accounts — split into new vs existing to avoid overwriting account_type
+    // account_type is determined once when an account is first created.
+    // Uploading a new file (e.g. 2025) must NOT change account_type for existing accounts.
+    const { data: existingAccounts } = await supabase
+      .from("accounts")
+      .select("code")
+      .eq("user_id", user.id);
 
-    if (accountsErr) {
-      await supabase
-        .from("uploaded_files")
-        .update({ status: "error", error_msg: accountsErr.message })
-        .eq("id", fileId);
-      return NextResponse.json(
-        { error: "Failed to upsert accounts: " + accountsErr.message },
-        { status: 500 },
+    const existingCodes = new Set((existingAccounts ?? []).map((a: { code: string }) => a.code));
+    const newAccounts = accounts.filter((a) => !existingCodes.has(a.code));
+    const updatedAccounts = accounts.filter((a) => existingCodes.has(a.code));
+
+    // Insert brand-new accounts (with account_type)
+    if (newAccounts.length > 0) {
+      const { error: insertErr } = await supabase.from("accounts").insert(
+        newAccounts.map((a) => ({
+          user_id: user.id,
+          code: a.code,
+          name: a.name,
+          latest_group_code: a.group_code,
+          account_type: a.account_type,
+        })),
       );
+      if (insertErr) {
+        await supabase.from("uploaded_files").update({ status: "error", error_msg: insertErr.message }).eq("id", fileId);
+        return NextResponse.json({ error: "Failed to insert new accounts: " + insertErr.message }, { status: 500 });
+      }
     }
+
+    // Update existing accounts — name and group_code only, NEVER account_type
+    for (const a of updatedAccounts) {
+      await supabase
+        .from("accounts")
+        .update({ name: a.name, latest_group_code: a.group_code })
+        .eq("user_id", user.id)
+        .eq("code", a.code);
+    }
+
 
     return NextResponse.json({ success: true, fileId });
   } catch (err) {

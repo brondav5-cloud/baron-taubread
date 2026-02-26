@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Download, ChevronDown, ChevronRight } from "lucide-react";
 import { clsx } from "clsx";
 import type {
@@ -18,6 +18,7 @@ interface Props {
   year: number;
   onGroupClick?: (groupId: string, month?: number) => void;
   onAmountClick?: (accountId: string, month?: number) => void;
+  onAccountClick?: (accountId: string) => void;
 }
 
 type ViewMode = "yearly" | "compare";
@@ -142,7 +143,7 @@ const SECTION_STYLES: Record<string, { bg: string; text: string; border: string;
 
 export default function PnlTableTab({
   yearlyPnl, prevYearlyPnl, customGroups, accounts, getEffectiveGroup,
-  year, onGroupClick, onAmountClick,
+  year, onGroupClick, onAmountClick, onAccountClick,
 }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("yearly");
   const [compareA, setCompareA] = useState(1);
@@ -533,7 +534,7 @@ export default function PnlTableTab({
                 const ss = SECTION_STYLES[section] ?? SECTION_STYLES["other"]!;
 
                 return (
-                  <tbody key={section}>
+                  <React.Fragment key={section}>
                     {/* Section header row */}
                     <tr className={clsx("border-b cursor-pointer hover:brightness-95 transition-all", ss.bg, ss.border)}
                       onClick={() => toggleSection(section)}>
@@ -572,7 +573,7 @@ export default function PnlTableTab({
                       const groupTotal = yearlyPnl.total.byGroup.get(g.id) ?? 0;
 
                       return (
-                        <tbody key={g.id}>
+                        <React.Fragment key={g.id}>
                           {/* Group row */}
                           <tr className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
                             <td
@@ -645,7 +646,13 @@ export default function PnlTableTab({
                                   style={{ paddingRight: "48px", paddingLeft: "8px" }}
                                 >
                                   <span className="font-mono text-[10px] text-gray-400 ml-1">{acct.code}</span>
-                                  <span>{acct.name}</span>
+                                  <button
+                                    className="hover:text-primary-700 hover:underline text-right transition-colors"
+                                    onClick={() => onAccountClick?.(acct.id)}
+                                    title="לחץ לפתיחת כרטיס חשבון"
+                                  >
+                                    {acct.name}
+                                  </button>
                                 </td>
                                 {MONTHS.map(m => {
                                   const v = getVal(md => md.byAccount.get(acct.id) ?? 0, m);
@@ -704,7 +711,7 @@ export default function PnlTableTab({
                               <td className="bg-gray-50" />
                             </tr>
                           )}
-                        </tbody>
+                        </React.Fragment>
                       );
                     })}
 
@@ -765,7 +772,7 @@ export default function PnlTableTab({
                         </td>
                       </tr>
                     )}
-                  </tbody>
+                  </React.Fragment>
                 );
               })}
 
