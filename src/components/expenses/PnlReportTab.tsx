@@ -1,12 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Plus,
-  X,
-  TrendingUp,
-  TrendingDown,
-} from "lucide-react";
+import { Plus, X, TrendingUp, TrendingDown, Eye } from "lucide-react";
 import { clsx } from "clsx";
 import type {
   DbExpenseEntry,
@@ -34,12 +29,27 @@ interface Props {
   onDeleteRevenue: (id: string) => Promise<boolean>;
 }
 
-const SECTION_ORDER: ExpenseCategoryParentType[] = [
-  "cost_of_goods",
-  "operating",
-  "finance",
-  "other",
-];
+type ViewMode = "yearly" | "compare";
+
+const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
+const MONTH_SHORT = MONTHS.map((m) =>
+  new Date(2000, m - 1).toLocaleString("he-IL", { month: "short" }),
+);
+const MONTH_LONG = MONTHS.map((m) =>
+  new Date(2000, m - 1).toLocaleString("he-IL", { month: "long" }),
+);
+
+interface MonthlyPnl {
+  revenue: number;
+  costOfGoods: number;
+  grossProfit: number;
+  operating: number;
+  operatingProfit: number;
+  finance: number;
+  other: number;
+  netProfit: number;
+  byCategory: Map<string, number>;
+}
 
 export default function PnlReportTab({
   entries,
@@ -51,6 +61,11 @@ export default function PnlReportTab({
   onSaveRevenue,
   onDeleteRevenue,
 }: Props) {
+  const [viewMode, setViewMode] = useState<ViewMode>("yearly");
+  const [compareMonthA, setCompareMonthA] = useState(1);
+  const [compareMonthB, setCompareMonthB] = useState(
+    Math.min(new Date().getMonth() + 1, 12),
+  );
   const [showRevenueForm, setShowRevenueForm] = useState(false);
   const [revMonth, setRevMonth] = useState(month || new Date().getMonth() + 1);
   const [revYear, setRevYear] = useState(year);
@@ -71,59 +86,91 @@ export default function PnlReportTab({
     return m;
   }, [categories]);
 
-  // Build P&L sections from expense entries
-  const expenseByParentType = useMemo(() => {
-    const result = new Map<
-      ExpenseCategoryParentType,
-      Map<string, { name: string; total: number }>
-    >();
-
-    for (const type of SECTION_ORDER) {
-      result.set(type, new Map());
-    }
-
+  // Build all unique category names grouped by parent type
+  const categoryRows = useMemo(() => {
+    const seen = new Map<string, { name: string; parentType: ExpenseCategoryParentType }>();
     for (const entry of entries) {
       const supplier = supplierMap.get(entry.supplier_id);
       const catId = supplier?.category_id;
       const cat = catId ? categoryMap.get(catId) : null;
-      const parentType = cat?.parent_type || "other";
-
-      const section = result.get(parentType)!;
       const catName = cat?.name || "ללא קטגוריה";
-      if (!section.has(catName)) {
-        section.set(catName, { name: catName, total: 0 });
+      const parentType = cat?.parent_type || "other";
+      if (!seen.has(catName)) {
+        seen.set(catName, { name: catName, parentType });
       }
-      section.get(catName)!.total += (Number(entry.debits) || 0) - (Number(entry.credits) || 0);
     }
-
-    return result;
+    return Array.from(seen.values());
   }, [entries, supplierMap, categoryMap]);
 
-  // Revenue total
-  const totalRevenue = useMemo(
-    () => revenue.reduce((sum, r) => sum + Number(r.amount), 0),
-    [revenue],
-  );
+  // Monthly P&L data
+  const monthlyData = useMemo((): MonthlyPnl[] => {
+    return MONTHS.map((m) => {
+      const monthEntries = entries.filter((e) => e.month === m && e.year === year);
+      const monthRevenue = revenue.filter(
+        (r) => r.month === m && r.year === year,
+      );
 
-  // Section totals
-  const sectionTotals = useMemo(() => {
-    const totals: Record<ExpenseCategoryParentType, number> = {
-      cost_of_goods: 0,
-      operating: 0,
-      finance: 0,
-      other: 0,
-    };
-    expenseByParentType.forEach((catMap, type) => {
-      catMap.forEach((item) => {
-        totals[type] += item.total;
-      });
+      const rev = monthRevenue.reduce((s, r) => s + Number(r.amount), 0);
+      const byCategory = new Map<string, number>();
+      const byParent: Record<ExpenseCategoryParentType, number> = {
+        cost_of_goods: 0,
+        operating: 0,
+        finance: 0,
+        other: 0,
+      };
+
+      for (const entry of monthEntries) {
+        const supplier = supplierMap.get(entry.supplier_id);
+        const catId = supplier?.category_id;
+        const cat = catId ? categoryMap.get(catId) : null;
+        const catName = cat?.name || "ללא קטגוריה";
+        const parentType = cat?.parent_type || "other";
+        const amount = (Number(entry.debits) || 0) - (Number(entry.credits) || 0);
+
+        byCategory.set(catName, (byCategory.get(catName) || 0) + amount);
+        byParent[parentType] += amount;
+      }
+
+      const grossProfit = rev - byParent.cost_of_goods;
+      const operatingProfit = grossProfit - byParent.operating;
+      const netProfit = operatingProfit - byParent.finance - byParent.other;
+
+      return {
+        revenue: rev,
+        costOfGoods: byParent.cost_of_goods,
+        grossProfit,
+        operating: byParent.operating,
+        operatingProfit,
+        finance: byParent.finance,
+        other: byParent.other,
+        netProfit,
+        byCategory,
+      };
     });
-    return totals;
-  }, [expenseByParentType]);
+  }, [entries, revenue, year, supplierMap, categoryMap]);
 
-  const grossProfit = totalRevenue - sectionTotals.cost_of_goods;
-  const operatingProfit = grossProfit - sectionTotals.operating;
-  const netProfit = operatingProfit - sectionTotals.finance - sectionTotals.other;
+  // Totals for the year
+  const yearTotal = useMemo((): MonthlyPnl => {
+    const totals: MonthlyPnl = {
+      revenue: 0, costOfGoods: 0, grossProfit: 0, operating: 0,
+      operatingProfit: 0, finance: 0, other: 0, netProfit: 0,
+      byCategory: new Map(),
+    };
+    for (const md of monthlyData) {
+      totals.revenue += md.revenue;
+      totals.costOfGoods += md.costOfGoods;
+      totals.grossProfit += md.grossProfit;
+      totals.operating += md.operating;
+      totals.operatingProfit += md.operatingProfit;
+      totals.finance += md.finance;
+      totals.other += md.other;
+      totals.netProfit += md.netProfit;
+      md.byCategory.forEach((val, key) => {
+        totals.byCategory.set(key, (totals.byCategory.get(key) || 0) + val);
+      });
+    }
+    return totals;
+  }, [monthlyData]);
 
   const handleSaveRevenue = async () => {
     if (!revAmount) return;
@@ -141,27 +188,55 @@ export default function PnlReportTab({
     setRevDescription("");
   };
 
-  const periodLabel = month
-    ? `${new Date(year, month - 1).toLocaleString("he-IL", { month: "long" })} ${year}`
-    : `שנת ${year}`;
+  const getCellVal = (md: MonthlyPnl, catName: string) =>
+    md.byCategory.get(catName) || 0;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">
-            דוח רווח והפסד
+            דוח רווח והפסד — {year}
           </h2>
-          <p className="text-sm text-gray-500">{periodLabel}</p>
+          <p className="text-sm text-gray-500">
+            {entries.length} רשומות הוצאות · {revenue.length} רשומות הכנסה
+          </p>
         </div>
-        <button
-          onClick={() => setShowRevenueForm(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl text-sm font-medium hover:bg-green-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          הוסף הכנסה
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex bg-gray-100 rounded-xl p-0.5">
+            <button
+              onClick={() => setViewMode("yearly")}
+              className={clsx(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                viewMode === "yearly"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500",
+              )}
+            >
+              <Eye className="w-3.5 h-3.5 inline ml-1" />
+              שנתי
+            </button>
+            <button
+              onClick={() => setViewMode("compare")}
+              className={clsx(
+                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                viewMode === "compare"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500",
+              )}
+            >
+              השוואת חודשים
+            </button>
+          </div>
+          <button
+            onClick={() => setShowRevenueForm(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-xl text-xs font-medium hover:bg-green-700 transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            הכנסה
+          </button>
+        </div>
       </div>
 
       {/* Revenue Form */}
@@ -181,10 +256,8 @@ export default function PnlReportTab({
                 onChange={(e) => setRevMonth(Number(e.target.value))}
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white"
               >
-                {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                  <option key={m} value={m}>
-                    {new Date(2000, m - 1).toLocaleString("he-IL", { month: "long" })}
-                  </option>
+                {MONTHS.map((m) => (
+                  <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>
                 ))}
               </select>
             </div>
@@ -196,11 +269,7 @@ export default function PnlReportTab({
                 className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white"
               >
                 {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i).map(
-                  (y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ),
+                  (y) => (<option key={y} value={y}>{y}</option>),
                 )}
               </select>
             </div>
@@ -235,173 +304,583 @@ export default function PnlReportTab({
         </div>
       )}
 
-      {/* P&L Statement */}
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
-        {/* Revenue Section */}
-        <div className="bg-green-50 border-b border-green-100">
-          <div className="px-6 py-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-sm font-bold text-green-800 uppercase tracking-wider">
-                הכנסות
-              </h3>
-              <span className="text-lg font-bold text-green-700">
-                {formatCurrency(totalRevenue)}
-              </span>
-            </div>
-            {revenue.length > 0 && (
-              <div className="mt-2 space-y-1">
-                {revenue.map((r) => (
-                  <div key={r.id} className="flex justify-between text-xs text-green-700">
-                    <span>
-                      {r.description || r.category}{" "}
-                      ({new Date(r.year, r.month - 1).toLocaleString("he-IL", { month: "short" })})
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <span>{formatCurrency(Number(r.amount))}</span>
-                      <button
-                        onClick={() => onDeleteRevenue(r.id)}
-                        className="text-red-400 hover:text-red-600"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            {revenue.length === 0 && (
-              <p className="text-xs text-green-600 mt-1">
-                לא הוזנו הכנסות — לחץ &quot;הוסף הכנסה&quot; למעלה
-              </p>
-            )}
-          </div>
+      {/* Compare mode selector */}
+      {viewMode === "compare" && (
+        <div className="flex items-center justify-center gap-4 bg-gray-50 rounded-xl p-3">
+          <select
+            value={compareMonthA}
+            onChange={(e) => setCompareMonthA(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white font-medium"
+          >
+            {MONTHS.map((m) => (
+              <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>
+            ))}
+          </select>
+          <span className="text-gray-400 font-bold">⟷</span>
+          <select
+            value={compareMonthB}
+            onChange={(e) => setCompareMonthB(Number(e.target.value))}
+            className="px-3 py-2 border border-gray-200 rounded-xl text-sm bg-white font-medium"
+          >
+            {MONTHS.map((m) => (
+              <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>
+            ))}
+          </select>
         </div>
+      )}
 
-        {/* Expense Sections */}
-        {SECTION_ORDER.map((parentType) => {
-          const items = expenseByParentType.get(parentType);
-          if (!items || items.size === 0) return null;
-          const sectionTotal = sectionTotals[parentType];
+      {/* P&L Table */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              {viewMode === "yearly" ? (
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-right py-3 px-4 font-bold text-gray-700 sticky right-0 bg-gray-50 z-10 min-w-[160px]">
+                    סעיף
+                  </th>
+                  {MONTHS.map((m) => (
+                    <th
+                      key={m}
+                      className="text-center py-3 px-2 font-semibold text-gray-500 min-w-[80px]"
+                    >
+                      {MONTH_SHORT[m - 1]}
+                    </th>
+                  ))}
+                  <th className="text-center py-3 px-3 font-bold text-gray-900 bg-gray-100 min-w-[95px]">
+                    סה&quot;כ
+                  </th>
+                </tr>
+              ) : (
+                <tr className="bg-gray-50 border-b border-gray-200">
+                  <th className="text-right py-3 px-4 font-bold text-gray-700 min-w-[160px]">
+                    סעיף
+                  </th>
+                  <th className="text-center py-3 px-4 font-semibold text-primary-700 min-w-[100px] bg-primary-50">
+                    {MONTH_LONG[compareMonthA - 1]}
+                  </th>
+                  <th className="text-center py-3 px-4 font-semibold text-primary-700 min-w-[100px] bg-primary-50">
+                    {MONTH_LONG[compareMonthB - 1]}
+                  </th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[90px]">
+                    הפרש
+                  </th>
+                  <th className="text-center py-3 px-4 font-semibold text-gray-600 min-w-[70px]">
+                    % שינוי
+                  </th>
+                </tr>
+              )}
+            </thead>
+            <tbody>
+              {/* REVENUE */}
+              <PnlTableRow
+                label="הכנסות"
+                isSection
+                sectionColor="bg-green-50"
+                textColor="text-green-800"
+                monthlyData={monthlyData}
+                yearTotal={yearTotal}
+                getValue={(md) => md.revenue}
+                viewMode={viewMode}
+                compareA={compareMonthA}
+                compareB={compareMonthB}
+              />
 
-          return (
-            <div key={parentType} className="border-b border-gray-100">
-              <div className="px-6 py-3 bg-gray-50">
-                <div className="flex justify-between items-center">
-                  <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    (-) {PARENT_TYPE_LABELS[parentType]}
-                  </h3>
-                  <span className="text-sm font-bold text-red-600">
-                    {formatCurrency(sectionTotal)}
-                  </span>
+              {/* COST OF GOODS */}
+              <PnlTableRow
+                label={`(-) ${PARENT_TYPE_LABELS.cost_of_goods}`}
+                isSection
+                monthlyData={monthlyData}
+                yearTotal={yearTotal}
+                getValue={(md) => md.costOfGoods}
+                viewMode={viewMode}
+                compareA={compareMonthA}
+                compareB={compareMonthB}
+                isExpense
+              />
+              {categoryRows
+                .filter((c) => c.parentType === "cost_of_goods")
+                .map((c) => (
+                  <PnlTableRow
+                    key={c.name}
+                    label={c.name}
+                    monthlyData={monthlyData}
+                    yearTotal={yearTotal}
+                    getValue={(md) => getCellVal(md, c.name)}
+                    viewMode={viewMode}
+                    compareA={compareMonthA}
+                    compareB={compareMonthB}
+                    isExpense
+                    indent
+                  />
+                ))}
+
+              {/* GROSS PROFIT */}
+              <PnlTableRow
+                label="= רווח גולמי"
+                isSubtotal
+                sectionColor="bg-blue-50"
+                textColor="text-blue-900"
+                monthlyData={monthlyData}
+                yearTotal={yearTotal}
+                getValue={(md) => md.grossProfit}
+                viewMode={viewMode}
+                compareA={compareMonthA}
+                compareB={compareMonthB}
+              />
+
+              {/* OPERATING EXPENSES */}
+              <PnlTableRow
+                label={`(-) ${PARENT_TYPE_LABELS.operating}`}
+                isSection
+                monthlyData={monthlyData}
+                yearTotal={yearTotal}
+                getValue={(md) => md.operating}
+                viewMode={viewMode}
+                compareA={compareMonthA}
+                compareB={compareMonthB}
+                isExpense
+              />
+              {categoryRows
+                .filter((c) => c.parentType === "operating")
+                .map((c) => (
+                  <PnlTableRow
+                    key={c.name}
+                    label={c.name}
+                    monthlyData={monthlyData}
+                    yearTotal={yearTotal}
+                    getValue={(md) => getCellVal(md, c.name)}
+                    viewMode={viewMode}
+                    compareA={compareMonthA}
+                    compareB={compareMonthB}
+                    isExpense
+                    indent
+                  />
+                ))}
+
+              {/* OPERATING PROFIT */}
+              <PnlTableRow
+                label="= רווח תפעולי"
+                isSubtotal
+                sectionColor="bg-blue-50"
+                textColor="text-blue-900"
+                monthlyData={monthlyData}
+                yearTotal={yearTotal}
+                getValue={(md) => md.operatingProfit}
+                viewMode={viewMode}
+                compareA={compareMonthA}
+                compareB={compareMonthB}
+              />
+
+              {/* FINANCE */}
+              {yearTotal.finance > 0 && (
+                <>
+                  <PnlTableRow
+                    label={`(-) ${PARENT_TYPE_LABELS.finance}`}
+                    isSection
+                    monthlyData={monthlyData}
+                    yearTotal={yearTotal}
+                    getValue={(md) => md.finance}
+                    viewMode={viewMode}
+                    compareA={compareMonthA}
+                    compareB={compareMonthB}
+                    isExpense
+                  />
+                  {categoryRows
+                    .filter((c) => c.parentType === "finance")
+                    .map((c) => (
+                      <PnlTableRow
+                        key={c.name}
+                        label={c.name}
+                        monthlyData={monthlyData}
+                        yearTotal={yearTotal}
+                        getValue={(md) => getCellVal(md, c.name)}
+                        viewMode={viewMode}
+                        compareA={compareMonthA}
+                        compareB={compareMonthB}
+                        isExpense
+                        indent
+                      />
+                    ))}
+                </>
+              )}
+
+              {/* OTHER */}
+              {yearTotal.other > 0 && (
+                <>
+                  <PnlTableRow
+                    label={`(-) ${PARENT_TYPE_LABELS.other}`}
+                    isSection
+                    monthlyData={monthlyData}
+                    yearTotal={yearTotal}
+                    getValue={(md) => md.other}
+                    viewMode={viewMode}
+                    compareA={compareMonthA}
+                    compareB={compareMonthB}
+                    isExpense
+                  />
+                  {categoryRows
+                    .filter((c) => c.parentType === "other")
+                    .map((c) => (
+                      <PnlTableRow
+                        key={c.name}
+                        label={c.name}
+                        monthlyData={monthlyData}
+                        yearTotal={yearTotal}
+                        getValue={(md) => getCellVal(md, c.name)}
+                        viewMode={viewMode}
+                        compareA={compareMonthA}
+                        compareB={compareMonthB}
+                        isExpense
+                        indent
+                      />
+                    ))}
+                </>
+              )}
+
+              {/* NET PROFIT */}
+              <PnlTableRow
+                label="= רווח נקי"
+                isSubtotal
+                isFinal
+                sectionColor="bg-gradient-to-l from-primary-50 to-green-50"
+                textColor="text-gray-900"
+                monthlyData={monthlyData}
+                yearTotal={yearTotal}
+                getValue={(md) => md.netProfit}
+                viewMode={viewMode}
+                compareA={compareMonthA}
+                compareB={compareMonthB}
+              />
+
+              {/* % NET MARGIN */}
+              <tr className="border-t border-gray-200 bg-gray-50/50">
+                <td className="py-2 px-4 text-gray-500 font-medium text-[11px]">
+                  % רווח נקי מהכנסות
+                </td>
+                {viewMode === "yearly" ? (
+                  <>
+                    {MONTHS.map((m) => {
+                      const md = monthlyData[m - 1]!;
+                      const pct = md.revenue > 0 ? (md.netProfit / md.revenue) * 100 : 0;
+                      return (
+                        <td key={m} className="py-2 px-2 text-center">
+                          <span
+                            className={clsx(
+                              "text-[10px] font-bold",
+                              pct > 0 ? "text-green-600" : pct < 0 ? "text-red-500" : "text-gray-400",
+                            )}
+                          >
+                            {md.revenue > 0 ? `${pct.toFixed(1)}%` : "-"}
+                          </span>
+                        </td>
+                      );
+                    })}
+                    <td className="py-2 px-3 text-center bg-gray-100">
+                      <span
+                        className={clsx(
+                          "text-[11px] font-bold",
+                          yearTotal.revenue > 0 && yearTotal.netProfit >= 0
+                            ? "text-green-700"
+                            : "text-red-600",
+                        )}
+                      >
+                        {yearTotal.revenue > 0
+                          ? `${((yearTotal.netProfit / yearTotal.revenue) * 100).toFixed(1)}%`
+                          : "-"}
+                      </span>
+                    </td>
+                  </>
+                ) : (
+                  <CompareMarginCells
+                    monthlyData={monthlyData}
+                    compareA={compareMonthA}
+                    compareB={compareMonthB}
+                  />
+                )}
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Revenue list */}
+      {revenue.length > 0 && (
+        <div className="bg-green-50 border border-green-100 rounded-xl p-4">
+          <h3 className="text-xs font-bold text-green-800 mb-2">הכנסות שהוזנו</h3>
+          <div className="space-y-1">
+            {revenue.map((r) => (
+              <div key={r.id} className="flex justify-between items-center text-xs text-green-700">
+                <span>
+                  {MONTH_LONG[r.month - 1]} {r.year} — {r.description || r.category}
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{fmtC(Number(r.amount))}</span>
+                  <button
+                    onClick={() => onDeleteRevenue(r.id)}
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
-              <div className="px-6 py-2 space-y-1">
-                {Array.from(items.values())
-                  .sort((a, b) => b.total - a.total)
-                  .map((item) => (
-                    <div
-                      key={item.name}
-                      className="flex justify-between text-sm py-1"
-                    >
-                      <span className="text-gray-600">{item.name}</span>
-                      <span className="text-gray-900 font-medium">
-                        {formatCurrency(item.total)}
-                      </span>
-                    </div>
-                  ))}
-              </div>
-            </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// PnlTableRow - renders one row in the P&L table
+// ============================================
+
+interface RowProps {
+  label: string;
+  isSection?: boolean;
+  isSubtotal?: boolean;
+  isFinal?: boolean;
+  sectionColor?: string;
+  textColor?: string;
+  isExpense?: boolean;
+  indent?: boolean;
+  monthlyData: MonthlyPnl[];
+  yearTotal: MonthlyPnl;
+  getValue: (md: MonthlyPnl) => number;
+  viewMode: ViewMode;
+  compareA: number;
+  compareB: number;
+}
+
+function PnlTableRow({
+  label,
+  isSection,
+  isSubtotal,
+  isFinal,
+  sectionColor,
+  textColor,
+  isExpense,
+  indent,
+  monthlyData,
+  yearTotal,
+  getValue,
+  viewMode,
+  compareA,
+  compareB,
+}: RowProps) {
+  const totalVal = getValue(yearTotal);
+
+  if (viewMode === "yearly") {
+    return (
+      <tr
+        className={clsx(
+          "border-b border-gray-50 transition-colors",
+          isSubtotal && sectionColor,
+          isFinal && sectionColor,
+          !isSection && !isSubtotal && "hover:bg-gray-50/50",
+        )}
+      >
+        <td
+          className={clsx(
+            "py-2 px-4 sticky right-0 z-10",
+            isSubtotal || isFinal
+              ? `font-bold ${textColor || "text-gray-900"} ${sectionColor || "bg-white"}`
+              : isSection
+                ? `font-semibold text-gray-700 ${sectionColor || "bg-white"}`
+                : indent
+                  ? "pr-8 text-gray-500 bg-white"
+                  : "text-gray-600 bg-white",
+          )}
+        >
+          {label}
+        </td>
+        {MONTHS.map((m) => {
+          const val = getValue(monthlyData[m - 1]!);
+          return (
+            <td key={m} className={clsx("py-2 px-2 text-center tabular-nums", isSubtotal && sectionColor, isFinal && sectionColor)}>
+              {val !== 0 ? (
+                <span
+                  className={clsx(
+                    isSubtotal || isFinal
+                      ? `font-bold ${val >= 0 ? "text-green-700" : "text-red-600"}`
+                      : isSection
+                        ? "font-semibold text-gray-700"
+                        : isExpense
+                          ? "text-red-600"
+                          : "text-gray-700",
+                  )}
+                >
+                  {fmtK(val)}
+                </span>
+              ) : (
+                <span className="text-gray-300">-</span>
+              )}
+            </td>
           );
         })}
+        <td
+          className={clsx(
+            "py-2 px-3 text-center tabular-nums bg-gray-100",
+            isSubtotal || isFinal ? "font-bold" : isSection ? "font-semibold" : "font-medium",
+          )}
+        >
+          <span
+            className={clsx(
+              isSubtotal || isFinal
+                ? totalVal >= 0 ? "text-green-700" : "text-red-600"
+                : isExpense
+                  ? "text-red-700"
+                  : "text-gray-900",
+            )}
+          >
+            {totalVal !== 0 ? fmtC(totalVal) : "-"}
+          </span>
+        </td>
+      </tr>
+    );
+  }
 
-        {/* Subtotals */}
-        <div className="divide-y divide-gray-100">
-          <PnlSubtotalRow
-            label="רווח גולמי"
-            value={grossProfit}
-            revenue={totalRevenue}
-            highlight
-          />
-          <PnlSubtotalRow
-            label="רווח תפעולי"
-            value={operatingProfit}
-            revenue={totalRevenue}
-          />
-          <PnlSubtotalRow
-            label="רווח נקי"
-            value={netProfit}
-            revenue={totalRevenue}
-            isFinal
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PnlSubtotalRow({
-  label,
-  value,
-  revenue,
-  highlight,
-  isFinal,
-}: {
-  label: string;
-  value: number;
-  revenue: number;
-  highlight?: boolean;
-  isFinal?: boolean;
-}) {
-  const pctOfRevenue = revenue > 0 ? (value / revenue) * 100 : 0;
-  const isPositive = value >= 0;
+  // Compare mode
+  const valA = getValue(monthlyData[compareA - 1]!);
+  const valB = getValue(monthlyData[compareB - 1]!);
+  const diff = valB - valA;
+  const pctChange = valA !== 0 ? ((valB - valA) / Math.abs(valA)) * 100 : 0;
 
   return (
-    <div
+    <tr
       className={clsx(
-        "px-6 py-4 flex justify-between items-center",
-        isFinal && "bg-gradient-to-l from-primary-50 to-transparent",
-        highlight && "bg-blue-50/50",
+        "border-b border-gray-50",
+        isSubtotal && sectionColor,
+        isFinal && sectionColor,
       )}
     >
-      <div className="flex items-center gap-2">
-        {isPositive ? (
-          <TrendingUp className="w-4 h-4 text-green-500" />
-        ) : (
-          <TrendingDown className="w-4 h-4 text-red-500" />
+      <td
+        className={clsx(
+          "py-2.5 px-4",
+          isSubtotal || isFinal
+            ? `font-bold ${textColor || "text-gray-900"}`
+            : isSection
+              ? "font-semibold text-gray-700"
+              : indent
+                ? "pr-8 text-gray-500"
+                : "text-gray-600",
         )}
+      >
+        {label}
+      </td>
+      <td className="py-2.5 px-4 text-center tabular-nums bg-primary-50/30">
         <span
           className={clsx(
-            "font-bold",
-            isFinal ? "text-lg text-gray-900" : "text-sm text-gray-700",
+            isSubtotal || isFinal ? "font-bold" : isSection ? "font-semibold" : "",
+            isSubtotal && (valA >= 0 ? "text-green-700" : "text-red-600"),
           )}
         >
-          = {label}
+          {valA !== 0 ? fmtC(valA) : "-"}
         </span>
-      </div>
-      <div className="text-left">
+      </td>
+      <td className="py-2.5 px-4 text-center tabular-nums bg-primary-50/30">
         <span
           className={clsx(
-            "font-bold",
-            isFinal ? "text-xl" : "text-base",
-            isPositive ? "text-green-700" : "text-red-700",
+            isSubtotal || isFinal ? "font-bold" : isSection ? "font-semibold" : "",
+            isSubtotal && (valB >= 0 ? "text-green-700" : "text-red-600"),
           )}
         >
-          {formatCurrency(value)}
+          {valB !== 0 ? fmtC(valB) : "-"}
         </span>
-        {revenue > 0 && (
-          <span className="text-xs text-gray-400 mr-2">
-            ({pctOfRevenue.toFixed(1)}%)
+      </td>
+      <td className="py-2.5 px-4 text-center tabular-nums">
+        {diff !== 0 ? (
+          <span
+            className={clsx(
+              "font-medium",
+              isExpense
+                ? diff > 0 ? "text-red-600" : "text-green-600"
+                : diff > 0 ? "text-green-600" : "text-red-600",
+            )}
+          >
+            {diff > 0 ? "+" : ""}
+            {fmtC(diff)}
           </span>
+        ) : (
+          <span className="text-gray-300">-</span>
         )}
-      </div>
-    </div>
+      </td>
+      <td className="py-2.5 px-4 text-center">
+        {valA !== 0 && diff !== 0 ? (
+          <span
+            className={clsx(
+              "inline-flex items-center gap-0.5 text-[11px] font-bold px-1.5 py-0.5 rounded-md",
+              isExpense
+                ? pctChange > 0 ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"
+                : pctChange > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
+            )}
+          >
+            {pctChange > 0 ? (
+              <TrendingUp className="w-3 h-3" />
+            ) : (
+              <TrendingDown className="w-3 h-3" />
+            )}
+            {pctChange > 0 ? "+" : ""}
+            {pctChange.toFixed(1)}%
+          </span>
+        ) : (
+          <span className="text-gray-300">-</span>
+        )}
+      </td>
+    </tr>
   );
 }
 
-function formatCurrency(val: number): string {
+function CompareMarginCells({
+  monthlyData,
+  compareA,
+  compareB,
+}: {
+  monthlyData: MonthlyPnl[];
+  compareA: number;
+  compareB: number;
+}) {
+  const mdA = monthlyData[compareA - 1]!;
+  const mdB = monthlyData[compareB - 1]!;
+  const pctA = mdA.revenue > 0 ? (mdA.netProfit / mdA.revenue) * 100 : 0;
+  const pctB = mdB.revenue > 0 ? (mdB.netProfit / mdB.revenue) * 100 : 0;
+  const diff = pctB - pctA;
+
+  return (
+    <>
+      <td className="py-2 px-4 text-center bg-primary-50/30">
+        <span className={clsx("text-[11px] font-bold", pctA >= 0 ? "text-green-600" : "text-red-600")}>
+          {mdA.revenue > 0 ? `${pctA.toFixed(1)}%` : "-"}
+        </span>
+      </td>
+      <td className="py-2 px-4 text-center bg-primary-50/30">
+        <span className={clsx("text-[11px] font-bold", pctB >= 0 ? "text-green-600" : "text-red-600")}>
+          {mdB.revenue > 0 ? `${pctB.toFixed(1)}%` : "-"}
+        </span>
+      </td>
+      <td className="py-2 px-4 text-center">
+        <span className={clsx("text-[11px] font-bold", diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : "text-gray-400")}>
+          {diff > 0 ? "+" : ""}{diff.toFixed(1)}%
+        </span>
+      </td>
+      <td />
+    </>
+  );
+}
+
+function fmtC(val: number): string {
   return new Intl.NumberFormat("he-IL", {
     style: "currency",
     currency: "ILS",
     maximumFractionDigits: 0,
   }).format(val);
+}
+
+function fmtK(val: number): string {
+  const abs = Math.abs(val);
+  if (abs >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+  if (abs >= 10000) return `${(val / 1000).toFixed(0)}K`;
+  if (abs >= 1000) return `${(val / 1000).toFixed(1)}K`;
+  return fmtC(val);
 }
