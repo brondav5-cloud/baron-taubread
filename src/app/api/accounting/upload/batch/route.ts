@@ -78,30 +78,42 @@ export async function POST(request: Request) {
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
     let inserted = 0;
+    let skipped = 0;
+
     if (rows.length > 0) {
       const { error: txErr, data: txData } = await supabase
         .from("transactions")
-        .upsert(rows, {
-          onConflict:
-            "user_id,account_id,header_number,movement_number,transaction_date,debit,credit",
-          ignoreDuplicates: true,
-        })
+        .insert(rows)
         .select("id");
 
       if (txErr) {
-        console.error("Transaction batch insert error:", txErr.message);
+        // Duplicate constraint violation (code 23505) on re-upload — skip gracefully
+        if (txErr.code === "23505") {
+          skipped = rows.length;
+        } else {
+          return NextResponse.json(
+            { error: "שגיאת שמירת תנועות: " + txErr.message },
+            { status: 500 },
+          );
+        }
       } else {
         inserted = txData?.length ?? rows.length;
       }
     }
 
-    const skipped = rows.length - inserted;
+    skipped += rows.length - inserted;
 
     // On last batch: mark file completed + seed default groups
     if (isLast) {
+      // Count actual inserted transactions for this file
+      const { count: actualCount } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("file_id", fileId);
+
       await supabase
         .from("uploaded_files")
-        .update({ status: "completed" })
+        .update({ status: "completed", row_count: actualCount ?? inserted })
         .eq("id", fileId);
 
       const { count: groupCount } = await supabase
