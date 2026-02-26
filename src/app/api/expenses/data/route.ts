@@ -46,10 +46,13 @@ export async function GET(request: NextRequest) {
       .order("name");
 
     // Fetch expense entries with filters
+    // NOTE: Supabase default limit is 1000 rows — we must set a high explicit limit.
+    // A typical year has ~3,000 entries; 50,000 covers many years comfortably.
     let entriesQuery = supabase
       .from("expense_entries")
       .select("*, supplier:suppliers(id, name, account_key, category_id)")
-      .eq("company_id", companyId);
+      .eq("company_id", companyId)
+      .limit(50000);
 
     if (year) entriesQuery = entriesQuery.eq("year", parseInt(year));
     if (month) entriesQuery = entriesQuery.eq("month", parseInt(month));
