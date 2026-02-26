@@ -2,14 +2,19 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { processAccountingExcel } from "@/lib/accountingExcelProcessor";
+import type { ParsedAccountingResult } from "@/types/accounting";
+
+interface UploadRequestBody {
+  filename: string;
+  year: number;
+  month: number | null;
+  fileType: "yearly" | "monthly";
+  parsed: ParsedAccountingResult;
+}
 
 // POST /api/accounting/upload
-// Accepts multipart/form-data with:
-//   file: File
-//   year: string
-//   month?: string (optional, for monthly files)
-//   fileType: 'yearly' | 'monthly'
+// Accepts pre-parsed JSON from the client (parsing happens client-side via loadXlsx).
+// Body: { filename, year, month, fileType, parsed: ParsedAccountingResult }
 export async function POST(request: Request) {
   try {
     const authClient = createServerSupabaseClient();
@@ -18,25 +23,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File | null;
-    const yearStr = formData.get("year") as string | null;
-    const monthStr = formData.get("month") as string | null;
-    const fileType = (formData.get("fileType") as string) || "yearly";
+    const body: UploadRequestBody = await request.json();
+    const { filename, year, month, fileType, parsed } = body;
 
-    if (!file || !yearStr) {
-      return NextResponse.json({ error: "Missing file or year" }, { status: 400 });
+    if (!filename || !year || !parsed) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
 
-    const year = parseInt(yearStr, 10);
-    const month = monthStr ? parseInt(monthStr, 10) : null;
-
-    // Parse the Excel file client-side would be done before calling this route,
-    // but we parse server-side here for reliability. The file is sent as a FormData blob.
-    const parsed = await processAccountingExcel(file);
-
     if (!parsed.success) {
-      return NextResponse.json({ error: parsed.error }, { status: 400 });
+      return NextResponse.json({ error: parsed.error ?? "Parse failed" }, { status: 400 });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -46,7 +41,7 @@ export async function POST(request: Request) {
       .from("uploaded_files")
       .insert({
         user_id: user.id,
-        filename: file.name,
+        filename,
         year,
         month,
         file_type: fileType,
@@ -57,12 +52,15 @@ export async function POST(request: Request) {
       .single();
 
     if (uploadErr || !uploadRecord) {
-      return NextResponse.json({ error: "Failed to create upload record" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to create upload record: " + (uploadErr?.message ?? "unknown") },
+        { status: 500 },
+      );
     }
 
     const fileId = uploadRecord.id as string;
 
-    // Upsert accounts (insert new, update name+group_code from this file)
+    // 2. Upsert accounts
     const { data: upsertedAccounts, error: accountsErr } = await supabase
       .from("accounts")
       .upsert(
@@ -73,16 +71,19 @@ export async function POST(request: Request) {
           latest_group_code: a.group_code,
           account_type: a.account_type,
         })),
-        {
-          onConflict: "user_id,code",
-          ignoreDuplicates: false,
-        },
+        { onConflict: "user_id,code", ignoreDuplicates: false },
       )
       .select("id, code");
 
     if (accountsErr) {
-      await supabase.from("uploaded_files").update({ status: "error", error_msg: accountsErr.message }).eq("id", fileId);
-      return NextResponse.json({ error: "Failed to upsert accounts: " + accountsErr.message }, { status: 500 });
+      await supabase
+        .from("uploaded_files")
+        .update({ status: "error", error_msg: accountsErr.message })
+        .eq("id", fileId);
+      return NextResponse.json(
+        { error: "Failed to upsert accounts: " + accountsErr.message },
+        { status: 500 },
+      );
     }
 
     // Build code → id map
@@ -91,10 +92,9 @@ export async function POST(request: Request) {
       codeToId.set(acc.code as string, acc.id as string);
     }
 
-    // 3. Insert transactions (in chunks to avoid payload limits)
+    // 3. Insert transactions in chunks
     const CHUNK_SIZE = 500;
     let inserted = 0;
-    let skipped = 0;
 
     for (let i = 0; i < parsed.transactions.length; i += CHUNK_SIZE) {
       const chunk = parsed.transactions.slice(i, i + CHUNK_SIZE);
@@ -123,24 +123,28 @@ export async function POST(request: Request) {
 
       const { error: txErr } = await supabase
         .from("transactions")
-        .upsert(rows, { onConflict: "user_id,account_id,header_number,movement_number,transaction_date,debit,credit", ignoreDuplicates: true });
+        .upsert(rows, {
+          onConflict:
+            "user_id,account_id,header_number,movement_number,transaction_date,debit,credit",
+          ignoreDuplicates: true,
+        });
 
       if (txErr) {
-        console.error("Transaction insert error:", txErr.message);
+        console.error("Transaction insert error (chunk):", txErr.message);
       } else {
         inserted += rows.length;
       }
     }
 
-    skipped = parsed.stats.rowsCount - inserted;
+    const skipped = Math.max(0, parsed.stats.rowsCount - inserted);
 
-    // 4. Mark upload as completed
+    // 4. Mark upload completed
     await supabase
       .from("uploaded_files")
       .update({ status: "completed", row_count: inserted })
       .eq("id", fileId);
 
-    // 5. Seed default custom groups if first upload
+    // 5. Seed default groups on first upload
     const { count: groupCount } = await supabase
       .from("custom_groups")
       .select("id", { count: "exact", head: true })
@@ -156,7 +160,7 @@ export async function POST(request: Request) {
       stats: {
         accountsCount: parsed.stats.accountsCount,
         rowsInserted: inserted,
-        rowsSkipped: skipped > 0 ? skipped : 0,
+        rowsSkipped: skipped,
         dateRange: parsed.stats.dateRange,
       },
     });

@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Upload, Trash2, CheckCircle, AlertCircle, Clock, FileText } from "lucide-react";
 import { clsx } from "clsx";
 import type { DbUploadedFile } from "@/types/accounting";
+import { processAccountingExcel } from "@/lib/accountingExcelProcessor";
 
 interface Props {
   files: DbUploadedFile[];
@@ -43,26 +44,41 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
 
     setUploading(true);
     setLastResult(null);
-    setProgress("מעבד קובץ...");
 
     try {
-      const fd = new FormData();
-      fd.append("file", f);
-      fd.append("year", String(year));
-      fd.append("fileType", fileType);
-      if (fileType === "monthly" && month) fd.append("month", String(month));
+      // Step 1: parse client-side (xlsx can only run in browser)
+      setProgress("מנתח קובץ Excel...");
+      const parsed = await processAccountingExcel(f);
 
-      setProgress("שולח לשרת...");
-      const res = await fetch("/api/accounting/upload", { method: "POST", body: fd });
+      if (!parsed.success) {
+        setLastResult({ success: false, message: parsed.error ?? "שגיאת פרסור" });
+        return;
+      }
+
+      setProgress(`נמצאו ${parsed.stats.rowsCount.toLocaleString()} תנועות · שולח לשרת...`);
+
+      // Step 2: send parsed JSON to server
+      const res = await fetch("/api/accounting/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: f.name,
+          year,
+          month: fileType === "monthly" ? month : null,
+          fileType,
+          parsed,
+        }),
+      });
+
       const data = await res.json();
 
       if (!res.ok) {
-        setLastResult({ success: false, message: data.error ?? "שגיאה בהעלאה" });
+        setLastResult({ success: false, message: data.error ?? "שגיאה בשמירה לשרת" });
       } else {
         const { stats } = data;
         setLastResult({
           success: true,
-          message: `יובאו ${stats.rowsInserted.toLocaleString()} תנועות · ${stats.accountsCount} חשבונות · ${stats.rowsSkipped > 0 ? `${stats.rowsSkipped} כפילויות דולגו` : ""}`,
+          message: `יובאו ${(stats.rowsInserted as number).toLocaleString()} תנועות · ${stats.accountsCount as number} חשבונות${(stats.rowsSkipped as number) > 0 ? ` · ${stats.rowsSkipped} כפילויות דולגו` : ""}`,
         });
         onUploadComplete();
       }
