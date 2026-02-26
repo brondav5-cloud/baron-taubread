@@ -1,23 +1,26 @@
 /**
  * Expense Excel Processor for Hashbshevet (חשבשבת) reports.
  *
- * File structure (Hashbshevet "כרטסת הנהלת חשבונות"):
- *  - Rows 0-2: metadata (company name, report title, date range)
- *  - Row 3: headers
- *  - Row 4+: data in hierarchical blocks per supplier:
- *      [Supplier header]  "שם ספק" | "מפתח ספק" | ...
- *      [Opening balance]  "" | "" | "יתרת פתיחה" | ...
- *      [Transaction rows] "" | "" | "" | data...  (supplier cols empty)
- *      [Summary row]      "סה"כ מפתח חשבון" | ...
+ * File structure (כרטסת הנהלת חשבונות):
+ *  - Rows 0-1: metadata (company name, report title)
+ *  - Row 2 (main header): "שם ספק" | "מפתח חשבון" | ... | "חובה / זכות (שקל)" (merged) | ...
+ *  - Row 3 (sub-header, optional): "" | "" | ... | "זכות" | "חובה" | "הנגה" | ...
+ *  - Row 4+: data blocks per supplier:
+ *      [Supplier header]  col A = supplier name | col B = account key
+ *      [Opening balance]  "יתרת פתיחה" in some cell, no date in col I
+ *      [Transaction rows] col I = date | col P = debit amount
+ *      [Summary row]      any cell contains "סה"כ"
+ *      [blank rows]       skip
  *
- * Key columns:
- *  - שם ספק (col 0) — supplier name, only in header row
- *  - מפתח ספק (col 1) — account key, only in header row
- *  - ת.אסמכ (col 8) — reference date as Excel serial number
- *  - חובה / זכות (שקל) חובה (col 14) — debits
- *  - חובה / זכות (שקל) זכות (col 15) — credits
- *  - יתרה (שקל) (col 16) — balance
- *  - פרטים (col 12) — details
+ * KEY ALGORITHM:
+ *  1. Find header row (has "שם ספק" + "מפתח חשבון")
+ *  2. Check the row AFTER the header for sub-header ("חובה", "זכות" exact values)
+ *     → used to correct financial column positions (fixes merged-cell confusion)
+ *  3. For each row after header:
+ *     a. Any cell contains "סה"כ" → summary row, reset supplier, skip
+ *     b. Col A + Col B both filled → new supplier header
+ *     c. Col I has valid date + Col P has amount → transaction row ✓
+ *     d. Otherwise → skip (יתרת פתיחה, blanks, separators)
  */
 
 import { loadXlsx } from "./loadXlsx";
@@ -59,9 +62,6 @@ const COLUMN_MAPPINGS: Record<string, string[]> = {
   balance: ["יתרה (שקל)", "יתרה"],
 };
 
-const SUMMARY_END_PATTERNS = ["סה\"כ", "סה״כ", "מספר תנועות"];
-const SKIP_ROW_PATTERNS = ["יתרת פתיחה"];
-
 function findColumnIndex(
   headers: string[],
   fieldMappings: string[],
@@ -71,9 +71,15 @@ function findColumnIndex(
       .trim()
       .replace(/\s+/g, " "),
   );
+  // First pass: exact match (avoids false positives from merged cell labels)
+  for (const mapping of fieldMappings) {
+    const idx = normalized.findIndex((h) => h === mapping);
+    if (idx !== -1) return idx;
+  }
+  // Second pass: substring match (fallback)
   for (const mapping of fieldMappings) {
     const idx = normalized.findIndex(
-      (h) => h === mapping || h.includes(mapping),
+      (h) => h.includes(mapping),
     );
     if (idx !== -1) return idx;
   }
@@ -110,21 +116,47 @@ function parseExcelDate(val: unknown): string | null {
   return null;
 }
 
-function isSummaryEndRow(row: unknown[]): boolean {
-  const first = String(row[0] ?? "").trim();
-  return SUMMARY_END_PATTERNS.some((p) => first.includes(p));
+/**
+ * Check if ANY cell in the row contains summary text ("סה"כ" etc.)
+ * This handles cases where the summary label is in col C (כותרת), not col A.
+ */
+function hasSummaryText(row: unknown[]): boolean {
+  return row.some((cell) => {
+    const s = String(cell ?? "").trim();
+    return (
+      s.includes('סה"כ') ||
+      s.includes("סה\"כ") ||
+      s.includes("סה״כ") ||
+      s.includes("מספר תנועות")
+    );
+  });
 }
 
-function isSkipRow(row: unknown[]): boolean {
-  const third = String(row[2] ?? "").trim();
-  return SKIP_ROW_PATTERNS.some((p) => third.includes(p));
-}
-
-function isSupplierHeaderRow(row: unknown[], nameIdx: number, keyIdx: number): boolean {
+/**
+ * Detect a supplier header row:
+ * Both col A (supplier name) and col B (account key) must be non-empty.
+ * This row has no transaction date — it just identifies the supplier block.
+ */
+function isSupplierHeaderRow(
+  row: unknown[],
+  nameIdx: number,
+  keyIdx: number,
+): boolean {
+  if (nameIdx < 0 || keyIdx < 0) return false;
   const name = String(row[nameIdx] ?? "").trim();
   const key = String(row[keyIdx] ?? "").trim();
   if (!name || !key) return false;
-  if (name.includes("סה\"כ") || name.includes("סה״כ") || name.includes("מספר תנועות")) return false;
+  // Extra guard: column header values should not be treated as supplier names
+  if (
+    name === "שם ספק" ||
+    name === "שם חשבון" ||
+    name === "שם" ||
+    key === "מפתח חשבון" ||
+    key === "מפתח ספק" ||
+    key === "מפתח"
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -161,13 +193,22 @@ export async function processExpenseExcel(
       return emptyResult("הקובץ לא מכיל מספיק שורות");
     }
 
+    // ─────────────────────────────────────────
+    // STEP 1: Find main header row
+    // ─────────────────────────────────────────
     let headerRowIdx = -1;
     for (let i = 0; i < Math.min(rawData.length, 10); i++) {
       const row = rawData[i];
       if (!row) continue;
-      const rowStr = row.map((c) => String(c ?? "").trim().replace(/\s+/g, " "));
-      const hasName = findColumnIndex(rowStr, COLUMN_MAPPINGS.supplierName!) !== -1;
-      const hasKey = findColumnIndex(rowStr, COLUMN_MAPPINGS.accountKey!) !== -1;
+      const rowStr = row.map((c) =>
+        String(c ?? "")
+          .trim()
+          .replace(/\s+/g, " "),
+      );
+      const hasName =
+        findColumnIndex(rowStr, COLUMN_MAPPINGS.supplierName!) !== -1;
+      const hasKey =
+        findColumnIndex(rowStr, COLUMN_MAPPINGS.accountKey!) !== -1;
       if (hasName && hasKey) {
         headerRowIdx = i;
         break;
@@ -176,7 +217,7 @@ export async function processExpenseExcel(
 
     if (headerRowIdx === -1) {
       return emptyResult(
-        'לא נמצאה שורת כותרות מתאימה. ודא שהקובץ מכיל עמודות "שם ספק" ו"מפתח ספק"',
+        'לא נמצאה שורת כותרות. ודא שהקובץ מכיל עמודות "שם ספק" ו"מפתח חשבון"',
       );
     }
 
@@ -186,6 +227,9 @@ export async function processExpenseExcel(
         .replace(/\s+/g, " "),
     );
 
+    // ─────────────────────────────────────────
+    // STEP 2: Detect column positions from main header
+    // ─────────────────────────────────────────
     const colIdx = {
       name: findColumnIndex(headers, COLUMN_MAPPINGS.supplierName!),
       key: findColumnIndex(headers, COLUMN_MAPPINGS.accountKey!),
@@ -196,8 +240,50 @@ export async function processExpenseExcel(
       balance: findColumnIndex(headers, COLUMN_MAPPINGS.balance!),
     };
 
+    // ─────────────────────────────────────────
+    // STEP 2b: Check sub-header row for exact "חובה" / "זכות" positions.
+    // This fixes the merged-cell problem where main header has
+    // "חובה / זכות (שקל)" as one cell, hiding the individual sub-columns.
+    // ─────────────────────────────────────────
+    const subHeaderRow = rawData[headerRowIdx + 1];
+    if (subHeaderRow) {
+      const subHeaders = (subHeaderRow as unknown[]).map((c) =>
+        String(c ?? "")
+          .trim()
+          .replace(/\s+/g, " "),
+      );
+      // Only override if the sub-header row has column-label-like content
+      // (empty in A/B cols, specific labels in financial cols)
+      const nameInSub = subHeaders[colIdx.name] ?? "";
+      const keyInSub = subHeaders[colIdx.key] ?? "";
+      const subHasNoSupplier = !nameInSub && !keyInSub;
+
+      if (subHasNoSupplier) {
+        const debitExact = subHeaders.findIndex((h) => h === "חובה");
+        const creditExact = subHeaders.findIndex((h) => h === "זכות");
+        const dateExact = findColumnIndex(
+          subHeaders,
+          COLUMN_MAPPINGS.referenceDate!,
+        );
+        const balanceExact = subHeaders.findIndex(
+          (h) => h === "יתרה" || h === "יתרה (שקל)",
+        );
+
+        if (debitExact !== -1) colIdx.debits = debitExact;
+        if (creditExact !== -1) colIdx.credits = creditExact;
+        if (dateExact !== -1) colIdx.date = dateExact;
+        if (balanceExact !== -1) colIdx.balance = balanceExact;
+      }
+    }
+
+    // ─────────────────────────────────────────
+    // STEP 3: Process rows
+    // ─────────────────────────────────────────
     const rows: ParsedExpenseRow[] = [];
-    const supplierMap = new Map<string, { name: string; accountKey: string }>();
+    const supplierMap = new Map<
+      string,
+      { name: string; accountKey: string }
+    >();
     const monthCountMap = new Map<string, number>();
     let totalDebits = 0;
     let totalCredits = 0;
@@ -210,21 +296,23 @@ export async function processExpenseExcel(
 
     for (let i = headerRowIdx + 1; i < rawData.length; i++) {
       const row = rawData[i] as unknown[];
+
+      // Skip completely empty rows
       if (!row || row.every((c) => c == null || String(c).trim() === ""))
         continue;
 
-      if (isSummaryEndRow(row)) {
+      // ── a. Summary row: any cell has "סה"כ" → end supplier block
+      if (hasSummaryText(row)) {
         currentSupplierName = "";
         currentAccountKey = "";
         continue;
       }
 
-      if (isSkipRow(row)) continue;
-
+      // ── b. New supplier header: col A + col B both filled
       if (isSupplierHeaderRow(row, colIdx.name, colIdx.key)) {
         currentSupplierName = String(row[colIdx.name] ?? "").trim();
         currentAccountKey = String(row[colIdx.key] ?? "").trim();
-        if (currentAccountKey && currentSupplierName) {
+        if (currentSupplierName && currentAccountKey) {
           supplierMap.set(currentAccountKey, {
             name: currentSupplierName,
             accountKey: currentAccountKey,
@@ -233,17 +321,27 @@ export async function processExpenseExcel(
         continue;
       }
 
-      if (!currentAccountKey || !currentSupplierName) continue;
+      // No supplier yet → skip (opening lines before first supplier)
+      if (!currentSupplierName || !currentAccountKey) continue;
 
-      const credits = parseNumber(colIdx.credits >= 0 ? row[colIdx.credits] : 0);
-      const debits = parseNumber(colIdx.debits >= 0 ? row[colIdx.debits] : 0);
-      const balance = parseNumber(colIdx.balance >= 0 ? row[colIdx.balance] : 0);
+      // ── c. Transaction row: must have valid date in col I
+      const refDate =
+        colIdx.date >= 0 ? parseExcelDate(row[colIdx.date]) : null;
+      if (!refDate) continue; // No date = יתרת פתיחה, separator, etc.
 
-      const refDate = colIdx.date >= 0 ? parseExcelDate(row[colIdx.date]) : null;
+      const debits = parseNumber(
+        colIdx.debits >= 0 ? row[colIdx.debits] : 0,
+      );
+      const credits = parseNumber(
+        colIdx.credits >= 0 ? row[colIdx.credits] : 0,
+      );
 
-      if (!refDate) continue;
+      // Skip rows with no financial movement
+      if (debits === 0 && credits === 0) continue;
 
-      if (credits === 0 && debits === 0 && balance === 0) continue;
+      const balance = parseNumber(
+        colIdx.balance >= 0 ? row[colIdx.balance] : 0,
+      );
 
       const parsed: ParsedExpenseRow = {
         supplierName: currentSupplierName,
@@ -263,14 +361,12 @@ export async function processExpenseExcel(
       totalCredits += credits;
       totalBalance += balance;
 
-      if (refDate && refDate.length >= 7) {
-        const d = new Date(refDate);
-        if (!isNaN(d.getTime())) {
-          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-          monthCountMap.set(key, (monthCountMap.get(key) || 0) + 1);
-          if (!minDate || refDate < minDate) minDate = refDate;
-          if (!maxDate || refDate > maxDate) maxDate = refDate;
-        }
+      const d = new Date(refDate);
+      if (!isNaN(d.getTime())) {
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        monthCountMap.set(key, (monthCountMap.get(key) || 0) + 1);
+        if (!minDate || refDate < minDate) minDate = refDate;
+        if (!maxDate || refDate > maxDate) maxDate = refDate;
       }
     }
 
