@@ -86,38 +86,66 @@ export function useDeliveryUpload() {
 
       setState((prev) => ({ ...prev, result, progress: 60 }));
 
-      const payload = {
-        filename: file.name,
-        deliveries: result.deliveries,
-        stats: result.stats,
-      };
-      const bodyStr = JSON.stringify(payload);
-      if (new Blob([bodyStr]).size > 3.5 * 1024 * 1024) {
-        throw new Error("גודל הנתונים חורג מהמותר (4MB). נסה קובץ קטן יותר.");
-      }
-
       setState((prev) => ({ ...prev, status: "uploading", progress: 70 }));
 
-      const response = await fetch("/api/upload-deliveries", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: bodyStr,
-      });
+      // Split deliveries into chunks that fit within Vercel's 4.5MB limit.
+      // We target ≤3.5MB per chunk to leave headroom for headers/metadata.
+      const CHUNK_MAX_BYTES = 3.5 * 1024 * 1024;
+      const deliveries = result.deliveries;
 
-      if (!response.ok) {
-        let errMsg = "שגיאה בשמירת הנתונים";
-        try {
-          const errorData = await response.json();
-          if (errorData?.error) errMsg = errorData.error;
-        } catch {
-          errMsg = `שגיאת שרת (${response.status})`;
+      // Build chunks by accumulating records until the JSON size would exceed the limit
+      const chunks: (typeof deliveries)[] = [];
+      let current: typeof deliveries = [];
+      let currentSize = 2; // opening/closing brackets
+      for (const delivery of deliveries) {
+        const recordSize = JSON.stringify(delivery).length + 1; // +1 for comma
+        if (current.length > 0 && currentSize + recordSize > CHUNK_MAX_BYTES) {
+          chunks.push(current);
+          current = [];
+          currentSize = 2;
         }
-        throw new Error(errMsg);
+        current.push(delivery);
+        currentSize += recordSize;
       }
+      if (current.length > 0) chunks.push(current);
 
-      const uploadResponse = await response.json();
+      const totalChunks = chunks.length;
+      let uploadResponse = null;
+
+      for (let i = 0; i < totalChunks; i++) {
+        const isLast = i === totalChunks - 1;
+        const chunkPayload = {
+          filename: file.name,
+          deliveries: chunks[i],
+          stats: result.stats, // full stats always included (used only on last chunk)
+          chunkIndex: i,
+          totalChunks,
+        };
+
+        const response = await fetch("/api/upload-deliveries", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(chunkPayload),
+        });
+
+        if (!response.ok) {
+          let errMsg = "שגיאה בשמירת הנתונים";
+          try {
+            const errorData = await response.json();
+            if (errorData?.error) errMsg = errorData.error;
+          } catch {
+            errMsg = `שגיאת שרת (${response.status})`;
+          }
+          throw new Error(errMsg);
+        }
+
+        const chunkResponse = await response.json();
+        if (isLast) uploadResponse = chunkResponse;
+
+        // Update progress proportionally across chunks (70-100%)
+        const chunkProgress = 70 + Math.round(((i + 1) / totalChunks) * 30);
+        setState((prev) => ({ ...prev, progress: chunkProgress }));
+      }
 
       // Success!
       setState((prev) => ({

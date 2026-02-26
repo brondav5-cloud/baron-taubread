@@ -16,10 +16,11 @@ import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 
+// Each chunk is limited to 4MB (Vercel hard limit is 4.5MB per request)
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_PROCESSING_MS = 55_000;
 const PAYLOAD_TOO_LARGE_MSG = {
-  error: "גודל הבקשה חורג מהמותר (4MB). נסה קובץ קטן יותר.",
+  error: "גודל הבקשה חורג מהמותר. נסה שוב — הקובץ יחולק אוטומטית.",
 };
 
 const getSupabaseAdmin = () =>
@@ -99,19 +100,29 @@ export async function POST(request: NextRequest) {
     if (!parseResult.ok) {
       return NextResponse.json(PAYLOAD_TOO_LARGE_MSG, { status: 413 });
     }
-    const payload = parseResult.data as DeliveryUploadPayload;
+    const payload = parseResult.data as DeliveryUploadPayload & {
+      chunkIndex?: number;
+      totalChunks?: number;
+    };
 
     if (!payload.deliveries || payload.deliveries.length === 0) {
       return NextResponse.json({ error: "אין נתוני אספקות" }, { status: 400 });
     }
 
+    const isChunked =
+      typeof payload.totalChunks === "number" && payload.totalChunks > 1;
+    const chunkIndex = payload.chunkIndex ?? 0;
+    const totalChunks = payload.totalChunks ?? 1;
+    const isLastChunk = chunkIndex === totalChunks - 1;
+
     const elapsed = performance.now() - startTime;
     if (elapsed > MAX_PROCESSING_MS) {
       return NextResponse.json(
-        { error: "העיבוד ארך יותר מדי זמן. נסה קובץ קטן יותר." },
+        { error: "העיבוד ארך יותר מדי זמן." },
         { status: 504 },
       );
     }
+
     const result = await upsertDeliveries(
       supabaseAdmin,
       companyId,
@@ -127,30 +138,44 @@ export async function POST(request: NextRequest) {
 
     const processingTime = Math.round(performance.now() - startTime);
 
-    // Create upload record
-    const uploadRecord = await createDeliveryUpload(supabaseAdmin, companyId, {
-      filename: payload.filename,
-      uploaded_by: user.id,
-      period_start: payload.stats.periodStart,
-      period_end: payload.stats.periodEnd,
-      rows_processed: payload.stats.rowsProcessed,
-      stores_count: payload.stats.storesCount,
-      total_deliveries: payload.stats.totalDeliveries,
-      total_value: payload.stats.totalValue,
-      status: "completed",
-      error_message: null,
-      processing_time_ms: processingTime,
-    });
+    // Create upload record only on last (or only) chunk
+    if (!isChunked || isLastChunk) {
+      const uploadRecord = await createDeliveryUpload(
+        supabaseAdmin,
+        companyId,
+        {
+          filename: payload.filename,
+          uploaded_by: user.id,
+          period_start: payload.stats.periodStart,
+          period_end: payload.stats.periodEnd,
+          rows_processed: payload.stats.rowsProcessed,
+          stores_count: payload.stats.storesCount,
+          total_deliveries: payload.stats.totalDeliveries,
+          total_value: payload.stats.totalValue,
+          status: "completed",
+          error_message: null,
+          processing_time_ms: processingTime,
+        },
+      );
 
+      return NextResponse.json({
+        success: true,
+        uploadId: uploadRecord?.id,
+        stats: {
+          deliveriesCount: payload.stats.totalDeliveries,
+          storesCount: payload.stats.storesCount,
+          totalValue: payload.stats.totalValue,
+          processingTimeMs: processingTime,
+        },
+      });
+    }
+
+    // Intermediate chunk — just confirm success
     return NextResponse.json({
       success: true,
-      uploadId: uploadRecord?.id,
-      stats: {
-        deliveriesCount: payload.deliveries.length,
-        storesCount: payload.stats.storesCount,
-        totalValue: payload.stats.totalValue,
-        processingTimeMs: processingTime,
-      },
+      partial: true,
+      chunkIndex,
+      totalChunks,
     });
   } catch (error) {
     logError("upload-deliveries", error);
