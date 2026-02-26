@@ -70,15 +70,26 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
         }),
       });
 
-      const data = await res.json();
+      if (res.status === 413) {
+        setLastResult({ success: false, message: "הקובץ גדול מדי — נסה קובץ קטן יותר (מקסימום ~50MB)" });
+        return;
+      }
+
+      let data: Record<string, unknown>;
+      try {
+        data = await res.json();
+      } catch {
+        setLastResult({ success: false, message: `שגיאת שרת (${res.status}: ${res.statusText})` });
+        return;
+      }
 
       if (!res.ok) {
-        setLastResult({ success: false, message: data.error ?? "שגיאה בשמירה לשרת" });
+        setLastResult({ success: false, message: (data.error as string) ?? "שגיאה בשמירה לשרת" });
       } else {
-        const { stats } = data;
+        const stats = data.stats as { rowsInserted: number; accountsCount: number; rowsSkipped: number };
         setLastResult({
           success: true,
-          message: `יובאו ${(stats.rowsInserted as number).toLocaleString()} תנועות · ${stats.accountsCount as number} חשבונות${(stats.rowsSkipped as number) > 0 ? ` · ${stats.rowsSkipped} כפילויות דולגו` : ""}`,
+          message: `יובאו ${stats.rowsInserted.toLocaleString()} תנועות · ${stats.accountsCount} חשבונות${stats.rowsSkipped > 0 ? ` · ${stats.rowsSkipped} כפילויות דולגו` : ""}`,
         });
         onUploadComplete();
       }
