@@ -27,7 +27,8 @@ export type UserPermissionModule =
   | "visits"
   | "profitability"
   | "upload"
-  | "settings";
+  | "settings"
+  | "expenses";
 
 export type UserPermissions = Partial<Record<UserPermissionModule, boolean>>;
 

@@ -23,6 +23,7 @@ import {
   Users,
   Upload,
   BarChart3,
+  Wallet,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -48,7 +49,8 @@ interface NavItem {
     | "visits"
     | "profitability"
     | "upload"
-    | "settings";
+    | "settings"
+    | "expenses";
   badge?: string;
   badgeColor?: string;
 }
@@ -156,6 +158,19 @@ const navigation: NavSection[] = [
         href: "/dashboard/compare",
         icon: GitCompare,
         module: "compare",
+      },
+    ],
+  },
+  {
+    title: "כספים",
+    items: [
+      {
+        label: "הוצאות ורווח/הפסד",
+        href: "/dashboard/expenses",
+        icon: Wallet,
+        module: "expenses",
+        badge: "חדש",
+        badgeColor: "bg-purple-100 text-purple-700",
       },
     ],
   },

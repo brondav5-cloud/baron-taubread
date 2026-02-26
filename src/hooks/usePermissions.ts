@@ -18,6 +18,7 @@ export const MODULE_TO_PATH: Record<string, string[]> = {
   profitability: ["/dashboard/profitability"],
   upload: ["/dashboard/upload"],
   settings: ["/dashboard/settings"],
+  expenses: ["/dashboard/expenses"],
 };
 
 export function usePermissions() {
@@ -29,6 +30,7 @@ export function usePermissions() {
     const isAdmin = role === "super_admin" || role === "admin";
 
     return (module: UserPermissionModule): boolean => {
+      if (module === "expenses") return role === "super_admin";
       if (isAdmin) return true;
       if (perms && typeof perms[module] === "boolean")
         return perms[module] === true;
