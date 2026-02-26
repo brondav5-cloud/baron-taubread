@@ -45,21 +45,33 @@ export async function GET(request: NextRequest) {
       .is("merged_into_id", null)
       .order("name");
 
-    // Fetch expense entries with filters
-    // NOTE: Supabase default limit is 1000 rows — we must set a high explicit limit.
-    // A typical year has ~3,000 entries; 50,000 covers many years comfortably.
-    let entriesQuery = supabase
-      .from("expense_entries")
-      .select("*, supplier:suppliers(id, name, account_key, category_id)")
-      .eq("company_id", companyId)
-      .limit(50000);
+    // Fetch ALL expense entries using pagination to bypass Supabase's 1000-row default limit.
+    const PAGE_SIZE = 1000;
+    const allEntries: unknown[] = [];
+    const yearInt = year ? parseInt(year) : null;
+    const monthInt = month ? parseInt(month) : null;
 
-    if (year) entriesQuery = entriesQuery.eq("year", parseInt(year));
-    if (month) entriesQuery = entriesQuery.eq("month", parseInt(month));
+    for (let page = 0; ; page++) {
+      let q = supabase
+        .from("expense_entries")
+        .select("*, supplier:suppliers(id, name, account_key, category_id)")
+        .eq("company_id", companyId)
+        .order("reference_date", { ascending: false })
+        .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
-    const { data: entries } = await entriesQuery.order("reference_date", {
-      ascending: false,
-    });
+      if (yearInt) q = q.eq("year", yearInt);
+      if (monthInt) q = q.eq("month", monthInt);
+
+      const { data: batch, error: batchErr } = await q;
+      if (batchErr || !batch || batch.length === 0) break;
+
+      allEntries.push(...batch);
+
+      // If we got fewer rows than PAGE_SIZE, we've reached the last page
+      if (batch.length < PAGE_SIZE) break;
+    }
+
+    const entries = allEntries;
 
     // Fetch revenue entries
     let revenueQuery = supabase
