@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
       supabaseAuth,
       user.id,
     );
-    if (!companyId || role !== "super_admin") {
+    if (!companyId || (role !== "super_admin" && role !== "admin")) {
       return NextResponse.json(
         { error: "רק מנהל ראשי יכול לגשת למודול הוצאות" },
         { status: 403 },

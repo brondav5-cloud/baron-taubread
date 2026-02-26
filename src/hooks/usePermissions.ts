@@ -30,7 +30,6 @@ export function usePermissions() {
     const isAdmin = role === "super_admin" || role === "admin";
 
     return (module: UserPermissionModule): boolean => {
-      if (module === "expenses") return role === "super_admin";
       if (isAdmin) return true;
       if (perms && typeof perms[module] === "boolean")
         return perms[module] === true;

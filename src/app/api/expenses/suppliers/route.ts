@@ -21,7 +21,7 @@ export async function PATCH(request: NextRequest) {
       supabase,
       user.id,
     );
-    if (!companyId || role !== "super_admin") {
+    if (!companyId || (role !== "super_admin" && role !== "admin")) {
       return NextResponse.json(
         { error: "רק מנהל ראשי יכול לנהל ספקים" },
         { status: 403 },

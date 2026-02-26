@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
       supabase,
       user.id,
     );
-    if (!companyId || role !== "super_admin") {
+    if (!companyId || (role !== "super_admin" && role !== "admin")) {
       return NextResponse.json(
         { error: "רק מנהל ראשי יכול לגשת למודול הוצאות" },
         { status: 403 },

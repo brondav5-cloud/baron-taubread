@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
       supabase,
       user.id,
     );
-    if (!companyId || role !== "super_admin") {
+    if (!companyId || (role !== "super_admin" && role !== "admin")) {
       return NextResponse.json(
         { error: "רק מנהל ראשי יכול לנהל קטגוריות" },
         { status: 403 },
@@ -98,7 +98,7 @@ export async function DELETE(request: NextRequest) {
       supabase,
       user.id,
     );
-    if (!companyId || role !== "super_admin") {
+    if (!companyId || (role !== "super_admin" && role !== "admin")) {
       return NextResponse.json({ error: "אין הרשאה" }, { status: 403 });
     }
 
