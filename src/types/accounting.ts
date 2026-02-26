@@ -11,7 +11,9 @@ export type AlertRuleType =
   | "monthly_change_pct"
   | "yearly_change_pct"
   | "absolute_threshold"
-  | "consecutive_increase";
+  | "consecutive_increase"
+  | "margin_below"
+  | "new_account";
 export type ClassificationMode = "latest" | "original";
 
 export const PARENT_SECTION_LABELS: Record<ParentSection, string> = {
@@ -131,6 +133,11 @@ export interface DbAlertRule {
   threshold_value: number | null;
   is_active: boolean;
   created_at: string;
+  // Extended fields (migration 003)
+  name?: string | null;
+  severity?: "warning" | "critical";
+  applies_to?: "all" | "specific";
+  is_preset?: boolean;
 }
 
 // ── Parser Types ─────────────────────────────────────────────
@@ -176,8 +183,7 @@ export interface MonthlyGroupAmount {
   groupName: string;
   parentSection: ParentSection;
   amount: number;
-  // Breakdown by account for drill-down
-  byAccount: Map<string, number>; // accountId → amount
+  byAccount: Map<string, number>;
 }
 
 export interface MonthlyPnl {
@@ -206,11 +212,12 @@ export interface AccountAnomaly {
   accountId: string;
   accountCode: string;
   accountName: string;
-  type: "monthly_spike" | "yoy_increase" | "consecutive_increase";
+  type: "monthly_spike" | "yoy_increase" | "consecutive_increase" | "margin_below" | "new_account";
   severity: "warning" | "critical";
   month?: number;
   currentValue: number;
   referenceValue: number;
   changePct: number;
   months?: number[]; // for consecutive
+  description?: string;
 }

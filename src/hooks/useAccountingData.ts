@@ -75,7 +75,7 @@ function buildClassifier(
   classificationOverrides: DbAccountClassificationOverride[],
   mode: ClassificationMode,
 ) {
-  const overrideMap = new Map<string, string>(); // accountId → custom_group_id
+  const overrideMap = new Map<string, string>();
   for (const co of classificationOverrides) {
     overrideMap.set(co.account_id, co.custom_group_id);
   }
@@ -86,7 +86,6 @@ function buildClassifier(
   const accountById = new Map<string, DbAccount>();
   for (const a of accounts) accountById.set(a.id, a);
 
-  // account_code → group (highest precision — per account-mapping.md)
   const acToGroup = new Map<string, DbCustomGroup>();
   for (const g of customGroups) {
     for (const ac of (g.account_codes ?? [])) {
@@ -94,7 +93,6 @@ function buildClassifier(
     }
   }
 
-  // group_code → group (fallback when account_codes is empty)
   const gcToGroup = new Map<string, DbCustomGroup>();
   for (const g of customGroups) {
     for (const gc of g.group_codes) {
@@ -103,20 +101,15 @@ function buildClassifier(
   }
 
   function getEffectiveGroup(accountId: string, txGroupCode: string): DbCustomGroup | null {
-    // Layer 1: account classification override (always wins)
     const overrideGroupId = overrideMap.get(accountId);
-    if (overrideGroupId) {
-      return groupById.get(overrideGroupId) ?? null;
-    }
+    if (overrideGroupId) return groupById.get(overrideGroupId) ?? null;
 
-    // Layer 2a: match by individual account code (precise, per mapping doc)
     const account = accountById.get(accountId);
     if (account) {
       const byCode = acToGroup.get(account.code);
       if (byCode) return byCode;
     }
 
-    // Layer 2b: match by effective group_code (fallback)
     const effectiveGc =
       mode === "latest"
         ? (account?.latest_group_code ?? txGroupCode)
@@ -143,7 +136,6 @@ function calcYearlyPnl(
 ): YearlyPnl {
   const { getEffectiveGroup } = buildClassifier(accounts, customGroups, classificationOverrides, mode);
 
-  // Build override lookup: txId → list of overrides
   const overridesByTx = new Map<string, DbTransactionOverride[]>();
   for (const ov of transactionOverrides) {
     const list = overridesByTx.get(ov.transaction_id) ?? [];
@@ -151,7 +143,6 @@ function calcYearlyPnl(
     overridesByTx.set(ov.transaction_id, list);
   }
 
-  // Build account lookup
   const accountById = new Map<string, DbAccount>();
   for (const a of accounts) accountById.set(a.id, a);
 
@@ -173,16 +164,13 @@ function calcYearlyPnl(
 
   for (const tx of transactions) {
     const txDate = new Date(tx.transaction_date);
-    const txYear = txDate.getFullYear();
-    if (txYear !== year) continue;
+    if (txDate.getFullYear() !== year) continue;
 
-    const month = txDate.getMonth() + 1; // 1-based
+    const month = txDate.getMonth() + 1;
     const md = monthlyData[month - 1]!;
 
-    // Apply overrides
     const overrides = overridesByTx.get(tx.id) ?? [];
-    const isExcluded = overrides.some((o) => o.override_type === "exclude");
-    if (isExcluded) continue;
+    if (overrides.some((o) => o.override_type === "exclude")) continue;
 
     const amountOverride = overrides.find((o) => o.override_type === "amount");
     let debit = tx.debit;
@@ -199,15 +187,13 @@ function calcYearlyPnl(
     if (!account) continue;
 
     if (account.account_type === "revenue") {
-      const amount = credit - debit; // revenue = credit net
-      md.revenue += amount;
+      md.revenue += credit - debit;
     } else {
-      const amount = debit - credit; // expense = debit net
+      const amount = debit - credit;
       const group = getEffectiveGroup(tx.account_id, tx.group_code);
       const section: ParentSection = group?.parent_section ?? "other";
 
       md.bySection[section] += amount;
-
       if (group) {
         md.byGroup.set(group.id, (md.byGroup.get(group.id) ?? 0) + amount);
       }
@@ -215,7 +201,6 @@ function calcYearlyPnl(
     }
   }
 
-  // Calculate derived values for each month
   for (const md of monthlyData) {
     md.grossProfit = md.revenue - md.bySection.cost_of_goods;
     md.operatingProfit = md.grossProfit - md.bySection.operating;
@@ -225,7 +210,6 @@ function calcYearlyPnl(
     md.netProfit = md.operatingProfit - md.adminTotal - md.financeTotal - md.otherTotal;
   }
 
-  // Build totals
   const total = emptyMonth(0);
   for (const md of monthlyData) {
     total.revenue += md.revenue;
@@ -261,19 +245,59 @@ function detectAnomalies(
   const accountById = new Map<string, DbAccount>();
   for (const a of accounts) accountById.set(a.id, a);
 
-  // Default thresholds
-  const monthlySpikePct = alertRules.find(r => r.rule_type === "monthly_change_pct" && !r.account_id)?.threshold_value ?? 30;
   const yearlyChangePct = alertRules.find(r => r.rule_type === "yearly_change_pct" && !r.account_id)?.threshold_value ?? 40;
   const consecutiveCount = alertRules.find(r => r.rule_type === "consecutive_increase" && !r.account_id)?.threshold_value ?? 3;
+  const marginThreshold = alertRules.find(r => r.rule_type === "margin_below")?.threshold_value ?? 30;
 
-  // Collect all unique accountIds
+  // ── margin_below: gross margin fallen below threshold ────────
+  if (pnl.total.revenue > 0) {
+    const grossMarginPct = (pnl.total.grossProfit / pnl.total.revenue) * 100;
+    if (grossMarginPct < marginThreshold) {
+      anomalies.push({
+        accountId: "_gross_margin",
+        accountCode: "",
+        accountName: "רווח גולמי",
+        type: "margin_below",
+        severity: grossMarginPct < marginThreshold * 0.7 ? "critical" : "warning",
+        currentValue: grossMarginPct,
+        referenceValue: marginThreshold,
+        changePct: grossMarginPct - marginThreshold,
+        description: `רווח גולמי ${grossMarginPct.toFixed(1)}% — מתחת לסף ${marginThreshold}%`,
+      });
+    }
+  }
+
+  // ── new_account: accounts in current year that didn't exist in prev ──
+  if (prevPnl) {
+    const prevAccountIds = new Set<string>();
+    prevPnl.total.byAccount.forEach((_, id) => prevAccountIds.add(id));
+
+    pnl.total.byAccount.forEach((amount, id) => {
+      if (amount <= 0) return;
+      if (!prevAccountIds.has(id)) {
+        const account = accountById.get(id);
+        if (!account) return;
+        anomalies.push({
+          accountId: id,
+          accountCode: account.code,
+          accountName: account.name,
+          type: "new_account",
+          severity: "warning",
+          currentValue: amount,
+          referenceValue: 0,
+          changePct: 100,
+          description: `חשבון חדש שלא היה קיים ב-${pnl.year - 1}`,
+        });
+      }
+    });
+  }
+
   const allAccountIdsSet = new Set<string>();
   for (const md of pnl.months) {
     md.byAccount.forEach((_, id) => allAccountIdsSet.add(id));
   }
-  const allAccountIds = Array.from(allAccountIdsSet);
 
-  for (const accountId of allAccountIds) {
+  for (const accountId of Array.from(allAccountIdsSet)) {
     const account = accountById.get(accountId);
     if (!account) continue;
 
@@ -285,7 +309,7 @@ function detectAnomalies(
     const variance = nonZeroMonths.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / nonZeroMonths.length;
     const stddev = Math.sqrt(variance);
 
-    // Monthly spike detection (stddev-based)
+    // Monthly spike detection
     for (let m = 0; m < 12; m++) {
       const val = monthlyAmounts[m] ?? 0;
       if (val === 0) continue;
@@ -348,11 +372,11 @@ function detectAnomalies(
         if (consecutiveUp === 0) consecutiveStart = m - 1;
         consecutiveUp++;
         if (consecutiveUp >= consecutiveCount - 1) {
-          const pct =
-            (monthlyAmounts[consecutiveStart] ?? 0) > 0
-              ? ((curr - (monthlyAmounts[consecutiveStart] ?? 0)) / Math.abs(monthlyAmounts[consecutiveStart] ?? 1)) * 100
-              : 0;
           if (!anomalies.find(a => a.accountId === accountId && a.type === "consecutive_increase")) {
+            const pct =
+              (monthlyAmounts[consecutiveStart] ?? 0) > 0
+                ? ((curr - (monthlyAmounts[consecutiveStart] ?? 0)) / Math.abs(monthlyAmounts[consecutiveStart] ?? 1)) * 100
+                : 0;
             anomalies.push({
               accountId,
               accountCode: account.code,
@@ -371,7 +395,6 @@ function detectAnomalies(
         consecutiveStart = -1;
       }
     }
-    void monthlySpikePct; // used via stddev threshold above
   }
 
   return anomalies;
@@ -407,22 +430,25 @@ export function useAccountingData(year: number): AccountingData {
     void fetchData();
   }, [fetchData]);
 
-  // Memoized classifier
+  // Memoize classifier for efficient repeated lookups
+  const classifier = useMemo(() => {
+    if (!raw) return null;
+    return buildClassifier(
+      raw.accounts,
+      raw.customGroups,
+      raw.classificationOverrides,
+      classificationMode,
+    );
+  }, [raw, classificationMode]);
+
   const getEffectiveGroup = useCallback(
     (accountId: string, txGroupCode: string) => {
-      if (!raw) return null;
-      const { getEffectiveGroup: geg } = buildClassifier(
-        raw.accounts,
-        raw.customGroups,
-        raw.classificationOverrides,
-        classificationMode,
-      );
-      return geg(accountId, txGroupCode);
+      if (!classifier) return null;
+      return classifier.getEffectiveGroup(accountId, txGroupCode);
     },
-    [raw, classificationMode],
+    [classifier],
   );
 
-  // P&L calculations
   const yearlyPnl = useMemo(() => {
     if (!raw || raw.transactions.length === 0) return null;
     return calcYearlyPnl(

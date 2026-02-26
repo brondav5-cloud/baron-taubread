@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   FolderOpen, LayoutDashboard, FileSpreadsheet,
-  Settings, Bell, BarChart3, ArrowRight,
+  Settings, Bell, BarChart3, ArrowRight, CheckCircle, XCircle, AlertTriangle,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAccountingData } from "@/hooks/useAccountingData";
@@ -16,28 +16,98 @@ import CategoryPanel from "@/components/accounting/CategoryPanel";
 import TransactionModal from "@/components/accounting/TransactionModal";
 import AccountMappingTab from "@/components/accounting/AccountMappingTab";
 
+// ── Toast system ──────────────────────────────────────────────
+
+type ToastType = "success" | "error" | "warning";
+
+interface Toast {
+  id: string;
+  message: string;
+  type: ToastType;
+}
+
+function ToastContainer({ toasts, onRemove }: { toasts: Toast[]; onRemove: (id: string) => void }) {
+  return (
+    <div className="fixed bottom-6 left-6 z-[9999] space-y-2 min-w-[280px] max-w-[380px]" dir="rtl">
+      {toasts.map(t => (
+        <div key={t.id}
+          className={clsx(
+            "flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-sm font-medium transition-all animate-in slide-in-from-bottom-2",
+            t.type === "success" && "bg-emerald-50 border-emerald-200 text-emerald-800",
+            t.type === "error" && "bg-red-50 border-red-200 text-red-800",
+            t.type === "warning" && "bg-amber-50 border-amber-200 text-amber-800",
+          )}>
+          {t.type === "success" && <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />}
+          {t.type === "error" && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+          {t.type === "warning" && <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />}
+          <span className="flex-1">{t.message}</span>
+          <button onClick={() => onRemove(t.id)} className="text-gray-400 hover:text-gray-600">✕</button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function useToast() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((message: string, type: ToastType = "success") => {
+    const id = crypto.randomUUID();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+  }, []);
+
+  const removeToast = useCallback((id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  return { toasts, addToast, removeToast };
+}
+
+// ── Tab config ────────────────────────────────────────────────
+
 const TABS = [
-  { id: "files",        label: "קבצים",          icon: FolderOpen },
-  { id: "dashboard",    label: "דשבורד",          icon: LayoutDashboard },
-  { id: "pnl",          label: "רווח והפסד",      icon: FileSpreadsheet },
-  { id: "accounts",     label: "חשבונות נגדיים",  icon: Settings },
-  { id: "alerts",       label: "התראות",           icon: Bell },
-  { id: "compare",      label: "השוואות",          icon: BarChart3 },
+  { id: "files",     label: "קבצים",         icon: FolderOpen },
+  { id: "dashboard", label: "דשבורד",         icon: LayoutDashboard },
+  { id: "pnl",       label: "רווח והפסד",     icon: FileSpreadsheet },
+  { id: "accounts",  label: "חשבונות",        icon: Settings },
+  { id: "alerts",    label: "התראות",          icon: Bell },
+  { id: "compare",   label: "השוואות",         icon: BarChart3 },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+// ── Page ──────────────────────────────────────────────────────
 
 export default function ExpensesPage() {
   const [activeTab, setActiveTab] = useState<TabId>("files");
   const [year, setYear] = useState(new Date().getFullYear());
 
-  // Drill-down state
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [openAccountId, setOpenAccountId] = useState<string | null>(null);
   const [openAccountMonth, setOpenAccountMonth] = useState<number | undefined>(undefined);
 
+  const { toasts, addToast, removeToast } = useToast();
+
   const data = useAccountingData(year);
   const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
+
+  // Unclassified accounts banner
+  const unclassifiedCount = data.accounts.filter(a => {
+    if (a.account_type !== "expense") return false;
+    return !data.getEffectiveGroup(a.id, a.latest_group_code ?? "");
+  }).length;
+
+  // Wrapped mutations with toast feedback
+  const withToast = useCallback(
+    async (fn: () => Promise<boolean>, successMsg: string, errorMsg?: string) => {
+      const ok = await fn();
+      if (ok) addToast(successMsg, "success");
+      else addToast(errorMsg ?? "שגיאה בשמירה — נסה שוב", "error");
+      return ok;
+    },
+    [addToast],
+  );
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -51,7 +121,6 @@ export default function ExpensesPage() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Year selector */}
           <select
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}
@@ -60,7 +129,6 @@ export default function ExpensesPage() {
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
 
-          {/* Classification mode toggle */}
           <button
             onClick={() =>
               data.setClassificationMode(
@@ -81,6 +149,22 @@ export default function ExpensesPage() {
         </div>
       </div>
 
+      {/* Unclassified banner */}
+      {unclassifiedCount > 0 && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span>
+            <strong>{unclassifiedCount} חשבונות</strong> ללא סיווג — לא ייחשבו בדוח רווח והפסד
+          </span>
+          <button
+            onClick={() => setActiveTab("accounts")}
+            className="mr-auto px-3 py-1 bg-amber-100 hover:bg-amber-200 rounded-lg font-semibold text-xs transition-colors"
+          >
+            סווג עכשיו
+          </button>
+        </div>
+      )}
+
       {/* Main card */}
       <div className="bg-white rounded-2xl shadow-soft border border-gray-100">
         {/* Tabs */}
@@ -88,9 +172,10 @@ export default function ExpensesPage() {
           <nav className="flex gap-1 overflow-x-auto py-2" aria-label="טאבים">
             {TABS.map((tab) => {
               const Icon = tab.icon;
-              // Badge for alerts
               const badge = tab.id === "alerts" && data.anomalies.length > 0
                 ? data.anomalies.length : 0;
+              const warnBadge = tab.id === "accounts" && unclassifiedCount > 0
+                ? unclassifiedCount : 0;
 
               return (
                 <button
@@ -108,6 +193,11 @@ export default function ExpensesPage() {
                   {badge > 0 && (
                     <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                       {badge > 9 ? "9+" : badge}
+                    </span>
+                  )}
+                  {warnBadge > 0 && (
+                    <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                      {warnBadge > 9 ? "9+" : warnBadge}
                     </span>
                   )}
                 </button>
@@ -139,7 +229,10 @@ export default function ExpensesPage() {
               {activeTab === "files" && (
                 <FilesTab
                   files={data.files}
-                  onUploadComplete={() => void data.refetch()}
+                  onUploadComplete={() => {
+                    void data.refetch();
+                    addToast("הקובץ הועלה בהצלחה", "success");
+                  }}
                 />
               )}
 
@@ -148,11 +241,17 @@ export default function ExpensesPage() {
                   yearlyPnl={data.yearlyPnl}
                   prevYearlyPnl={data.prevYearlyPnl}
                   customGroups={data.customGroups}
+                  accounts={data.accounts}
+                  transactions={data.transactions}
+                  classificationOverrides={data.classificationOverrides}
                   year={year}
                   classificationMode={data.classificationMode}
                   onGroupClick={(groupId) => {
                     setOpenGroupId(groupId);
-                    setActiveTab("pnl");
+                  }}
+                  onAccountClick={(accountId) => {
+                    setOpenAccountId(accountId);
+                    setOpenAccountMonth(undefined);
                   }}
                 />
               )}
@@ -160,7 +259,10 @@ export default function ExpensesPage() {
               {activeTab === "pnl" && (
                 <PnlTableTab
                   yearlyPnl={data.yearlyPnl}
+                  prevYearlyPnl={data.prevYearlyPnl}
                   customGroups={data.customGroups}
+                  accounts={data.accounts}
+                  getEffectiveGroup={data.getEffectiveGroup}
                   year={year}
                   onGroupClick={(groupId) => setOpenGroupId(groupId)}
                   onAmountClick={(accountId, month) => {
@@ -177,10 +279,46 @@ export default function ExpensesPage() {
                   classificationOverrides={data.classificationOverrides}
                   tags={data.tags}
                   accountTags={data.accountTags}
-                  onSaveClassification={data.saveClassificationOverride}
-                  onDeleteClassification={data.deleteClassificationOverride}
-                  onAssignTag={data.assignTag}
-                  onRemoveTag={data.removeTag}
+                  counterNames={data.counterNames}
+                  onSaveClassification={(accountId, groupId, note) =>
+                    withToast(
+                      () => data.saveClassificationOverride(accountId, groupId, note),
+                      "הסיווג עודכן בהצלחה",
+                    )
+                  }
+                  onDeleteClassification={(accountId) =>
+                    withToast(
+                      () => data.deleteClassificationOverride(accountId),
+                      "הסיווג אופס לברירת מחדל",
+                    )
+                  }
+                  onSaveGroup={(group) =>
+                    withToast(
+                      () => data.saveGroup(group),
+                      group.id ? "הקבוצה עודכנה" : "הקבוצה נוצרה בהצלחה",
+                    )
+                  }
+                  onDeleteGroup={(id) =>
+                    withToast(() => data.deleteGroup(id), "הקבוצה נמחקה")
+                  }
+                  onSaveTag={(tag) =>
+                    withToast(
+                      () => data.saveTag(tag),
+                      tag.id ? "התגית עודכנה" : "התגית נוצרה בהצלחה",
+                    )
+                  }
+                  onDeleteTag={(id) =>
+                    withToast(() => data.deleteTag(id), "התגית נמחקה")
+                  }
+                  onAssignTag={(accountId, tagId) =>
+                    withToast(() => data.assignTag(accountId, tagId), "התגית שויכה")
+                  }
+                  onRemoveTag={(accountId, tagId) =>
+                    withToast(() => data.removeTag(accountId, tagId), "התגית הוסרה")
+                  }
+                  onSaveCounterName={(code, name) =>
+                    withToast(() => data.saveCounterName(code, name), "השם עודכן בהצלחה")
+                  }
                 />
               )}
 
@@ -190,8 +328,12 @@ export default function ExpensesPage() {
                   alertRules={data.alertRules}
                   accounts={data.accounts}
                   year={year}
-                  onSaveRule={data.saveAlertRule}
-                  onDeleteRule={data.deleteAlertRule}
+                  onSaveRule={(rule) =>
+                    withToast(() => data.saveAlertRule(rule), "הכלל נשמר בהצלחה")
+                  }
+                  onDeleteRule={(id) =>
+                    withToast(() => data.deleteAlertRule(id), "הכלל נמחק")
+                  }
                   onAccountClick={(accountId) => {
                     setOpenAccountId(accountId);
                     setOpenAccountMonth(undefined);
@@ -238,9 +380,19 @@ export default function ExpensesPage() {
         counterNames={data.counterNames}
         year={year}
         onClose={() => { setOpenAccountId(null); setOpenAccountMonth(undefined); }}
-        onSaveOverride={data.saveTransactionOverride}
-        onDeleteOverride={data.deleteTransactionOverride}
+        onSaveOverride={(txId, type, newValue, note) =>
+          withToast(
+            () => data.saveTransactionOverride(txId, type, newValue, note),
+            "שינוי נשמר בהצלחה",
+          )
+        }
+        onDeleteOverride={(id) =>
+          withToast(() => data.deleteTransactionOverride(id), "שינוי הוסר")
+        }
       />
+
+      {/* Toast notifications */}
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
     </div>
   );
 }
