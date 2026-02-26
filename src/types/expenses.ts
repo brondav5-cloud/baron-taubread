@@ -99,6 +99,13 @@ export interface ParsedExpenseRow {
   balance: number;
 }
 
+export interface DetectedMonth {
+  month: number;
+  year: number;
+  label: string;
+  rowCount: number;
+}
+
 export interface ExpenseProcessingResult {
   success: boolean;
   rows: ParsedExpenseRow[];
@@ -108,9 +115,12 @@ export interface ExpenseProcessingResult {
     totalCredits: number;
     totalBalance: number;
   };
+  detectedMonths: DetectedMonth[];
+  dateRange: { from: string | null; to: string | null };
   stats: {
     rowsCount: number;
     suppliersCount: number;
+    monthsCount: number;
   };
   error?: string;
 }

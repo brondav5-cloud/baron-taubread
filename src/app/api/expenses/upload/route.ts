@@ -11,10 +11,10 @@ interface UploadPayload {
   rows: ParsedExpenseRow[];
   suppliers: Array<{ name: string; accountKey: string }>;
   totals: { totalDebits: number; totalCredits: number; totalBalance: number };
-  stats: { rowsCount: number; suppliersCount: number };
+  stats: { rowsCount: number; suppliersCount: number; monthsCount: number };
   fileName: string;
-  periodMonth?: number;
-  periodYear?: number;
+  detectedMonths: Array<{ month: number; year: number; label: string; rowCount: number }>;
+  dateRange: { from: string | null; to: string | null };
 }
 
 export async function POST(request: NextRequest) {
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const payload: UploadPayload = await request.json();
-    const { rows, suppliers, totals, stats, fileName, periodMonth, periodYear } =
+    const { rows, suppliers, totals, stats, fileName, detectedMonths, dateRange } =
       payload;
 
     if (!rows || rows.length === 0) {
@@ -49,14 +49,17 @@ export async function POST(request: NextRequest) {
 
     const admin = getAdmin();
 
+    const minMonth = detectedMonths.length > 0 ? detectedMonths[0] : null;
+    const maxMonth = detectedMonths.length > 0 ? detectedMonths[detectedMonths.length - 1] : null;
+
     const { data: upload, error: uploadErr } = await admin
       .from("expense_uploads")
       .insert({
         company_id: companyId,
         uploaded_by: user.id,
         file_name: fileName,
-        period_month: periodMonth ?? null,
-        period_year: periodYear ?? null,
+        period_month: minMonth?.month ?? null,
+        period_year: minMonth?.year ?? null,
         rows_count: stats.rowsCount,
         suppliers_found: stats.suppliersCount,
         total_debits: totals.totalDebits,
@@ -117,13 +120,16 @@ export async function POST(request: NextRequest) {
 
       // Insert expense entries in batches
       const BATCH_SIZE = 200;
+      const fallbackMonth = maxMonth?.month ?? new Date().getMonth() + 1;
+      const fallbackYear = maxMonth?.year ?? new Date().getFullYear();
+
       const entries = rows
         .map((row) => {
           const supplierId = supplierIds.get(row.accountKey);
           if (!supplierId) return null;
 
-          let month = periodMonth ?? new Date().getMonth() + 1;
-          let year = periodYear ?? new Date().getFullYear();
+          let month = fallbackMonth;
+          let year = fallbackYear;
           if (row.referenceDate) {
             const d = new Date(row.referenceDate);
             if (!isNaN(d.getTime())) {
@@ -170,9 +176,12 @@ export async function POST(request: NextRequest) {
         stats: {
           rowsInserted: entries.length,
           suppliersFound: supplierIds.size,
+          monthsDetected: detectedMonths.length,
           totalDebits: totals.totalDebits,
           totalCredits: totals.totalCredits,
         },
+        dateRange,
+        detectedMonths,
       });
     } catch (err) {
       await admin

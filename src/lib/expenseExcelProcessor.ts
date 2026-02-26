@@ -15,6 +15,7 @@ import { loadXlsx } from "./loadXlsx";
 import type {
   ParsedExpenseRow,
   ExpenseProcessingResult,
+  DetectedMonth,
 } from "@/types/expenses";
 
 const COLUMN_MAPPINGS: { [key: string]: string[] } & {
@@ -101,7 +102,9 @@ export async function processExpenseExcel(
         rows: [],
         suppliers: [],
         totals: { totalDebits: 0, totalCredits: 0, totalBalance: 0 },
-        stats: { rowsCount: 0, suppliersCount: 0 },
+        detectedMonths: [],
+        dateRange: { from: null, to: null },
+        stats: { rowsCount: 0, suppliersCount: 0, monthsCount: 0 },
         error: "הקובץ ריק — לא נמצאו גיליונות",
       };
     }
@@ -118,7 +121,9 @@ export async function processExpenseExcel(
         rows: [],
         suppliers: [],
         totals: { totalDebits: 0, totalCredits: 0, totalBalance: 0 },
-        stats: { rowsCount: 0, suppliersCount: 0 },
+        detectedMonths: [],
+        dateRange: { from: null, to: null },
+        stats: { rowsCount: 0, suppliersCount: 0, monthsCount: 0 },
         error: "הקובץ לא מכיל מספיק שורות",
       };
     }
@@ -142,7 +147,9 @@ export async function processExpenseExcel(
         rows: [],
         suppliers: [],
         totals: { totalDebits: 0, totalCredits: 0, totalBalance: 0 },
-        stats: { rowsCount: 0, suppliersCount: 0 },
+        detectedMonths: [],
+        dateRange: { from: null, to: null },
+        stats: { rowsCount: 0, suppliersCount: 0, monthsCount: 0 },
         error:
           'לא נמצאה שורת כותרות מתאימה. ודא שהקובץ מכיל עמודות "שם" ו"מפתח"',
       };
@@ -163,9 +170,12 @@ export async function processExpenseExcel(
 
     const rows: ParsedExpenseRow[] = [];
     const supplierMap = new Map<string, { name: string; accountKey: string }>();
+    const monthCountMap = new Map<string, number>();
     let totalDebits = 0;
     let totalCredits = 0;
     let totalBalance = 0;
+    let minDate: string | null = null;
+    let maxDate: string | null = null;
 
     for (let i = headerRowIdx + 1; i < rawData.length; i++) {
       const row = rawData[i] as unknown[];
@@ -180,10 +190,12 @@ export async function processExpenseExcel(
       const debits = parseNumber(colIdx.debits >= 0 ? row[colIdx.debits] : 0);
       const balance = parseNumber(colIdx.balance >= 0 ? row[colIdx.balance] : 0);
 
+      const refDate = colIdx.date >= 0 ? parseDateString(row[colIdx.date]) : null;
+
       const parsed: ParsedExpenseRow = {
         supplierName,
         accountKey,
-        referenceDate: colIdx.date >= 0 ? parseDateString(row[colIdx.date]) : null,
+        referenceDate: refDate,
         details:
           colIdx.details >= 0 ? String(row[colIdx.details] ?? "").trim() || null : null,
         credits,
@@ -199,18 +211,48 @@ export async function processExpenseExcel(
       if (accountKey && supplierName) {
         supplierMap.set(accountKey, { name: supplierName, accountKey });
       }
+
+      if (refDate && refDate.length >= 7) {
+        const d = new Date(refDate);
+        if (!isNaN(d.getTime())) {
+          const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+          monthCountMap.set(key, (monthCountMap.get(key) || 0) + 1);
+          if (!minDate || refDate < minDate) minDate = refDate;
+          if (!maxDate || refDate > maxDate) maxDate = refDate;
+        }
+      }
     }
 
     const suppliers = Array.from(supplierMap.values());
+
+    const detectedMonths: DetectedMonth[] = Array.from(monthCountMap.entries())
+      .map(([key, count]) => {
+        const [y, m] = key.split("-");
+        const monthNum = parseInt(m!, 10);
+        const yearNum = parseInt(y!, 10);
+        return {
+          month: monthNum,
+          year: yearNum,
+          label: new Date(yearNum, monthNum - 1).toLocaleString("he-IL", {
+            month: "long",
+            year: "numeric",
+          }),
+          rowCount: count,
+        };
+      })
+      .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month - b.month);
 
     return {
       success: true,
       rows,
       suppliers,
       totals: { totalDebits, totalCredits, totalBalance },
+      detectedMonths,
+      dateRange: { from: minDate, to: maxDate },
       stats: {
         rowsCount: rows.length,
         suppliersCount: suppliers.length,
+        monthsCount: detectedMonths.length,
       },
     };
   } catch (err) {
@@ -219,7 +261,9 @@ export async function processExpenseExcel(
       rows: [],
       suppliers: [],
       totals: { totalDebits: 0, totalCredits: 0, totalBalance: 0 },
-      stats: { rowsCount: 0, suppliersCount: 0 },
+      detectedMonths: [],
+      dateRange: { from: null, to: null },
+      stats: { rowsCount: 0, suppliersCount: 0, monthsCount: 0 },
       error: `שגיאה בעיבוד הקובץ: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
