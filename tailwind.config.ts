@@ -41,6 +41,7 @@ const config: Config = {
         'scale-in': 'scaleIn 0.3s ease-out',
         'spin-slow': 'spin 3s linear infinite',
         'float': 'float 6s ease-in-out infinite',
+        'slide-in-left': 'slideInLeft 0.3s ease-out',
       },
       keyframes: {
         fadeIn: {
@@ -62,6 +63,10 @@ const config: Config = {
         float: {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-10px)' },
+        },
+        slideInLeft: {
+          '0%': { transform: 'translateX(-100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
         },
       },
     },
