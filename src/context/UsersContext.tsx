@@ -46,6 +46,7 @@ export interface AppUser {
   role: string;
   avatar: string;
   email: string;
+  phone: string;
   department: string;
   position: string;
   permissions?: UserPermissions | null;
@@ -73,6 +74,7 @@ function dbUserToAppUser(u: DbUser): AppUser {
     role: u.role ?? "viewer",
     avatar: u.avatar ?? "👤",
     email: u.email,
+    phone: ((u as unknown as Record<string, unknown>).phone as string) ?? "",
     department: u.department ?? "",
     position: u.position ?? "",
     permissions: u.permissions ?? undefined,
@@ -133,6 +135,7 @@ const FALLBACK_USER: AppUser = {
   role: "viewer",
   avatar: "👤",
   email: "",
+  phone: "",
   department: "",
   position: "",
 };
@@ -235,6 +238,7 @@ export function UsersProvider({ children }: UsersProviderProps) {
       const dbUpdates: Record<string, unknown> = {};
       if (updates.name !== undefined) dbUpdates.name = updates.name;
       if (updates.email !== undefined) dbUpdates.email = updates.email;
+      if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
       if (updates.department !== undefined)
         dbUpdates.department = updates.department;
       if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;

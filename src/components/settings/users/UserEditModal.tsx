@@ -58,6 +58,7 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
 
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+  const [phone, setPhone] = useState(user?.phone ?? "");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState(user?.role ?? "editor");
   const [position, setPosition] = useState(user?.position || "agent");
@@ -128,6 +129,7 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
         await updateUser(user.id, {
           name: name.trim(),
           email: email.trim(),
+          phone: phone.trim(),
           role,
           position,
           department: department.trim(),
@@ -187,6 +189,20 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="user@company.com"
               type="email"
+              dir="ltr"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              טלפון נייד (ל-SMS)
+            </label>
+            <input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="050-1234567"
+              type="tel"
               dir="ltr"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />
