@@ -423,17 +423,21 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
       };
     }
 
-    const rawColumns = Object.keys(rows[0] ?? {});
-    const columnMap: Record<string, string> = {};
     // Strip invisible Unicode characters (RTL marks, BOM, zero-width spaces, etc.)
     const normalizeCol = (s: string) =>
       s
         .replace(/[\u200B-\u200F\u202A-\u202E\uFEFF\u00A0]/g, "")
         .trim()
         .replace(/\s+/g, " ");
-    for (const col of rawColumns) {
-      const normalized = normalizeCol(col);
-      if (!columnMap[normalized]) columnMap[normalized] = col;
+
+    // Build columnMap from ALL rows — some columns (e.g. "רשת") may be empty
+    // in the first row and would be missed if we only scan rows[0]
+    const columnMap: Record<string, string> = {};
+    for (const row of rows) {
+      for (const col of Object.keys(row)) {
+        const normalized = normalizeCol(col);
+        if (!columnMap[normalized]) columnMap[normalized] = col;
+      }
     }
     console.log("[excelProcessor] columns found:", Object.keys(columnMap));
     const getVal = (
