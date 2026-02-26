@@ -41,6 +41,10 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 // DATE PARSING
 // ============================================
 
+// Reasonable year range for delivery data
+const MIN_YEAR = 2010;
+const MAX_YEAR = 2040;
+
 function parseDocumentDate(
   dateValue: unknown,
   // eslint-disable-next-line
@@ -56,44 +60,53 @@ function parseDocumentDate(
   }
   // Handle Excel serial number
   else if (typeof dateValue === "number") {
+    // Guard: Excel serials for 2010-2040 are roughly 40179-51501
+    // Values outside this range are not valid dates for our purposes
+    if (dateValue < 36526 || dateValue > 58849) {
+      return null;
+    }
     if (XLSX?.SSF?.parse_date_code) {
-      date = XLSX.SSF.parse_date_code(dateValue) as unknown as Date;
+      const parsed = XLSX.SSF.parse_date_code(dateValue);
+      if (parsed && typeof parsed === "object" && "y" in parsed) {
+        const ep = parsed as unknown as { y: number; m: number; d: number };
+        date = new Date(ep.y, ep.m - 1, ep.d);
+      } else {
+        date = parsed as unknown as Date;
+      }
     } else {
       const epoch = new Date(1899, 11, 30);
       date = new Date(epoch.getTime() + dateValue * 86400000);
     }
-    if (date && typeof date === "object" && "y" in date) {
-      const excelDate = date as unknown as { y: number; m: number; d: number };
-      date = new Date(excelDate.y, excelDate.m - 1, excelDate.d);
-    }
   }
   // Handle string date
   else if (typeof dateValue === "string") {
-    // Try DD-MM-YYYY or DD/MM/YYYY
-    const patterns = [
-      /^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/, // DD-MM-YYYY
-      /^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/, // YYYY-MM-DD
+    const s = dateValue.trim();
+    const patterns: Array<[RegExp, (m: RegExpMatchArray) => Date]> = [
+      // DD/MM/YYYY or DD-MM-YYYY
+      [
+        /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})$/,
+        (m) => new Date(parseInt(m[3]!, 10), parseInt(m[2]!, 10) - 1, parseInt(m[1]!, 10)),
+      ],
+      // YYYY/MM/DD or YYYY-MM-DD
+      [
+        /^(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})$/,
+        (m) => new Date(parseInt(m[1]!, 10), parseInt(m[2]!, 10) - 1, parseInt(m[3]!, 10)),
+      ],
+      // DD/MM/YY (2-digit year: ≤30 → 2000s, else → 1900s — but we filter below)
+      [
+        /^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$/,
+        (m) => {
+          const yy = parseInt(m[3]!, 10);
+          const yyyy = yy <= 30 ? 2000 + yy : 1900 + yy;
+          return new Date(yyyy, parseInt(m[2]!, 10) - 1, parseInt(m[1]!, 10));
+        },
+      ],
     ];
 
-    for (const pattern of patterns) {
-      const match = dateValue.match(pattern);
+    for (const [pattern, builder] of patterns) {
+      const match = s.match(pattern);
       if (match) {
-        const d = match[1] ?? "0";
-        const m = match[2] ?? "0";
-        const y = match[3] ?? "0";
-        if (pattern === patterns[0]) {
-          date = new Date(
-            parseInt(y, 10),
-            parseInt(m, 10) - 1,
-            parseInt(d, 10),
-          );
-        } else {
-          date = new Date(
-            parseInt(d, 10),
-            parseInt(m, 10) - 1,
-            parseInt(y, 10),
-          );
-        }
+        date = builder(match);
         break;
       }
     }
@@ -102,9 +115,12 @@ function parseDocumentDate(
   if (!date || isNaN(date.getTime())) return null;
 
   const year = date.getFullYear();
+  // Reject dates outside our acceptable range
+  if (year < MIN_YEAR || year > MAX_YEAR) return null;
+
   const month = date.getMonth() + 1;
 
-  // Calculate week number (ISO week)
+  // Calculate week number (simple ISO-like week)
   const firstDayOfYear = new Date(year, 0, 1);
   const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
   const week = Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
