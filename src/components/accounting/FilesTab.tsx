@@ -36,6 +36,16 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
   } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const BATCH_SIZE = 300;
+
+  const safeJson = async (res: Response): Promise<Record<string, unknown>> => {
+    try {
+      return await res.json();
+    } catch {
+      return { error: `שגיאת שרת ${res.status}: ${res.statusText}` };
+    }
+  };
+
   const handleFile = async (f: File) => {
     if (!f.name.endsWith(".xlsx")) {
       setLastResult({ success: false, message: "הקובץ חייב להיות בפורמט .xlsx" });
@@ -55,10 +65,11 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
         return;
       }
 
-      setProgress(`נמצאו ${parsed.stats.rowsCount.toLocaleString()} תנועות · שולח לשרת...`);
+      const { transactions, accounts, stats } = parsed;
 
-      // Step 2: send parsed JSON to server
-      const res = await fetch("/api/accounting/upload", {
+      // Step 2: phase 1 — send metadata + accounts only
+      setProgress(`נמצאו ${stats.rowsCount.toLocaleString()} תנועות · שולח חשבונות...`);
+      const phase1Res = await fetch("/api/accounting/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -66,33 +77,54 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
           year,
           month: fileType === "monthly" ? month : null,
           fileType,
-          parsed,
+          accounts,
+          totalTransactions: stats.rowsCount,
         }),
       });
 
-      if (res.status === 413) {
-        setLastResult({ success: false, message: "הקובץ גדול מדי — נסה קובץ קטן יותר (מקסימום ~50MB)" });
+      const phase1Data = await safeJson(phase1Res);
+      if (!phase1Res.ok) {
+        setLastResult({ success: false, message: (phase1Data.error as string) ?? "שגיאה ביצירת רשומה" });
         return;
       }
 
-      let data: Record<string, unknown>;
-      try {
-        data = await res.json();
-      } catch {
-        setLastResult({ success: false, message: `שגיאת שרת (${res.status}: ${res.statusText})` });
-        return;
-      }
+      const fileId = phase1Data.fileId as string;
 
-      if (!res.ok) {
-        setLastResult({ success: false, message: (data.error as string) ?? "שגיאה בשמירה לשרת" });
-      } else {
-        const stats = data.stats as { rowsInserted: number; accountsCount: number; rowsSkipped: number };
-        setLastResult({
-          success: true,
-          message: `יובאו ${stats.rowsInserted.toLocaleString()} תנועות · ${stats.accountsCount} חשבונות${stats.rowsSkipped > 0 ? ` · ${stats.rowsSkipped} כפילויות דולגו` : ""}`,
+      // Step 3: phase 2 — send transactions in chunks
+      const totalChunks = Math.ceil(transactions.length / BATCH_SIZE);
+      let totalInserted = 0;
+      let totalSkipped = 0;
+
+      for (let i = 0; i < transactions.length; i += BATCH_SIZE) {
+        const chunkIndex = Math.floor(i / BATCH_SIZE);
+        const chunk = transactions.slice(i, i + BATCH_SIZE);
+        const isLast = i + BATCH_SIZE >= transactions.length;
+
+        setProgress(
+          `שולח תנועות... ${Math.min(i + BATCH_SIZE, transactions.length).toLocaleString()} / ${transactions.length.toLocaleString()} (${Math.round(((chunkIndex + 1) / totalChunks) * 100)}%)`,
+        );
+
+        const batchRes = await fetch("/api/accounting/upload/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileId, transactions: chunk, isLast }),
         });
-        onUploadComplete();
+
+        const batchData = await safeJson(batchRes);
+        if (!batchRes.ok) {
+          setLastResult({ success: false, message: (batchData.error as string) ?? "שגיאה בהעלאת תנועות" });
+          return;
+        }
+
+        totalInserted += (batchData.inserted as number) ?? 0;
+        totalSkipped += (batchData.skipped as number) ?? 0;
       }
+
+      setLastResult({
+        success: true,
+        message: `יובאו ${totalInserted.toLocaleString()} תנועות · ${accounts.length} חשבונות${totalSkipped > 0 ? ` · ${totalSkipped} כפילויות דולגו` : ""}`,
+      });
+      onUploadComplete();
     } catch (err) {
       setLastResult({ success: false, message: String(err) });
     } finally {
