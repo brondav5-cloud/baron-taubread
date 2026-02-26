@@ -19,6 +19,7 @@ interface Props {
   tags: DbCustomTag[];
   accountTags: DbAccountTag[];
   counterNames: DbCounterAccountName[];
+  transactions?: { counter_account: string | null }[];
   onSaveClassification: (accountId: string, groupId: string, note?: string) => Promise<boolean>;
   onDeleteClassification: (accountId: string) => Promise<boolean>;
   onSaveGroup: (group: Partial<DbCustomGroup> & { name: string; parent_section: ParentSection; group_codes: string[] }) => Promise<boolean>;
@@ -840,6 +841,7 @@ function CounterNamesTab({ counterNames, transactions, onSaveCounterName }: {
 
 export default function AccountMappingTab({
   accounts, customGroups, classificationOverrides, tags, accountTags, counterNames,
+  transactions: txProp,
   onSaveClassification, onDeleteClassification, onSaveGroup, onDeleteGroup,
   onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName,
 }: Props) {
@@ -858,10 +860,7 @@ export default function AccountMappingTab({
     { id: "counter", label: "שמות נגדיים", icon: <FileText className="w-3.5 h-3.5" /> },
   ];
 
-  const transactions = useMemo(() =>
-    ([] as { counter_account: string | null }[]),
-    [],
-  );
+  const transactions = txProp ?? [];
 
   return (
     <div className="space-y-4" dir="rtl">

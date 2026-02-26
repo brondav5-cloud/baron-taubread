@@ -280,6 +280,7 @@ export default function ExpensesPage() {
                   tags={data.tags}
                   accountTags={data.accountTags}
                   counterNames={data.counterNames}
+                  transactions={data.transactions}
                   onSaveClassification={(accountId, groupId, note) =>
                     withToast(
                       () => data.saveClassificationOverride(accountId, groupId, note),
