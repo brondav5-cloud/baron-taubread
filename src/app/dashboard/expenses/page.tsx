@@ -1,21 +1,29 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import {
   FolderOpen, LayoutDashboard, FileSpreadsheet,
   Settings, Bell, BarChart3, ArrowRight, CheckCircle, XCircle, AlertTriangle,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAccountingData } from "@/hooks/useAccountingData";
-import FilesTab from "@/components/accounting/FilesTab";
-import DashboardTab from "@/components/accounting/DashboardTab";
-import PnlTableTab from "@/components/accounting/PnlTableTab";
-import AlertsTab from "@/components/accounting/AlertsTab";
-import ComparisonsTab from "@/components/accounting/ComparisonsTab";
 import CategoryPanel from "@/components/accounting/CategoryPanel";
 import TransactionModal from "@/components/accounting/TransactionModal";
-import AccountMappingTab from "@/components/accounting/AccountMappingTab";
 import AccountDetailPanel from "@/components/accounting/AccountDetailPanel";
+
+const TabSkeleton = () => (
+  <div className="space-y-4">
+    {[1, 2, 3].map(i => <div key={i} className="h-14 bg-gray-100 rounded-xl animate-pulse" />)}
+  </div>
+);
+
+const FilesTab = dynamic(() => import("@/components/accounting/FilesTab"), { loading: TabSkeleton });
+const DashboardTab = dynamic(() => import("@/components/accounting/DashboardTab"), { loading: TabSkeleton });
+const PnlTableTab = dynamic(() => import("@/components/accounting/PnlTableTab"), { loading: TabSkeleton });
+const AlertsTab = dynamic(() => import("@/components/accounting/AlertsTab"), { loading: TabSkeleton });
+const ComparisonsTab = dynamic(() => import("@/components/accounting/ComparisonsTab"), { loading: TabSkeleton });
+const AccountMappingTab = dynamic(() => import("@/components/accounting/AccountMappingTab"), { loading: TabSkeleton });
 
 // ── Toast system ──────────────────────────────────────────────
 

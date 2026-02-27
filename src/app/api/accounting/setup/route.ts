@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { readFileSync } from "fs";
 import path from "path";
 
@@ -75,7 +74,7 @@ export async function POST() {
 // Returns setup status: checks if accounting tables exist
 export async function GET() {
   try {
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = getSupabaseAdmin();
 
     // Check if our tables exist by trying a simple query
     const checks = await Promise.allSettled([

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 async function getUser() {
@@ -14,7 +13,7 @@ export async function GET() {
   const user = await getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = getSupabaseAdmin();
   const [tagsRes, accountTagsRes] = await Promise.all([
     supabase.from("custom_tags").select("*").eq("user_id", user.id),
     supabase.from("account_tags").select("account_id, tag_id"),
@@ -33,7 +32,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await request.json();
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = getSupabaseAdmin();
 
   if (body.mode === "assign") {
     const { data, error } = await supabase
@@ -62,7 +61,7 @@ export async function PATCH(request: Request) {
 
   const body = await request.json();
   const { id, ...update } = body;
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("custom_tags")
@@ -85,7 +84,7 @@ export async function DELETE(request: Request) {
   const id = searchParams.get("id");
   const accountId = searchParams.get("account_id");
   const tagId = searchParams.get("tag_id");
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+  const supabase = getSupabaseAdmin();
 
   if (accountId && tagId) {
     // Remove account→tag assignment

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const PAGE = 5000;
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
     const year = parseInt(searchParams.get("year") ?? String(new Date().getFullYear()), 10);
     const prevYear = year - 1;
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = getSupabaseAdmin();
     const uid = user.id;
 
     // Fetch metadata in parallel (small tables — no pagination needed)

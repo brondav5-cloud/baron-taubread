@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ParsedTransaction } from "@/types/accounting";
 
@@ -31,7 +30,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing fileId or transactions" }, { status: 400 });
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const supabase = getSupabaseAdmin();
 
     // Fetch account code→id map for this user (only codes present in this batch)
     const codes = Array.from(new Set(transactions.map((t) => t.account_code)));
