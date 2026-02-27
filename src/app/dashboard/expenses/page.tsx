@@ -156,6 +156,22 @@ export default function ExpensesPage() {
             <ArrowRight className="w-4 h-4" />
             סיווג: {data.classificationMode === "latest" ? "אחרון" : "מקורי"}
           </button>
+
+          {data.closingEntriesCount > 0 && (
+            <button
+              onClick={() => data.setExcludeClosingEntries(!data.excludeClosingEntries)}
+              className={clsx(
+                "flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all",
+                data.excludeClosingEntries
+                  ? "bg-green-50 border-green-200 text-green-700"
+                  : "bg-red-50 border-red-200 text-red-700",
+              )}
+              title={`נמצאו ${data.closingEntriesCount} פקודות סגירה`}
+            >
+              {data.excludeClosingEntries ? "✓ ללא פקודות סגירה" : "⚠ כולל פקודות סגירה"}
+              <span className="text-[10px] opacity-70">({data.closingEntriesCount.toLocaleString()})</span>
+            </button>
+          )}
         </div>
       </div>
 

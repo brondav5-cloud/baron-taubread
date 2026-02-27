@@ -16,7 +16,7 @@ import type {
   YearlyPnl,
   AccountAnomaly,
 } from "@/types/accounting";
-import { buildClassifier, calcYearlyPnl, detectAnomalies } from "./accountingCalc";
+import { buildClassifier, calcYearlyPnl, detectAnomalies, countClosingEntries } from "./accountingCalc";
 import { useAccountingMutations, type AccountingMutations } from "./useAccountingMutations";
 
 // ── Raw API response ─────────────────────────────────────────
@@ -44,6 +44,9 @@ export interface AccountingData extends AccountingApiData, AccountingMutations {
   error: string | null;
   classificationMode: ClassificationMode;
   setClassificationMode: (m: ClassificationMode) => void;
+  excludeClosingEntries: boolean;
+  setExcludeClosingEntries: (v: boolean) => void;
+  closingEntriesCount: number;
   yearlyPnl: YearlyPnl | null;
   prevYearlyPnl: YearlyPnl | null;
   anomalies: AccountAnomaly[];
@@ -58,6 +61,7 @@ export function useAccountingData(year: number): AccountingData {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [classificationMode, setClassificationMode] = useState<ClassificationMode>("latest");
+  const [excludeClosingEntries, setExcludeClosingEntries] = useState(true);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
@@ -101,6 +105,11 @@ export function useAccountingData(year: number): AccountingData {
     [classifier],
   );
 
+  const closingEntriesCount = useMemo(() => {
+    if (!raw) return 0;
+    return countClosingEntries(raw.transactions);
+  }, [raw]);
+
   const yearlyPnl = useMemo(() => {
     if (!raw || raw.transactions.length === 0) return null;
     return calcYearlyPnl(
@@ -111,8 +120,9 @@ export function useAccountingData(year: number): AccountingData {
       raw.classificationOverrides,
       raw.transactionOverrides,
       classificationMode,
+      excludeClosingEntries,
     );
-  }, [raw, year, classificationMode]);
+  }, [raw, year, classificationMode, excludeClosingEntries]);
 
   const prevYearlyPnl = useMemo(() => {
     if (!raw || raw.prevTransactions.length === 0) return null;
@@ -124,6 +134,7 @@ export function useAccountingData(year: number): AccountingData {
       raw.classificationOverrides,
       [],
       classificationMode,
+      false,
     );
   }, [raw, classificationMode]);
 
@@ -154,6 +165,9 @@ export function useAccountingData(year: number): AccountingData {
     error,
     classificationMode,
     setClassificationMode,
+    excludeClosingEntries,
+    setExcludeClosingEntries,
+    closingEntriesCount,
     yearlyPnl,
     prevYearlyPnl,
     anomalies,

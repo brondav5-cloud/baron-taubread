@@ -61,6 +61,12 @@ function computePreviewStats(preview: ParsedPreview) {
 
   const uniqueHeaders = new Set(transactions.map((t) => t.header_number).filter(Boolean));
 
+  const CLOSING_KW = ["סגירה", "סגירת", "סגירת שנה", "סגירת ספרים", "closing", "year end"];
+  const closingCount = transactions.filter((t) => {
+    const desc = (t.description || "").toLowerCase();
+    return CLOSING_KW.some((kw) => desc.includes(kw));
+  }).length;
+
   return {
     totalDebit,
     totalCredit,
@@ -68,6 +74,7 @@ function computePreviewStats(preview: ParsedPreview) {
     expenseAccounts,
     uniqueCounterAccounts: uniqueCounterAccounts.size,
     uniqueHeaders: uniqueHeaders.size,
+    closingCount,
     monthsSorted,
   };
 }
@@ -377,6 +384,16 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
                 color="amber"
               />
             </div>
+
+            {/* Closing Entries Warning */}
+            {previewStats.closingCount > 0 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
+                <strong>שים לב:</strong> נמצאו{" "}
+                <span className="font-bold">{previewStats.closingCount.toLocaleString()}</span>{" "}
+                פקודות סגירת שנה (תנועות עם תיאור &quot;סגירה&quot;).
+                פקודות אלו יסוננו אוטומטית מחישוב הרווח והפסד כדי להציג תמונה מדויקת.
+              </div>
+            )}
 
             {/* Monthly Breakdown */}
             {previewStats.monthsSorted.length > 0 && (

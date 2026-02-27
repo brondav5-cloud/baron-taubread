@@ -67,19 +67,47 @@ export function buildClassifier(
   return { getEffectiveGroup };
 }
 
+// ── Closing Entry Detection ──────────────────────────────────
+
+const CLOSING_KEYWORDS = [
+  "סגירה", "סגירת", "סגירת שנה", "סגירת ספרים",
+  "closing", "year end", "yearend",
+];
+
+export type TransactionWithDesc = Pick<
+  DbTransaction,
+  "id" | "account_id" | "group_code" | "transaction_date" | "debit" | "credit"
+> & { description?: string | null; header_number?: string | null };
+
+export function isClosingEntry(tx: TransactionWithDesc): boolean {
+  const desc = (tx.description || "").trim();
+  if (!desc) return false;
+  const lower = desc.toLowerCase();
+  return CLOSING_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+export function countClosingEntries(transactions: TransactionWithDesc[]): number {
+  return transactions.filter(isClosingEntry).length;
+}
+
 // ── P&L Calculation ──────────────────────────────────────────
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
 export function calcYearlyPnl(
   year: number,
-  transactions: Pick<DbTransaction, "id" | "account_id" | "group_code" | "transaction_date" | "debit" | "credit">[],
+  transactions: TransactionWithDesc[],
   accounts: DbAccount[],
   customGroups: DbCustomGroup[],
   classificationOverrides: DbAccountClassificationOverride[],
   transactionOverrides: DbTransactionOverride[],
   mode: ClassificationMode,
+  excludeClosingEntries = true,
 ): YearlyPnl {
+  const filteredTx = excludeClosingEntries
+    ? transactions.filter((tx) => !isClosingEntry(tx))
+    : transactions;
+
   const { getEffectiveGroup } = buildClassifier(accounts, customGroups, classificationOverrides, mode);
 
   const overridesByTx = new Map<string, DbTransactionOverride[]>();
@@ -108,7 +136,7 @@ export function calcYearlyPnl(
 
   const monthlyData: MonthlyPnl[] = MONTHS.map(emptyMonth);
 
-  for (const tx of transactions) {
+  for (const tx of filteredTx) {
     const txDate = new Date(tx.transaction_date);
     if (txDate.getFullYear() !== year) continue;
 
@@ -150,7 +178,7 @@ export function calcYearlyPnl(
   // Build groupToAccountIds from actual transaction classifications
   const groupToAccountIdsSet = new Map<string, Set<string>>();
   const { getEffectiveGroup: geg2 } = buildClassifier(accounts, customGroups, classificationOverrides, mode);
-  for (const tx of transactions) {
+  for (const tx of filteredTx) {
     const acct2 = accountById.get(tx.account_id);
     if (!acct2 || acct2.account_type !== "expense") continue;
     const g2 = geg2(tx.account_id, tx.group_code);

@@ -271,16 +271,15 @@ export default function DashboardTab({
     );
   }
 
-  // Detect if revenue accounts might be misclassified
-  const revenueAccounts = accounts.filter(a => a.account_type === "revenue");
-  const hasRevenueData = curr.revenue > 0;
-  const hasExpenseData = (curr.bySection.cost_of_goods + curr.bySection.operating + curr.bySection.admin + curr.bySection.finance + curr.bySection.other) > 0;
-  const showRevenueWarning = !hasRevenueData && hasExpenseData;
-
   const totalExpenses = curr.bySection.cost_of_goods + curr.bySection.operating + curr.bySection.admin + curr.bySection.finance + curr.bySection.other;
-  const netProfitPct = curr.revenue > 0 ? (curr.netProfit / curr.revenue) * 100 : 0;
-  const grossMarginPct = curr.revenue > 0 ? (curr.grossProfit / curr.revenue) * 100 : 0;
-  const operatingPct = curr.revenue > 0 ? (curr.operatingProfit / curr.revenue) * 100 : 0;
+  const hasSignificantRevenue = curr.revenue > 100;
+
+  const revenueAccounts = accounts.filter(a => a.account_type === "revenue");
+  const hasExpenseData = totalExpenses > 0;
+  const showRevenueWarning = !hasSignificantRevenue && (hasExpenseData || revenueAccounts.length > 0);
+  const netProfitPct = hasSignificantRevenue ? (curr.netProfit / curr.revenue) * 100 : 0;
+  const grossMarginPct = hasSignificantRevenue ? (curr.grossProfit / curr.revenue) * 100 : 0;
+  const operatingPct = hasSignificantRevenue ? (curr.operatingProfit / curr.revenue) * 100 : 0;
 
   const kpiCards = [
     // Row 1 — Profit picture
@@ -289,10 +288,10 @@ export default function DashboardTab({
     { id: "operating", label: "רווח תפעולי", value: curr.operatingProfit, prev: prev?.operatingProfit, color: "#3B82F6", isPositiveGood: true, pctOfRev: operatingPct },
     { id: "net", label: "רווח נקי", value: curr.netProfit, prev: prev?.netProfit, color: "#1D4ED8", isPositiveGood: true, pctOfRev: netProfitPct },
     // Row 2 — Expenses
-    { id: "cogs", label: "עלות סחורה", value: curr.bySection.cost_of_goods, prev: prev?.bySection.cost_of_goods, color: "#EF4444", isPositiveGood: false, pctOfRev: curr.revenue > 0 ? (curr.bySection.cost_of_goods / curr.revenue) * 100 : 0 },
-    { id: "opex", label: "הוצאות תפעול", value: curr.bySection.operating, prev: prev?.bySection.operating, color: "#F97316", isPositiveGood: false, pctOfRev: curr.revenue > 0 ? (curr.bySection.operating / curr.revenue) * 100 : 0 },
-    { id: "admin", label: "הוצאות הנהלה", value: curr.bySection.admin, prev: prev?.bySection.admin, color: "#A855F7", isPositiveGood: false, pctOfRev: curr.revenue > 0 ? (curr.bySection.admin / curr.revenue) * 100 : 0 },
-    { id: "finance", label: "הוצאות מימון", value: curr.bySection.finance, prev: prev?.bySection.finance, color: "#6B7280", isPositiveGood: false, pctOfRev: curr.revenue > 0 ? (curr.bySection.finance / curr.revenue) * 100 : 0 },
+    { id: "cogs", label: "עלות סחורה", value: curr.bySection.cost_of_goods, prev: prev?.bySection.cost_of_goods, color: "#EF4444", isPositiveGood: false, pctOfRev: hasSignificantRevenue ? (curr.bySection.cost_of_goods / curr.revenue) * 100 : null },
+    { id: "opex", label: "הוצאות תפעול", value: curr.bySection.operating, prev: prev?.bySection.operating, color: "#F97316", isPositiveGood: false, pctOfRev: hasSignificantRevenue ? (curr.bySection.operating / curr.revenue) * 100 : null },
+    { id: "admin", label: "הוצאות הנהלה", value: curr.bySection.admin, prev: prev?.bySection.admin, color: "#A855F7", isPositiveGood: false, pctOfRev: hasSignificantRevenue ? (curr.bySection.admin / curr.revenue) * 100 : null },
+    { id: "finance", label: "הוצאות מימון", value: curr.bySection.finance, prev: prev?.bySection.finance, color: "#6B7280", isPositiveGood: false, pctOfRev: hasSignificantRevenue ? (curr.bySection.finance / curr.revenue) * 100 : null },
   ];
 
   const lineKeys: Record<string, Array<{ key: string; color: string; dash?: string }>> = {
@@ -318,8 +317,9 @@ export default function DashboardTab({
       )}
       {showRevenueWarning && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-800">
-          <strong>⚠️ אזהרה:</strong> לא נמצאו חשבונות הכנסות — {revenueAccounts.length} חשבון{revenueAccounts.length !== 1 ? "ות" : ""} מסווג{revenueAccounts.length !== 1 ? "ים" : ""} כ&quot;הכנסות&quot; אך ללא תנועות.
-          ייתכן שחשבונות הכנסות מסווגים בטעות כהוצאות. ניתן לתקן בטאב <strong>חשבונות → ספקים</strong>.
+          <strong>שים לב:</strong> הכנסות מוצגות כ-₪0 למרות ש-{revenueAccounts.length} חשבונות מסווגים כהכנסות.
+          ייתכן שהקובץ כולל <strong>פקודות סגירת שנה</strong> שמאפסות את חשבונות ההכנסה.
+          ודא שהאפשרות &quot;הסר פקודות סגירה&quot; מופעלת בתפריט הסינון למעלה.
         </div>
       )}
 

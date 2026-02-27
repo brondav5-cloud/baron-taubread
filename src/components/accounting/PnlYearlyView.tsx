@@ -35,6 +35,7 @@ function PnlYearlyView({
     new Set(["cost_of_goods", "operating", "admin", "finance"])
   );
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [showUncategorized, setShowUncategorized] = useState(false);
   const [showPct, setShowPct] = useState(false);
   const [showPrevYear, setShowPrevYear] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
@@ -73,6 +74,30 @@ function PnlYearlyView({
       if (accs.length > 0) map.set(groupId, accs);
     });
     return map;
+  }, [yearlyPnl, accounts]);
+
+  const uncategorizedAccounts = useMemo(() => {
+    const classifiedIds = new Set<string>();
+    yearlyPnl.groupToAccountIds.forEach((ids) => {
+      for (const id of ids) classifiedIds.add(id);
+    });
+
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
+    const result: DbAccount[] = [];
+
+    yearlyPnl.total.byAccount.forEach((amount, id) => {
+      if (classifiedIds.has(id)) return;
+      if (amount <= 0) return;
+      const acct = accountMap.get(id);
+      if (!acct || acct.account_type !== "expense") return;
+      result.push(acct);
+    });
+
+    return result.sort(
+      (a, b) =>
+        (yearlyPnl.total.byAccount.get(b.id) ?? 0) -
+        (yearlyPnl.total.byAccount.get(a.id) ?? 0),
+    );
   }, [yearlyPnl, accounts]);
 
   const groupsBySection = useMemo(() => {
@@ -463,6 +488,110 @@ function PnlYearlyView({
                   </React.Fragment>
                 );
               })}
+
+              {/* ── Uncategorized accounts ── */}
+              {uncategorizedAccounts.length > 0 && (
+                <>
+                  <tr
+                    className="border-b border-amber-200 bg-amber-50 cursor-pointer hover:bg-amber-100 transition-colors"
+                    onClick={() => setShowUncategorized((p) => !p)}
+                  >
+                    <td className="py-2.5 px-4 font-semibold text-[12px] text-amber-800 sticky right-0 bg-amber-50 z-10 shadow-[inset_-1px_0_0_#fde68a]">
+                      <div className="flex items-center gap-1.5">
+                        {showUncategorized
+                          ? <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                          : <ChevronRight className="w-3.5 h-3.5 shrink-0" />}
+                        <span>חשבונות ללא סיווג</span>
+                        <span className="text-[9px] bg-amber-200 text-amber-700 px-1.5 rounded-full font-bold">
+                          {uncategorizedAccounts.length}
+                        </span>
+                      </div>
+                    </td>
+                    {MONTHS.map((m) => {
+                      let v = 0;
+                      for (const acct of uncategorizedAccounts) {
+                        v += getVal((md) => md.byAccount.get(acct.id) ?? 0, m);
+                      }
+                      return (
+                        <td key={m} className="py-2.5 px-1.5 text-center tabular-nums font-medium text-amber-700">
+                          {v !== 0 ? fmt(v) : <span className="text-gray-200 opacity-50">—</span>}
+                        </td>
+                      );
+                    })}
+                    <td className="py-2.5 px-3 text-center tabular-nums font-bold text-amber-800 bg-amber-100">
+                      {(() => {
+                        let t = 0;
+                        for (const acct of uncategorizedAccounts) {
+                          t += yearlyPnl.total.byAccount.get(acct.id) ?? 0;
+                        }
+                        return t !== 0 ? fmtFull(t) : "—";
+                      })()}
+                    </td>
+                    <td className="py-2.5 px-2 text-center text-[10px] font-semibold text-amber-600">
+                      {(() => {
+                        let t = 0;
+                        for (const acct of uncategorizedAccounts) {
+                          t += yearlyPnl.total.byAccount.get(acct.id) ?? 0;
+                        }
+                        return pctOfRev(Math.abs(t), revTotal);
+                      })()}
+                    </td>
+                  </tr>
+
+                  {showUncategorized &&
+                    uncategorizedAccounts.map((acct) => {
+                      const aTotal = yearlyPnl.total.byAccount.get(acct.id) ?? 0;
+                      return (
+                        <tr
+                          key={acct.id}
+                          className="border-b border-gray-50/50 hover:bg-gray-50/60 transition-colors"
+                        >
+                          <td
+                            className="py-1.5 text-gray-500 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6] text-[11px]"
+                            style={{ paddingRight: "28px", paddingLeft: "8px" }}
+                          >
+                            <span className="font-mono text-[10px] text-gray-400 ml-1">
+                              {acct.code}
+                            </span>
+                            <button
+                              className="hover:text-primary-700 hover:underline text-right transition-colors"
+                              onClick={() => onAccountClick?.(acct.id)}
+                              title="לחץ לפתיחת כרטיס חשבון"
+                            >
+                              {acct.name}
+                            </button>
+                          </td>
+                          {MONTHS.map((m) => {
+                            const v = getVal(
+                              (md) => md.byAccount.get(acct.id) ?? 0,
+                              m,
+                            );
+                            return (
+                              <td
+                                key={m}
+                                className={clsx(
+                                  "py-1.5 px-1.5 text-center tabular-nums text-[10px] cursor-pointer hover:bg-blue-50 transition-colors",
+                                  v > 0 ? "text-gray-700" : "text-gray-300",
+                                )}
+                                onClick={() => {
+                                  if (v > 0) onAmountClick?.(acct.id, m);
+                                }}
+                              >
+                                {v > 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                              </td>
+                            );
+                          })}
+                          <td className="py-1.5 px-3 text-center tabular-nums text-[10px] text-red-600 font-medium bg-gray-50">
+                            {aTotal > 0 ? fmtFull(aTotal) : "—"}
+                          </td>
+                          <td className="py-1.5 px-2 text-center text-[9px] text-gray-400 bg-gray-50">
+                            {pctOfRev(Math.abs(aTotal), revTotal)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </>
+              )}
 
               {/* ── Net Profit ── */}
               <tr className="bg-gradient-to-l from-slate-800 to-slate-900 border-t-2 border-slate-600">
