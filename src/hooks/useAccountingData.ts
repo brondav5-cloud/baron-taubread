@@ -202,6 +202,21 @@ function calcYearlyPnl(
     }
   }
 
+  // Build groupToAccountIds from actual transaction classifications
+  const groupToAccountIdsSet = new Map<string, Set<string>>();
+  const { getEffectiveGroup: geg2 } = buildClassifier(accounts, customGroups, classificationOverrides, mode);
+  for (const tx of transactions) {
+    const acct2 = accountById.get(tx.account_id);
+    if (!acct2 || acct2.account_type !== "expense") continue;
+    const g2 = geg2(tx.account_id, tx.group_code);
+    if (!g2) continue;
+    const s = groupToAccountIdsSet.get(g2.id) ?? new Set<string>();
+    s.add(tx.account_id);
+    groupToAccountIdsSet.set(g2.id, s);
+  }
+  const groupToAccountIds = new Map<string, string[]>();
+  groupToAccountIdsSet.forEach((set, gid) => groupToAccountIds.set(gid, Array.from(set)));
+
   for (const md of monthlyData) {
     md.grossProfit = md.revenue - md.bySection.cost_of_goods;
     md.operatingProfit = md.grossProfit - md.bySection.operating;
@@ -231,7 +246,7 @@ function calcYearlyPnl(
   total.otherTotal = total.bySection.other;
   total.netProfit = total.operatingProfit - total.adminTotal - total.financeTotal - total.otherTotal;
 
-  return { year, months: monthlyData, total };
+  return { year, months: monthlyData, total, groupToAccountIds };
 }
 
 // ── Anomaly Detection ────────────────────────────────────────

@@ -264,7 +264,6 @@ export default function ExpensesPage() {
                   prevYearlyPnl={data.prevYearlyPnl}
                   customGroups={data.customGroups}
                   accounts={data.accounts}
-                  getEffectiveGroup={data.getEffectiveGroup}
                   year={year}
                   onGroupClick={(groupId) => setOpenGroupId(groupId)}
                   onAmountClick={(accountId, month) => {

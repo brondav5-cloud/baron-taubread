@@ -19,7 +19,7 @@ interface Props {
   tags: DbCustomTag[];
   accountTags: DbAccountTag[];
   counterNames: DbCounterAccountName[];
-  transactions?: { counter_account: string | null }[];
+  transactions?: { account_id: string; transaction_date: string; group_code: string; counter_account: string | null }[];
   onSaveClassification: (accountId: string, groupId: string, note?: string) => Promise<boolean>;
   onDeleteClassification: (accountId: string) => Promise<boolean>;
   onBatchSaveClassifications: (changes: Array<{ accountId: string; groupId: string | null }>) => Promise<boolean>;
@@ -32,7 +32,7 @@ interface Props {
   onSaveCounterName: (code: string, displayName: string) => Promise<boolean>;
 }
 
-type InnerTab = "groups" | "classification" | "tags" | "counter";
+type InnerTab = "groups" | "classification" | "suppliers" | "tags" | "counter";
 
 function getEffectiveGroup(
   acct: DbAccount,
@@ -895,7 +895,235 @@ function CounterNamesTab({ counterNames, transactions, onSaveCounterName }: {
 }
 
 // ══════════════════════════════════════════════════════════════
-// Main Component — 4 Inner Tabs
+// TAB — Suppliers (all accounts with year-by-year group codes)
+// ══════════════════════════════════════════════════════════════
+
+function SuppliersTab({
+  accounts, customGroups, classificationOverrides, transactions, onBatchSave,
+}: {
+  accounts: DbAccount[];
+  customGroups: DbCustomGroup[];
+  classificationOverrides: DbAccountClassificationOverride[];
+  transactions: { account_id: string; transaction_date: string; group_code: string; counter_account: string | null }[];
+  onBatchSave: (changes: Array<{ accountId: string; groupId: string | null }>) => Promise<boolean>;
+}) {
+  const [search, setSearch] = useState("");
+  const [filterType, setFilterType] = useState<"all" | "unclassified" | "revenue">("all");
+  const [saving, setSaving] = useState(false);
+  const [autoMapped, setAutoMapped] = useState(0);
+
+  // Build group lookup maps
+  const gcToGroup = useMemo(() => {
+    const map = new Map<string, DbCustomGroup>();
+    for (const g of customGroups) {
+      for (const gc of g.group_codes) {
+        if (!map.has(gc)) map.set(gc, g);
+      }
+    }
+    return map;
+  }, [customGroups]);
+
+  const acToGroup = useMemo(() => {
+    const map = new Map<string, DbCustomGroup>();
+    for (const g of customGroups) {
+      for (const ac of (g.account_codes ?? [])) {
+        if (!map.has(ac)) map.set(ac, g);
+      }
+    }
+    return map;
+  }, [customGroups]);
+
+  const overrideMap = useMemo(() =>
+    new Map(classificationOverrides.map(o => [o.account_id, o])),
+    [classificationOverrides],
+  );
+
+  const groupMap = useMemo(() => new Map(customGroups.map(g => [g.id, g])), [customGroups]);
+
+  // Per-account year data: accountId → Map<year, group_code[]>
+  const accountYearData = useMemo(() => {
+    const map = new Map<string, Map<number, Set<string>>>();
+    for (const tx of transactions) {
+      const year = new Date(tx.transaction_date).getFullYear();
+      if (!map.has(tx.account_id)) map.set(tx.account_id, new Map());
+      const ym = map.get(tx.account_id)!;
+      if (!ym.has(year)) ym.set(year, new Set());
+      ym.get(year)!.add(tx.group_code);
+    }
+    return map;
+  }, [transactions]);
+
+  const getCurrentGroup = (acct: DbAccount): DbCustomGroup | null => {
+    const ovr = overrideMap.get(acct.id);
+    if (ovr) return groupMap.get(ovr.custom_group_id) ?? null;
+    const byCode = acToGroup.get(acct.code);
+    if (byCode) return byCode;
+    return gcToGroup.get(acct.latest_group_code ?? "") ?? null;
+  };
+
+  const allYears = useMemo(() => {
+    const years = new Set<number>();
+    for (const ym of Array.from(accountYearData.values())) ym.forEach((_, y) => years.add(y));
+    return Array.from(years).sort((a, b) => b - a);
+  }, [accountYearData]);
+
+  const filtered = useMemo(() => {
+    let list = accounts;
+    if (filterType === "unclassified") list = list.filter(a => a.account_type === "expense" && !getCurrentGroup(a));
+    if (filterType === "revenue") list = list.filter(a => a.account_type === "revenue");
+    if (filterType === "all") list = list.filter(a => a.account_type === "expense");
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(a => a.name.toLowerCase().includes(q) || a.code.includes(q));
+    }
+    return list.sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accounts, filterType, search, classificationOverrides, customGroups]);
+
+  // Auto-map: for unclassified accounts, create override based on latest_group_code
+  const handleAutoMap = async () => {
+    const toMap: Array<{ accountId: string; groupId: string | null }> = [];
+    for (const acct of accounts) {
+      if (acct.account_type !== "expense") continue;
+      if (overrideMap.has(acct.id)) continue; // already has override
+      const g = gcToGroup.get(acct.latest_group_code ?? "");
+      if (!g) continue;
+      const currentG = getCurrentGroup(acct);
+      if (currentG?.id === g.id) continue; // already correct
+      toMap.push({ accountId: acct.id, groupId: g.id });
+    }
+    if (toMap.length === 0) { alert("אין חשבונות לסיווג אוטומטי"); return; }
+    setSaving(true);
+    const ok = await onBatchSave(toMap);
+    if (ok) setAutoMapped(toMap.length);
+    setSaving(false);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Header controls */}
+      <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="חיפוש שם / מפתח..."
+              className="pr-9 pl-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300 w-48" />
+          </div>
+          {(["all", "unclassified", "revenue"] as const).map(f => (
+            <button key={f} onClick={() => setFilterType(f)}
+              className={clsx("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors",
+                filterType === f ? "bg-primary-600 text-white border-primary-600" : "bg-white text-gray-600 border-gray-200 hover:border-primary-300",
+              )}>
+              {f === "all" ? "הוצאות" : f === "unclassified" ? "ללא שיוך" : "הכנסות"}
+            </button>
+          ))}
+        </div>
+
+        <button
+          onClick={() => void handleAutoMap()}
+          disabled={saving}
+          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-xl text-xs font-semibold hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+        >
+          {saving ? "ממפה..." : "⚡ מיפוי אוטומטי לפי שנה אחרונה"}
+        </button>
+      </div>
+
+      {autoMapped > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 text-xs text-emerald-800 font-medium">
+          ✅ {autoMapped} חשבונות מופו אוטומטית לפי ה-group_code של השנה האחרונה
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="overflow-x-auto" dir="rtl">
+          <table className="text-[11px] border-collapse" style={{ minWidth: `${400 + allYears.length * 80}px` }}>
+            <thead>
+              <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
+                <th className="text-right py-3 px-4 font-semibold sticky right-0 bg-slate-800 z-20 min-w-[60px] shadow-[inset_-1px_0_0_#475569]">מפתח</th>
+                <th className="text-right py-3 px-4 font-semibold min-w-[200px]">שם חשבון</th>
+                <th className="text-right py-3 px-4 font-semibold min-w-[180px]">סיווג נוכחי</th>
+                {allYears.map(yr => (
+                  <th key={yr} className="text-center py-3 px-3 font-semibold min-w-[80px]">{yr}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={3 + allYears.length} className="py-12 text-center text-gray-400">
+                    לא נמצאו חשבונות
+                  </td>
+                </tr>
+              ) : filtered.map(acct => {
+                const currentGroup = getCurrentGroup(acct);
+                const override = overrideMap.get(acct.id);
+                const yearData = accountYearData.get(acct.id);
+
+                return (
+                  <tr key={acct.id} className={clsx("border-b border-gray-50 hover:bg-gray-50/60",
+                    !currentGroup && "bg-red-50/30",
+                    override && "bg-amber-50/20",
+                  )}>
+                    <td className="py-2 px-4 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6]">
+                      <code className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                        {acct.code}
+                      </code>
+                    </td>
+                    <td className="py-2 px-4 font-medium text-gray-800">
+                      {acct.name}
+                      {override && <span className="mr-1.5 text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded font-bold">✎ override</span>}
+                    </td>
+                    <td className="py-2 px-4">
+                      {currentGroup ? (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg border border-gray-200 bg-white text-[11px]">
+                          <span className="w-2 h-2 rounded-full shrink-0" style={{ background: currentGroup.color }} />
+                          {currentGroup.name}
+                        </span>
+                      ) : (
+                        <span className="text-red-400 text-[10px]">ללא הגדרה</span>
+                      )}
+                    </td>
+                    {allYears.map(yr => {
+                      const gcSet = yearData?.get(yr);
+                      const gcs = gcSet ? Array.from(gcSet) : [];
+                      return (
+                        <td key={yr} className="py-2 px-3 text-center">
+                          {gcs.length > 0 ? (
+                            <div className="flex flex-col gap-0.5 items-center">
+                              {gcs.map(gc => {
+                                const g = gcToGroup.get(gc);
+                                return (
+                                  <span key={gc} className="inline-flex items-center gap-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded font-mono">
+                                    {g ? <span className="w-1.5 h-1.5 rounded-full" style={{ background: g.color }} /> : null}
+                                    {gc}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-gray-200">—</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
+          מציג {filtered.length} חשבונות
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Main Component — 5 Inner Tabs
 // ══════════════════════════════════════════════════════════════
 
 export default function AccountMappingTab({
@@ -905,7 +1133,7 @@ export default function AccountMappingTab({
   onSaveGroup, onDeleteGroup,
   onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<InnerTab>("classification");
+  const [activeTab, setActiveTab] = useState<InnerTab>("suppliers");
 
   const stats = useMemo(() => {
     const expense = accounts.filter(a => a.account_type === "expense");
@@ -914,6 +1142,7 @@ export default function AccountMappingTab({
   }, [accounts, customGroups, classificationOverrides]);
 
   const innerTabs: Array<{ id: InnerTab; label: string; icon: React.ReactNode; badge?: number }> = [
+    { id: "suppliers", label: "ספקים", icon: <Search className="w-3.5 h-3.5" /> },
     { id: "groups", label: "קיבוצים", icon: <Users className="w-3.5 h-3.5" /> },
     { id: "classification", label: "מפתח סיווג", icon: <LayoutGrid className="w-3.5 h-3.5" />, badge: stats.unclassified > 0 ? stats.unclassified : undefined },
     { id: "tags", label: "תגיות", icon: <Tag className="w-3.5 h-3.5" /> },
@@ -948,6 +1177,15 @@ export default function AccountMappingTab({
 
       {/* Tab content */}
       <div className="pt-1">
+        {activeTab === "suppliers" && (
+          <SuppliersTab
+            accounts={accounts}
+            customGroups={customGroups}
+            classificationOverrides={classificationOverrides}
+            transactions={transactions}
+            onBatchSave={onBatchSaveClassifications}
+          />
+        )}
         {activeTab === "groups" && (
           <GroupsTab
             accounts={accounts}

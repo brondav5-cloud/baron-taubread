@@ -204,6 +204,8 @@ export interface YearlyPnl {
   year: number;
   months: MonthlyPnl[];
   total: MonthlyPnl;
+  /** Maps groupId → accountIds that actually contributed transactions to that group */
+  groupToAccountIds: Map<string, string[]>;
 }
 
 // ── Alert / Anomaly Types ────────────────────────────────────

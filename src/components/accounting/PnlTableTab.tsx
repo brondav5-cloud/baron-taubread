@@ -14,7 +14,6 @@ interface Props {
   prevYearlyPnl: YearlyPnl | null;
   customGroups: DbCustomGroup[];
   accounts: DbAccount[];
-  getEffectiveGroup: (accountId: string, txGroupCode: string) => DbCustomGroup | null;
   year: number;
   onGroupClick?: (groupId: string, month?: number) => void;
   onAmountClick?: (accountId: string, month?: number) => void;
@@ -142,7 +141,7 @@ const SECTION_STYLES: Record<string, { bg: string; text: string; border: string;
 // ── Main Component ────────────────────────────────────────────
 
 export default function PnlTableTab({
-  yearlyPnl, prevYearlyPnl, customGroups, accounts, getEffectiveGroup,
+  yearlyPnl, prevYearlyPnl, customGroups, accounts,
   year, onGroupClick, onAmountClick, onAccountClick,
 }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("yearly");
@@ -173,29 +172,29 @@ export default function PnlTableTab({
     });
   };
 
-  // Precompute accounts per group (memoized)
+  // Build accountsByGroup from actual transaction classifications (groupToAccountIds)
+  // This ensures accounts appear in the SAME group their transactions were classified into,
+  // avoiding the mismatch between tx.group_code and acct.latest_group_code.
   const accountsByGroup = useMemo(() => {
     if (!yearlyPnl) return new Map<string, DbAccount[]>();
+    const accountMap = new Map(accounts.map((a) => [a.id, a]));
     const map = new Map<string, DbAccount[]>();
-    for (const account of accounts) {
-      if (account.account_type !== "expense") continue;
-      const total = yearlyPnl.total.byAccount.get(account.id) ?? 0;
-      if (total <= 0) continue;
-      const group = getEffectiveGroup(account.id, account.latest_group_code ?? "");
-      if (!group) continue;
-      const list = map.get(group.id) ?? [];
-      list.push(account);
-      map.set(group.id, list);
-    }
-    // Sort each group's accounts by total desc
-    map.forEach((accs, gId) => {
-      accs.sort((a, b) =>
-        (yearlyPnl.total.byAccount.get(b.id) ?? 0) - (yearlyPnl.total.byAccount.get(a.id) ?? 0)
+
+    yearlyPnl.groupToAccountIds.forEach((accountIds, groupId) => {
+      const accs: DbAccount[] = [];
+      for (const aid of accountIds) {
+        const acct = accountMap.get(aid);
+        if (!acct) continue;
+        if ((yearlyPnl.total.byAccount.get(aid) ?? 0) <= 0) continue;
+        accs.push(acct);
+      }
+      accs.sort(
+        (a, b) => (yearlyPnl.total.byAccount.get(b.id) ?? 0) - (yearlyPnl.total.byAccount.get(a.id) ?? 0),
       );
-      map.set(gId, accs);
+      if (accs.length > 0) map.set(groupId, accs);
     });
     return map;
-  }, [yearlyPnl, accounts, getEffectiveGroup]);
+  }, [yearlyPnl, accounts]);
 
   const groupsBySection = useMemo(() => {
     const map = new Map<string, DbCustomGroup[]>();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { TrendingUp, TrendingDown, Minus, Plus, X } from "lucide-react";
 import { clsx } from "clsx";
 import {
@@ -48,20 +48,63 @@ function getHeatmapColor(value: number, avg: number, stdDev: number): string {
 
 // ── Period selector ───────────────────────────────────────────
 
-interface Period { id: string; year: number; month: number | null; }
+interface Period {
+  id: string;
+  year: number;
+  /** null = full year, otherwise start month (1-12) */
+  monthFrom: number | null;
+  /** null = same as monthFrom (single month) or full year */
+  monthTo: number | null;
+}
 
 const PERIOD_COLORS = ["#3B82F6", "#8B5CF6", "#F97316", "#14B8A6"];
 
 function periodLabel(p: Period): string {
-  if (p.month === null) return `${p.year} (שנתי)`;
-  return `${MONTH_LONG[p.month - 1]} ${p.year}`;
+  if (p.monthFrom === null) return `${p.year} (שנתי)`;
+  const from = MONTH_LONG[p.monthFrom - 1] ?? "";
+  const to = p.monthTo !== null && p.monthTo !== p.monthFrom
+    ? MONTH_LONG[p.monthTo - 1]
+    : null;
+  if (to) return `${from}–${to} ${p.year}`;
+  return `${from} ${p.year}`;
+}
+
+/** Sum monthly P&L data for a range of months */
+function sumMonths(pnl: YearlyPnl, from: number, to: number): MonthlyPnl {
+  const result: MonthlyPnl = {
+    month: 0,
+    revenue: 0,
+    bySection: { cost_of_goods: 0, operating: 0, admin: 0, finance: 0, other: 0 },
+    byGroup: new Map(),
+    byAccount: new Map(),
+    grossProfit: 0, operatingProfit: 0, adminTotal: 0, financeTotal: 0, otherTotal: 0, netProfit: 0,
+  };
+  for (let m = from; m <= to; m++) {
+    const md = pnl.months[m - 1];
+    if (!md) continue;
+    result.revenue += md.revenue;
+    for (const sec of ["cost_of_goods", "operating", "admin", "finance", "other"] as const) {
+      result.bySection[sec] += md.bySection[sec];
+    }
+    md.byGroup.forEach((v, k) => result.byGroup.set(k, (result.byGroup.get(k) ?? 0) + v));
+    md.byAccount.forEach((v, k) => result.byAccount.set(k, (result.byAccount.get(k) ?? 0) + v));
+  }
+  result.grossProfit = result.revenue - result.bySection.cost_of_goods;
+  result.operatingProfit = result.grossProfit - result.bySection.operating;
+  result.adminTotal = result.bySection.admin;
+  result.financeTotal = result.bySection.finance;
+  result.otherTotal = result.bySection.other;
+  result.netProfit = result.operatingProfit - result.adminTotal - result.financeTotal - result.otherTotal;
+  return result;
 }
 
 function getPeriodData(p: Period, currentYear: number, yearlyPnl: YearlyPnl, prevYearlyPnl: YearlyPnl | null): MonthlyPnl | null {
   const pnl = p.year === currentYear ? yearlyPnl : prevYearlyPnl;
   if (!pnl) return null;
-  if (p.month === null) return pnl.total;
-  return pnl.months[p.month - 1] ?? null;
+  if (p.monthFrom === null) return pnl.total;
+  const to = p.monthTo ?? p.monthFrom;
+  if (to === p.monthFrom) return pnl.months[p.monthFrom - 1] ?? null;
+  return sumMonths(pnl, p.monthFrom, to);
 }
 
 // ── CompRow ───────────────────────────────────────────────────
@@ -195,7 +238,7 @@ function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
                   g => (curr.byGroup.get(g.id) ?? 0) > 0 || (prev?.byGroup.get(g.id) ?? 0) > 0,
                 );
                 return (
-                  <tbody key={sec}>
+                  <React.Fragment key={sec}>
                     <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`}
                       values={[pv !== 0 ? pv : null, cv]} isSection isExpense baseIdx={0} />
                     {groups.map(g => (
@@ -208,7 +251,7 @@ function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
                     {sec === "admin" && (
                       <CompRow label="= רווח תפעולי" values={[prev?.operatingProfit ?? null, curr.operatingProfit]} isSubtotal baseIdx={0} />
                     )}
-                  </tbody>
+                  </React.Fragment>
                 );
               })}
               <CompRow label="= רווח נקי" values={[prev?.netProfit ?? null, curr.netProfit]} isSubtotal isFinal baseIdx={0} />
@@ -426,17 +469,18 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
 }) {
   const prevYear = year - 1;
   const [periods, setPeriods] = useState<Period[]>([
-    { id: "a", year, month: 1 },
-    { id: "b", year, month: 2 },
+    { id: "a", year, monthFrom: 1, monthTo: 3 },
+    { id: "b", year: prevYearlyPnl ? prevYear : year, monthFrom: 1, monthTo: 3 },
   ]);
 
   const addPeriod = () => {
     if (periods.length >= 4) return;
-    const nextMonth = (periods[periods.length - 1]?.month ?? 0) + 1;
+    const last = periods[periods.length - 1];
     setPeriods(prev => [...prev, {
       id: crypto.randomUUID(),
-      year,
-      month: nextMonth <= 12 ? nextMonth : null,
+      year: last?.year ?? year,
+      monthFrom: last?.monthFrom ?? 1,
+      monthTo: last?.monthTo ?? 3,
     }]);
   };
 
@@ -445,8 +489,16 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
     setPeriods(prev => prev.filter(p => p.id !== id));
   };
 
-  const updatePeriod = (id: string, field: keyof Period, value: number | null) => {
-    setPeriods(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+  const updatePeriod = (id: string, patch: Partial<Period>) => {
+    setPeriods(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const updated = { ...p, ...patch };
+      // Ensure monthTo >= monthFrom when both are set
+      if (updated.monthFrom !== null && updated.monthTo !== null && updated.monthTo < updated.monthFrom) {
+        updated.monthTo = updated.monthFrom;
+      }
+      return updated;
+    }));
   };
 
   const availableYears = [year, ...(prevYearlyPnl ? [prevYear] : [])];
@@ -464,24 +516,47 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
 
   return (
     <div className="space-y-4">
+      {/* Period selectors */}
       <div className="flex flex-wrap gap-3 items-start">
         {periods.map((p, i) => (
           <div key={p.id}
-            className="flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
+            className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm flex-wrap">
             <div className="w-3 h-3 rounded-full shrink-0"
               style={{ background: PERIOD_COLORS[i] ?? "#6B7280" }} />
-            <select value={p.year} onChange={e => updatePeriod(p.id, "year", +e.target.value)}
+
+            {/* Year */}
+            <select value={p.year} onChange={e => updatePeriod(p.id, { year: +e.target.value })}
               className="text-xs font-semibold border-0 bg-transparent focus:ring-0 text-gray-800 cursor-pointer">
               {availableYears.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
-            <select value={p.month ?? "full"}
-              onChange={e => updatePeriod(p.id, "month", e.target.value === "full" ? null : +e.target.value)}
+
+            {/* Month From */}
+            <select value={p.monthFrom ?? "full"}
+              onChange={e => {
+                const v = e.target.value === "full" ? null : +e.target.value;
+                updatePeriod(p.id, { monthFrom: v, monthTo: v });
+              }}
               className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-1 focus:ring-primary-300">
               <option value="full">שנתי</option>
               {MONTHS.map(m => <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>)}
             </select>
+
+            {/* Month To (only when monthFrom is set) */}
+            {p.monthFrom !== null && (
+              <>
+                <span className="text-gray-400 text-xs">עד</span>
+                <select value={p.monthTo ?? p.monthFrom}
+                  onChange={e => updatePeriod(p.id, { monthTo: +e.target.value })}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-700 focus:ring-1 focus:ring-primary-300">
+                  {MONTHS.filter(m => m >= (p.monthFrom ?? 1)).map(m => (
+                    <option key={m} value={m}>{MONTH_LONG[m - 1]}</option>
+                  ))}
+                </select>
+              </>
+            )}
+
             {periods.length > 2 && (
-              <button onClick={() => removePeriod(p.id)} className="text-gray-300 hover:text-red-400 transition-colors">
+              <button onClick={() => removePeriod(p.id)} className="text-gray-300 hover:text-red-400 transition-colors mr-1">
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
@@ -519,7 +594,7 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
                   g => periodData.some(d => (d?.byGroup.get(g.id) ?? 0) !== 0)
                 );
                 return (
-                  <tbody key={sec}>
+                  <React.Fragment key={sec}>
                     <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`} isSection isExpense baseIdx={0}
                       values={periodData.map(d => d?.bySection[sec] ?? null)} />
                     {groups.map(g => (
@@ -532,7 +607,7 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
                     {sec === "admin" && (
                       <CompRow label="= רווח תפעולי" isSubtotal baseIdx={0} values={periodData.map(d => d?.operatingProfit ?? null)} />
                     )}
-                  </tbody>
+                  </React.Fragment>
                 );
               })}
               <CompRow label="= רווח נקי" isSubtotal isFinal baseIdx={0} values={periodData.map(d => d?.netProfit ?? null)} />
