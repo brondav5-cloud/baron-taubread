@@ -1,9 +1,12 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Upload, Trash2, CheckCircle, AlertCircle, Clock, FileText } from "lucide-react";
+import { useRef, useState, useMemo } from "react";
+import {
+  Upload, Trash2, CheckCircle, AlertCircle, Clock, FileText,
+  Save, X, Building2, Receipt, TrendingUp, TrendingDown, Calendar,
+} from "lucide-react";
 import { clsx } from "clsx";
-import type { DbUploadedFile } from "@/types/accounting";
+import type { DbUploadedFile, ParsedAccount, ParsedTransaction } from "@/types/accounting";
 import { processAccountingExcel } from "@/lib/accountingExcelProcessor";
 
 interface Props {
@@ -22,6 +25,53 @@ function fmtDate(iso: string) {
   });
 }
 
+function fmtNum(n: number) {
+  return n.toLocaleString("he-IL", { maximumFractionDigits: 0 });
+}
+
+function fmtCurrency(n: number) {
+  return `₪${Math.abs(n).toLocaleString("he-IL", { maximumFractionDigits: 0 })}`;
+}
+
+interface ParsedPreview {
+  filename: string;
+  accounts: ParsedAccount[];
+  transactions: ParsedTransaction[];
+  stats: { rowsCount: number; accountsCount: number; dateRange: { from: string | null; to: string | null } };
+}
+
+function computePreviewStats(preview: ParsedPreview) {
+  const { accounts, transactions } = preview;
+  const totalDebit = transactions.reduce((s, t) => s + t.debit, 0);
+  const totalCredit = transactions.reduce((s, t) => s + t.credit, 0);
+
+  const revenueAccounts = accounts.filter((a) => a.account_type === "revenue");
+  const expenseAccounts = accounts.filter((a) => a.account_type === "expense");
+
+  const uniqueCounterAccounts = new Set(
+    transactions.map((t) => t.counter_account).filter(Boolean),
+  );
+
+  const monthCounts = new Map<string, number>();
+  transactions.forEach((t) => {
+    const m = t.transaction_date.slice(0, 7);
+    monthCounts.set(m, (monthCounts.get(m) || 0) + 1);
+  });
+  const monthsSorted = Array.from(monthCounts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+  const uniqueHeaders = new Set(transactions.map((t) => t.header_number).filter(Boolean));
+
+  return {
+    totalDebit,
+    totalCredit,
+    revenueAccounts,
+    expenseAccounts,
+    uniqueCounterAccounts: uniqueCounterAccounts.size,
+    uniqueHeaders: uniqueHeaders.size,
+    monthsSorted,
+  };
+}
+
 export default function FilesTab({ files, onUploadComplete }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
@@ -29,6 +79,7 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
   const [month, setMonth] = useState<number | null>(null);
   const [fileType, setFileType] = useState<"yearly" | "monthly">("yearly");
   const [uploading, setUploading] = useState(false);
+  const [parsing, setParsing] = useState(false);
   const [progress, setProgress] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<{
     success: boolean;
@@ -36,14 +87,17 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
   } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
+  const [preview, setPreview] = useState<ParsedPreview | null>(null);
+
+  const previewStats = useMemo(
+    () => (preview ? computePreviewStats(preview) : null),
+    [preview],
+  );
+
   const BATCH_SIZE = 300;
 
   const safeJson = async (res: Response): Promise<Record<string, unknown>> => {
-    try {
-      return await res.json();
-    } catch {
-      return { error: `שגיאת שרת ${res.status}: ${res.statusText}` };
-    }
+    try { return await res.json(); } catch { return { error: `שגיאת שרת ${res.status}: ${res.statusText}` }; }
   };
 
   const handleFile = async (f: File) => {
@@ -52,28 +106,45 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
       return;
     }
 
-    setUploading(true);
+    setParsing(true);
     setLastResult(null);
+    setPreview(null);
 
     try {
-      // Step 1: parse client-side (xlsx can only run in browser)
-      setProgress("מנתח קובץ Excel...");
       const parsed = await processAccountingExcel(f);
-
       if (!parsed.success) {
         setLastResult({ success: false, message: parsed.error ?? "שגיאת פרסור" });
         return;
       }
 
-      const { transactions, accounts, stats } = parsed;
+      setPreview({
+        filename: f.name,
+        accounts: parsed.accounts,
+        transactions: parsed.transactions,
+        stats: parsed.stats,
+      });
+    } catch (err) {
+      setLastResult({ success: false, message: String(err) });
+    } finally {
+      setParsing(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
-      // Step 2: phase 1 — send metadata + accounts only
-      setProgress(`נמצאו ${stats.rowsCount.toLocaleString()} תנועות · שולח חשבונות...`);
+  const handleConfirmUpload = async () => {
+    if (!preview) return;
+    const { filename, accounts, transactions, stats } = preview;
+
+    setUploading(true);
+    setLastResult(null);
+
+    try {
+      setProgress(`שולח חשבונות...`);
       const phase1Res = await fetch("/api/accounting/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          filename: f.name,
+          filename,
           year,
           month: fileType === "monthly" ? month : null,
           fileType,
@@ -90,7 +161,6 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
 
       const fileId = phase1Data.fileId as string;
 
-      // Step 3: phase 2 — send transactions in chunks
       const totalChunks = Math.ceil(transactions.length / BATCH_SIZE);
       let totalInserted = 0;
       let totalSkipped = 0;
@@ -124,13 +194,13 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
         success: true,
         message: `יובאו ${totalInserted.toLocaleString()} תנועות · ${accounts.length} חשבונות${totalSkipped > 0 ? ` · ${totalSkipped} כפילויות דולגו` : ""}`,
       });
+      setPreview(null);
       onUploadComplete();
     } catch (err) {
       setLastResult({ success: false, message: String(err) });
     } finally {
       setUploading(false);
       setProgress(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -208,7 +278,7 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
           className={clsx(
             "border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-3 cursor-pointer transition-colors min-h-[140px]",
             dragOver ? "border-primary-400 bg-primary-50" : "border-gray-200 hover:border-primary-300 hover:bg-gray-50",
-            uploading && "pointer-events-none opacity-60",
+            (uploading || parsing) && "pointer-events-none opacity-60",
           )}
         >
           <input
@@ -221,7 +291,12 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
               if (f) void handleFile(f);
             }}
           />
-          {uploading ? (
+          {parsing ? (
+            <>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
+              <p className="text-sm text-gray-500">מנתח קובץ Excel...</p>
+            </>
+          ) : uploading ? (
             <>
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600" />
               <p className="text-sm text-gray-500">{progress}</p>
@@ -237,6 +312,137 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
           )}
         </div>
       </div>
+
+      {/* ── Preview Panel ────────────────────────────────── */}
+      {preview && previewStats && (
+        <div className="bg-white border border-blue-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="bg-blue-50 px-5 py-3 flex items-center justify-between border-b border-blue-100">
+            <div className="flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              <h3 className="text-sm font-bold text-blue-900">
+                תצוגה מקדימה — {preview.filename}
+              </h3>
+            </div>
+            <button
+              onClick={() => setPreview(null)}
+              className="p-1 hover:bg-blue-100 rounded-lg transition-colors"
+            >
+              <X className="w-4 h-4 text-blue-500" />
+            </button>
+          </div>
+
+          <div className="p-5 space-y-5">
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              <StatCard
+                icon={<Building2 className="w-5 h-5" />}
+                label="חשבונות (ספקים)"
+                value={fmtNum(preview.stats.accountsCount)}
+                color="blue"
+                detail={`${previewStats.revenueAccounts.length} הכנסה · ${previewStats.expenseAccounts.length} הוצאה`}
+              />
+              <StatCard
+                icon={<Receipt className="w-5 h-5" />}
+                label="תנועות"
+                value={fmtNum(preview.stats.rowsCount)}
+                color="purple"
+                detail={`${fmtNum(previewStats.uniqueHeaders)} כותרות`}
+              />
+              <StatCard
+                icon={<TrendingDown className="w-5 h-5" />}
+                label='סה"כ חובה'
+                value={fmtCurrency(previewStats.totalDebit)}
+                color="red"
+              />
+              <StatCard
+                icon={<TrendingUp className="w-5 h-5" />}
+                label='סה"כ זכות'
+                value={fmtCurrency(previewStats.totalCredit)}
+                color="green"
+              />
+              <StatCard
+                icon={<Calendar className="w-5 h-5" />}
+                label="טווח תאריכים"
+                value={
+                  preview.stats.dateRange.from && preview.stats.dateRange.to
+                    ? `${fmtDate(preview.stats.dateRange.from)} — ${fmtDate(preview.stats.dateRange.to)}`
+                    : "—"
+                }
+                color="gray"
+              />
+              <StatCard
+                icon={<Building2 className="w-5 h-5" />}
+                label="חשבונות נגדיים"
+                value={fmtNum(previewStats.uniqueCounterAccounts)}
+                color="amber"
+              />
+            </div>
+
+            {/* Monthly Breakdown */}
+            {previewStats.monthsSorted.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-gray-500 mb-2">פירוט לפי חודש</h4>
+                <div className="flex flex-wrap gap-2">
+                  {previewStats.monthsSorted.map(([m, count]) => {
+                    const [y, mo] = m.split("-");
+                    const monthIdx = parseInt(mo!, 10) - 1;
+                    const label = MONTH_NAMES[monthIdx] ? `${MONTH_NAMES[monthIdx]} ${y}` : m;
+                    return (
+                      <span
+                        key={m}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700"
+                      >
+                        <span className="font-medium">{label}</span>
+                        <span className="text-gray-400">·</span>
+                        <span className="text-gray-500">{fmtNum(count)} תנועות</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Top Accounts */}
+            <div>
+              <h4 className="text-xs font-semibold text-gray-500 mb-2">
+                חשבונות עם הכי הרבה תנועות (10 ראשונים)
+              </h4>
+              <TopAccountsTable
+                accounts={preview.accounts}
+                transactions={preview.transactions}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center gap-3 pt-2 border-t border-gray-100">
+              <button
+                onClick={() => void handleConfirmUpload()}
+                disabled={uploading}
+                className={clsx(
+                  "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors",
+                  uploading
+                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                    : "bg-green-600 text-white hover:bg-green-700 shadow-sm",
+                )}
+              >
+                <Save className="w-4 h-4" />
+                {uploading ? "שומר..." : "שמור נתונים"}
+              </button>
+              <button
+                onClick={() => setPreview(null)}
+                disabled={uploading}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+                ביטול
+              </button>
+              {uploading && progress && (
+                <span className="text-sm text-gray-500 mr-2">{progress}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Result */}
       {lastResult && (
@@ -312,6 +518,109 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
         <code className="bg-amber-100 px-1 rounded">.env.local</code>{" "}
         לאיתחול אוטומטי.
       </div>
+    </div>
+  );
+}
+
+// ── Sub-components ─────────────────────────────────────────
+
+function StatCard({
+  icon,
+  label,
+  value,
+  color,
+  detail,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  color: "blue" | "purple" | "red" | "green" | "gray" | "amber";
+  detail?: string;
+}) {
+  const colorMap: Record<string, { bg: string; icon: string }> = {
+    blue:   { bg: "bg-blue-50",   icon: "text-blue-500" },
+    purple: { bg: "bg-purple-50", icon: "text-purple-500" },
+    red:    { bg: "bg-red-50",    icon: "text-red-500" },
+    green:  { bg: "bg-green-50",  icon: "text-green-500" },
+    gray:   { bg: "bg-gray-50",   icon: "text-gray-500" },
+    amber:  { bg: "bg-amber-50",  icon: "text-amber-500" },
+  };
+  const c = colorMap[color] ?? colorMap.gray!;
+
+  return (
+    <div className={clsx("rounded-xl p-3 border border-gray-100", c.bg)}>
+      <div className="flex items-center gap-2 mb-1">
+        <span className={c.icon}>{icon}</span>
+        <span className="text-xs text-gray-500">{label}</span>
+      </div>
+      <p className="text-lg font-bold text-gray-900 leading-tight">{value}</p>
+      {detail && <p className="text-[11px] text-gray-400 mt-0.5">{detail}</p>}
+    </div>
+  );
+}
+
+function TopAccountsTable({
+  accounts,
+  transactions,
+}: {
+  accounts: ParsedAccount[];
+  transactions: ParsedTransaction[];
+}) {
+  const accountMap = new Map(accounts.map((a) => [a.code, a]));
+  const txByAccount = new Map<string, { count: number; debit: number; credit: number }>();
+
+  transactions.forEach((tx) => {
+    const entry = txByAccount.get(tx.account_code) || { count: 0, debit: 0, credit: 0 };
+    entry.count++;
+    entry.debit += tx.debit;
+    entry.credit += tx.credit;
+    txByAccount.set(tx.account_code, entry);
+  });
+
+  const sorted = Array.from(txByAccount.entries())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10);
+
+  return (
+    <div className="overflow-x-auto rounded-xl border border-gray-100">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-gray-50 text-gray-500 text-xs">
+            <th className="text-right px-3 py-2 font-medium">קוד</th>
+            <th className="text-right px-3 py-2 font-medium">שם חשבון</th>
+            <th className="text-right px-3 py-2 font-medium">סוג</th>
+            <th className="text-right px-3 py-2 font-medium">תנועות</th>
+            <th className="text-right px-3 py-2 font-medium">חובה</th>
+            <th className="text-right px-3 py-2 font-medium">זכות</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map(([code, data]) => {
+            const acc = accountMap.get(code);
+            return (
+              <tr key={code} className="border-t border-gray-50 hover:bg-gray-50/50">
+                <td className="px-3 py-2 text-gray-600 font-mono text-xs">{code}</td>
+                <td className="px-3 py-2 text-gray-800 font-medium">{acc?.name || code}</td>
+                <td className="px-3 py-2">
+                  <span
+                    className={clsx(
+                      "inline-block px-2 py-0.5 rounded text-[10px] font-medium",
+                      acc?.account_type === "revenue"
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700",
+                    )}
+                  >
+                    {acc?.account_type === "revenue" ? "הכנסה" : "הוצאה"}
+                  </span>
+                </td>
+                <td className="px-3 py-2 text-gray-700">{fmtNum(data.count)}</td>
+                <td className="px-3 py-2 text-red-600">{fmtCurrency(data.debit)}</td>
+                <td className="px-3 py-2 text-green-600">{fmtCurrency(data.credit)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
