@@ -10,7 +10,9 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { SmartPeriodSelector } from "@/components/common";
+import { exportStoresToExcel } from "@/lib/excelExport";
 import type { UseStoresPageSupabaseReturn } from "@/hooks/useStoresPageSupabase";
+import type { StoreWithStatus } from "@/types/data";
 
 interface StoresHeaderSupabaseProps {
   hook: UseStoresPageSupabaseReturn;
@@ -130,9 +132,7 @@ export function StoresHeaderSupabase({ hook }: StoresHeaderSupabaseProps) {
 
         {/* Excel Export */}
         <button
-          onClick={() => {
-            /* TODO: implement export */
-          }}
+          onClick={() => void exportStoresToExcel(hook.stores as unknown as StoreWithStatus[])}
           className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-600 transition-colors"
         >
           <FileSpreadsheet className="w-4 h-4" />
