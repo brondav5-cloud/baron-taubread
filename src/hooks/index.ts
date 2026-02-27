@@ -43,14 +43,6 @@ export {
   type TopStore,
 } from "./useProductDetail";
 
-// Products Page hook
-export {
-  useProductsPage,
-  type ProductsViewMode,
-  type ProductsFilters,
-  type ProductsTotals,
-} from "./useProductsPage";
-
 // Work Plan hook
 export {
   useWorkPlan,
@@ -58,15 +50,6 @@ export {
   PRIORITY_COLORS,
   type PlannedVisit,
 } from "./useWorkPlan";
-
-// Profitability hook
-export {
-  useProfitability,
-  PROFITABILITY_COLORS,
-  type CityProfitability,
-  type CategoryProfitability,
-  type StoreProfitability,
-} from "./useProfitability";
 
 // Dashboard Supabase hook
 export { useDashboardSupabase } from "./useDashboardSupabase";

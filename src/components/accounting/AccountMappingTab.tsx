@@ -496,7 +496,7 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
         : a.account.name.localeCompare(b.account.name, "he")
     );
     return filtered;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- getEffectiveGroup is a pure function derived from customGroups+classificationOverrides already in deps
   }, [accounts, customGroups, classificationOverrides, overrideMap, search, filterType, sortField]);
 
   const stats = useMemo(() => {
@@ -991,7 +991,7 @@ function SuppliersTab({
       return a.code.localeCompare(b.code, undefined, { numeric: true });
     });
     return list;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- getDisplayGroup is derived from customGroups+classificationOverrides+pending already in deps
   }, [accounts, filterType, search, sortBy, classificationOverrides, customGroups, pending, accountStats]);
 
   const handleBatchSave = async () => {

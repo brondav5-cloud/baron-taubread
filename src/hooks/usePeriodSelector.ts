@@ -135,7 +135,7 @@ export function usePeriodSelector({
   // Calculate available periods from metadata
   const available = useMemo(() => {
     return calculateAvailablePeriods(monthsList);
-  }, [monthsKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [monthsKey]); // eslint-disable-line react-hooks/exhaustive-deps -- monthsList is derived from monthsKey; using the key avoids array reference churn
 
   // State
   const [primary, setPrimary] = useState<PeriodSelection>({
@@ -165,7 +165,7 @@ export function usePeriodSelector({
       const newDefault = getDefaultSelection(monthsList, defaultType);
       setPrimary(newDefault);
     }
-  }, [monthsKey, defaultType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [monthsKey, defaultType]); // eslint-disable-line react-hooks/exhaustive-deps -- initializedRef gate ensures single run; monthsKey replaces monthsList to avoid reference churn
 
   // ============================================
   // SELECTION HANDLERS

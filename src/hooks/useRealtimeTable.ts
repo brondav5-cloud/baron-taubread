@@ -33,13 +33,10 @@ export function useRealtimeTable(
           filter: `company_id=eq.${companyId}`,
         },
         (payload) => {
-          console.log(`[Realtime] ${table} change:`, payload.eventType);
           onSync();
         },
       )
-      .subscribe((status) => {
-        console.log(`[Realtime] ${table} channel status:`, status);
-      });
+      .subscribe();
 
     channelRef.current = channel;
 

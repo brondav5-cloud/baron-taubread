@@ -439,7 +439,6 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
         if (!columnMap[normalized]) columnMap[normalized] = col;
       }
     }
-    console.log("[excelProcessor] columns found:", Object.keys(columnMap));
     const getVal = (
       row: Record<string, unknown>,
       keys: string[],

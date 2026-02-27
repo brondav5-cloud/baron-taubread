@@ -358,7 +358,7 @@ export function useStoresPageSupabase() {
         compareData,
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- period data computed from key strings, not full arrays; all relevant inputs captured
   }, [
     filteredStores,
     primaryMonthsKey,

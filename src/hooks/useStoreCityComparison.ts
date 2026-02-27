@@ -156,7 +156,7 @@ export function useStoreCityComparison(store: DbStore | null) {
         ? (aVal as number) - (bVal as number)
         : (bVal as number) - (aVal as number);
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cityStores already embeds all metrics; no extra deps needed
   }, [cityStores, sortKey, sortDir]);
 
   // Rankings

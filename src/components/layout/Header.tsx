@@ -159,7 +159,6 @@ export default function Header({ onMenuClick }: HeaderProps) {
                             fetch("/api/push/test", { method: "POST" })
                               .then((r) => r.json())
                               .then((d) => {
-                                console.log("[Push Test]", d);
                                 if (d.sent > 0) {
                                   alert("התראת בדיקה נשלחה! בדוק אם הגיעה.");
                                 } else {
