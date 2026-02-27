@@ -1,0 +1,35 @@
+---
+description: Project overview and AI behavior rules
+alwaysApply: true
+---
+
+# Bakery Analytics — Project Overview
+
+## Tech Stack
+- Next.js (App Router) + TypeScript (strict)
+- Supabase (auth, DB, RLS)
+- @supabase/ssr for cookie-based auth
+- SheetJS for Excel parsing (loaded from /public, NOT via import)
+- Deployed on Vercel
+- PWA enabled
+
+## Project Structure
+- `src/lib/supabase/client.ts` — Browser Supabase client
+- `src/lib/supabase/server.ts` — Server Supabase client
+- `src/lib/supabase/env.ts` — Decoded env constants (base64 → plain)
+- `src/lib/loadXlsx.ts` — Safe SheetJS loader (from /public)
+- `public/xlsx.full.min.js` — Pre-built SheetJS (DO NOT DELETE)
+
+## Data Flow
+- ALL data comes from Supabase via `useSupabaseData` hook
+- `dataLoader.ts` has been removed — do not recreate it
+- Cookie name for auth: `"hlaiyxpiebmvkb-auth-token"` — must match in ALL files
+- Excel uploads: client-side parser, .xlsx format only
+
+## AI Behavior Rules
+- Respond in Hebrew when I write in Hebrew, code and comments in English
+- Before making changes, explain what you plan to do
+- Make minimal, focused changes — don't refactor unrelated code
+- Never invent libraries or APIs that don't exist — verify first
+- Always check existing code patterns before writing new code
+- When unsure, ask — don't guess

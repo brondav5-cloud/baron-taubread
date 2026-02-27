@@ -1,18 +1,19 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { TrendingUp, TrendingDown, Minus, Plus, X } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Plus, X, ChevronDown, ChevronRight } from "lucide-react";
 import { clsx } from "clsx";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import type { YearlyPnl, DbCustomGroup, MonthlyPnl } from "@/types/accounting";
+import type { YearlyPnl, DbCustomGroup, DbAccount, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
 
 interface Props {
   yearlyPnl: YearlyPnl | null;
   prevYearlyPnl: YearlyPnl | null;
   customGroups: DbCustomGroup[];
+  accounts: DbAccount[];
   year: number;
 }
 
@@ -109,26 +110,41 @@ function getPeriodData(p: Period, currentYear: number, yearlyPnl: YearlyPnl, pre
 
 // ── CompRow ───────────────────────────────────────────────────
 
-function CompRow({ label, values, isSection, isSubtotal, isFinal, isExpense, isBold, indent, baseIdx = 0 }: {
+function CompRow({ label, values, isSection, isSubtotal, isFinal, isExpense, isBold, indent, baseIdx = 0,
+  isExpandable, isExpanded, onToggle, indentLevel = 0,
+}: {
   label: string; values: (number | null)[]; isSection?: boolean;
   isSubtotal?: boolean; isFinal?: boolean; isExpense?: boolean;
   isBold?: boolean; indent?: boolean; baseIdx?: number;
+  isExpandable?: boolean; isExpanded?: boolean; onToggle?: () => void; indentLevel?: number;
 }) {
   const base = values[baseIdx] ?? 0;
   const stickyBg = isFinal ? "bg-slate-800" : isSubtotal ? "bg-gray-50" : "bg-white";
+  const paddingRight = indentLevel === 0 ? undefined : `${16 + indentLevel * 16}px`;
 
   return (
-    <tr className={clsx("border-b border-gray-50",
-      isFinal && "bg-slate-800",
-      isSubtotal && !isFinal && "bg-gray-50",
-    )}>
+    <tr
+      className={clsx("border-b border-gray-50",
+        isFinal && "bg-slate-800",
+        isSubtotal && !isFinal && "bg-gray-50",
+        isExpandable && "cursor-pointer hover:brightness-95 transition-colors",
+      )}
+      onClick={isExpandable ? onToggle : undefined}
+    >
       <td className={clsx("py-2.5 px-4 sticky right-0 z-10 shadow-[inset_-1px_0_0_#e5e7eb]", stickyBg,
         isFinal ? "font-bold text-white text-sm" :
         isSubtotal ? "font-bold text-gray-800" :
         isSection || isBold ? "font-semibold text-gray-700" :
-        indent ? "text-gray-500 text-[11px]" : "text-gray-600",
-      )} style={indent ? { paddingRight: "28px" } : undefined}>
-        {label}
+        indent || indentLevel > 0 ? "text-gray-500 text-[11px]" : "text-gray-600",
+      )} style={paddingRight ? { paddingRight } : undefined}>
+        <div className="flex items-center gap-1.5">
+          {isExpandable && (
+            isExpanded
+              ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              : <ChevronRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          )}
+          <span>{label}</span>
+        </div>
       </td>
       {values.map((v, i) => {
         if (v === null) return (
@@ -169,14 +185,77 @@ function CompRow({ label, values, isSection, isSubtotal, isFinal, isExpense, isB
   );
 }
 
+// ── AccountRow ────────────────────────────────────────────────
+
+function AccountRow({ account, values, baseIdx = 0 }: {
+  account: DbAccount; values: (number | null)[]; baseIdx?: number;
+}) {
+  const base = values[baseIdx] ?? 0;
+  return (
+    <tr className="border-b border-gray-50 bg-blue-50/20 hover:bg-blue-50/40 transition-colors">
+      <td className="py-1.5 px-4 sticky right-0 z-10 bg-blue-50/20 shadow-[inset_-1px_0_0_#e5e7eb]"
+        style={{ paddingRight: "52px" }}>
+        <div className="flex items-center gap-2">
+          <code className="text-[10px] bg-gray-100 text-gray-500 px-1 rounded font-mono">{account.code}</code>
+          <span className="text-[11px] text-gray-600">{account.name}</span>
+        </div>
+      </td>
+      {values.map((v, i) => {
+        if (v === null || v === 0) return (
+          <td key={i} className="py-1.5 px-3 text-center text-gray-300 text-[11px] min-w-[110px]">—</td>
+        );
+        const diff = i !== baseIdx ? v - base : null;
+        const pct = diff !== null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
+        return (
+          <td key={i} className="py-1.5 px-3 text-center tabular-nums min-w-[110px]"
+            style={{ background: PERIOD_COLORS[i] ? `${PERIOD_COLORS[i]}08` : undefined }}>
+            <div className="space-y-0.5">
+              <div className="text-[11px] text-red-500">{fmtC(v)}</div>
+              {diff !== null && diff !== 0 && pct !== null && Math.abs(pct) < 1000 && (
+                <div className={clsx("text-[9px] font-bold",
+                  diff < 0 ? "text-emerald-600" : "text-red-500",
+                )}>
+                  {diff > 0 ? "+" : ""}{pct.toFixed(0)}%
+                </div>
+              )}
+            </div>
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
 // ── YoY Table ─────────────────────────────────────────────────
 
-function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
-  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: DbCustomGroup[]; year: number;
+function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
+  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: DbCustomGroup[]; accounts: DbAccount[]; year: number;
 }) {
   const curr = yearlyPnl.total;
   const prev = prevYearlyPnl?.total;
   const prevYear = year - 1;
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleSection = (sec: string) => setExpandedSections(prev => {
+    const next = new Set(prev); if (next.has(sec)) next.delete(sec); else next.add(sec); return next;
+  });
+  const toggleGroup = (gid: string) => setExpandedGroups(prev => {
+    const next = new Set(prev); if (next.has(gid)) next.delete(gid); else next.add(gid); return next;
+  });
+
+  const accountMap = useMemo(() => new Map(accounts.map(a => [a.id, a])), [accounts]);
+
+  const getAccountsForGroup = (groupId: string): DbAccount[] => {
+    const ids = new Set([
+      ...(yearlyPnl.groupToAccountIds.get(groupId) ?? []),
+      ...(prevYearlyPnl?.groupToAccountIds.get(groupId) ?? []),
+    ]);
+    return Array.from(ids)
+      .map(id => accountMap.get(id))
+      .filter((a): a is DbAccount => a != null)
+      .sort((a, b) => (curr.byAccount.get(b.id) ?? 0) - (curr.byAccount.get(a.id) ?? 0));
+  };
 
   const groupsBySection = useMemo(() => {
     const map = new Map<string, DbCustomGroup[]>();
@@ -237,14 +316,80 @@ function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
                 const groups = (groupsBySection.get(sec) ?? []).filter(
                   g => (curr.byGroup.get(g.id) ?? 0) > 0 || (prev?.byGroup.get(g.id) ?? 0) > 0,
                 );
+                const isSectionExpanded = expandedSections.has(sec);
                 return (
                   <React.Fragment key={sec}>
-                    <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`}
-                      values={[pv !== 0 ? pv : null, cv]} isSection isExpense baseIdx={0} />
-                    {groups.map(g => (
-                      <CompRow key={g.id} label={`  ▸ ${g.name}`} isExpense indent baseIdx={0}
-                        values={[(prev?.byGroup.get(g.id) ?? 0) !== 0 ? prev!.byGroup.get(g.id)! : null, curr.byGroup.get(g.id) ?? 0]} />
-                    ))}
+                    <CompRow
+                      label={`(-) ${PARENT_SECTION_LABELS[sec]}`}
+                      values={[pv !== 0 ? pv : null, cv]}
+                      isSection isExpense baseIdx={0}
+                      isExpandable={groups.length > 0}
+                      isExpanded={isSectionExpanded}
+                      onToggle={() => toggleSection(sec)}
+                    />
+                    {isSectionExpanded && groups.map(g => {
+                      const gv = curr.byGroup.get(g.id) ?? 0;
+                      const gpv = prev?.byGroup.get(g.id) ?? 0;
+                      const groupAccounts = getAccountsForGroup(g.id);
+                      const isGroupExpanded = expandedGroups.has(g.id);
+                      return (
+                        <React.Fragment key={g.id}>
+                          <tr
+                            className="border-b border-gray-50 bg-gray-50/60 cursor-pointer hover:bg-gray-100/60 transition-colors"
+                            onClick={() => toggleGroup(g.id)}
+                          >
+                            <td className="py-2 px-4 sticky right-0 z-10 bg-gray-50/80 shadow-[inset_-1px_0_0_#e5e7eb]"
+                              style={{ paddingRight: "36px" }}>
+                              <div className="flex items-center gap-1.5">
+                                {groupAccounts.length > 0 && (
+                                  isGroupExpanded
+                                    ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
+                                    : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
+                                )}
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />
+                                <span className="text-[11px] font-medium text-gray-700">{g.name}</span>
+                                {groupAccounts.length > 0 && (
+                                  <span className="text-[9px] text-gray-400 bg-gray-200 px-1 rounded-full">{groupAccounts.length}</span>
+                                )}
+                              </div>
+                            </td>
+                            {[gpv !== 0 ? gpv : null, gv].map((v, i) => {
+                              const base = i === 0 ? (gpv !== 0 ? gpv : 0) : gpv;
+                              const diff = i === 1 ? gv - (gpv || gv) : null;
+                              const pct = diff !== null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
+                              return (
+                                <td key={i} className="py-2 px-3 text-center tabular-nums min-w-[110px]"
+                                  style={{ background: PERIOD_COLORS[i] ? `${PERIOD_COLORS[i]}10` : undefined }}>
+                                  {v !== null && v !== 0 ? (
+                                    <div className="space-y-0.5">
+                                      <div className="text-[11px] text-red-600">{fmtC(v)}</div>
+                                      {i === 1 && diff !== null && diff !== 0 && pct !== null && Math.abs(pct) < 1000 && (
+                                        <div className={clsx("text-[9px] font-bold",
+                                          diff < 0 ? "text-emerald-600" : "text-red-500"
+                                        )}>
+                                          {diff > 0 ? "+" : ""}{pct.toFixed(0)}%
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : <span className="text-gray-300">—</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                          {isGroupExpanded && groupAccounts.map(acct => (
+                            <AccountRow
+                              key={acct.id}
+                              account={acct}
+                              values={[
+                                (prev?.byAccount.get(acct.id) ?? 0) !== 0 ? (prev?.byAccount.get(acct.id) ?? null) : null,
+                                curr.byAccount.get(acct.id) ?? 0,
+                              ]}
+                              baseIdx={0}
+                            />
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                     {sec === "cost_of_goods" && (
                       <CompRow label="= רווח גולמי" values={[prev?.grossProfit ?? null, curr.grossProfit]} isSubtotal baseIdx={0} />
                     )}
@@ -464,14 +609,42 @@ function HeatmapTable({ yearlyPnl }: { yearlyPnl: YearlyPnl }) {
 
 // ── Flexible Multi-Period Comparison ─────────────────────────
 
-function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
-  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: DbCustomGroup[]; year: number;
+function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
+  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: DbCustomGroup[]; accounts: DbAccount[]; year: number;
 }) {
   const prevYear = year - 1;
   const [periods, setPeriods] = useState<Period[]>([
     { id: "a", year, monthFrom: 1, monthTo: 3 },
     { id: "b", year: prevYearlyPnl ? prevYear : year, monthFrom: 1, monthTo: 3 },
   ]);
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+
+  const toggleSection = (sec: string) => setExpandedSections(prev => {
+    const next = new Set(prev); if (next.has(sec)) next.delete(sec); else next.add(sec); return next;
+  });
+  const toggleGroup = (gid: string) => setExpandedGroups(prev => {
+    const next = new Set(prev); if (next.has(gid)) next.delete(gid); else next.add(gid); return next;
+  });
+
+  const accountMap = useMemo(() => new Map(accounts.map(a => [a.id, a])), [accounts]);
+
+  const getAccountsForGroup = (groupId: string): DbAccount[] => {
+    const ids = new Set([
+      ...(yearlyPnl.groupToAccountIds.get(groupId) ?? []),
+      ...(prevYearlyPnl?.groupToAccountIds.get(groupId) ?? []),
+    ]);
+    const result = Array.from(ids)
+      .map(id => accountMap.get(id))
+      .filter((a): a is DbAccount => a != null);
+    // Sort by total across all periods (descending)
+    result.sort((a, b) => {
+      const sumA = periodData.reduce((s, pd) => s + (pd?.byAccount.get(a.id) ?? 0), 0);
+      const sumB = periodData.reduce((s, pd) => s + (pd?.byAccount.get(b.id) ?? 0), 0);
+      return sumB - sumA;
+    });
+    return result;
+  };
 
   const addPeriod = () => {
     if (periods.length >= 4) return;
@@ -593,14 +766,76 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
                 const groups = (groupsBySection.get(sec) ?? []).filter(
                   g => periodData.some(d => (d?.byGroup.get(g.id) ?? 0) !== 0)
                 );
+                const isSectionExpanded = expandedSections.has(sec);
                 return (
                   <React.Fragment key={sec}>
-                    <CompRow label={`(-) ${PARENT_SECTION_LABELS[sec]}`} isSection isExpense baseIdx={0}
-                      values={periodData.map(d => d?.bySection[sec] ?? null)} />
-                    {groups.map(g => (
-                      <CompRow key={g.id} label={`  ▸ ${g.name}`} isExpense indent baseIdx={0}
-                        values={periodData.map(d => d?.byGroup.get(g.id) ?? null)} />
-                    ))}
+                    <CompRow
+                      label={`(-) ${PARENT_SECTION_LABELS[sec]}`}
+                      isSection isExpense baseIdx={0}
+                      values={periodData.map(d => d?.bySection[sec] ?? null)}
+                      isExpandable={groups.length > 0}
+                      isExpanded={isSectionExpanded}
+                      onToggle={() => toggleSection(sec)}
+                    />
+                    {isSectionExpanded && groups.map(g => {
+                      const groupAccounts = getAccountsForGroup(g.id);
+                      const isGroupExpanded = expandedGroups.has(g.id);
+                      return (
+                        <React.Fragment key={g.id}>
+                          <tr
+                            className="border-b border-gray-50 bg-gray-50/60 cursor-pointer hover:bg-gray-100/60 transition-colors"
+                            onClick={() => toggleGroup(g.id)}
+                          >
+                            <td className="py-2 px-4 sticky right-0 z-10 bg-gray-50/80 shadow-[inset_-1px_0_0_#e5e7eb]"
+                              style={{ paddingRight: "36px" }}>
+                              <div className="flex items-center gap-1.5">
+                                {groupAccounts.length > 0 && (
+                                  isGroupExpanded
+                                    ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
+                                    : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
+                                )}
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />
+                                <span className="text-[11px] font-medium text-gray-700">{g.name}</span>
+                                {groupAccounts.length > 0 && (
+                                  <span className="text-[9px] text-gray-400 bg-gray-200 px-1 rounded-full">{groupAccounts.length}</span>
+                                )}
+                              </div>
+                            </td>
+                            {periodData.map((d, i) => {
+                              const v = d?.byGroup.get(g.id) ?? 0;
+                              const base = periodData[0]?.byGroup.get(g.id) ?? 0;
+                              const diff = i !== 0 ? v - base : null;
+                              const pct = diff !== null && base !== 0 ? (diff / Math.abs(base)) * 100 : null;
+                              return (
+                                <td key={i} className="py-2 px-3 text-center tabular-nums min-w-[110px]"
+                                  style={{ background: PERIOD_COLORS[i] ? `${PERIOD_COLORS[i]}10` : undefined }}>
+                                  {v !== 0 ? (
+                                    <div className="space-y-0.5">
+                                      <div className="text-[11px] text-red-600">{fmtC(v)}</div>
+                                      {diff !== null && diff !== 0 && pct !== null && Math.abs(pct) < 1000 && (
+                                        <div className={clsx("text-[9px] font-bold",
+                                          diff < 0 ? "text-emerald-600" : "text-red-500"
+                                        )}>
+                                          {diff > 0 ? "+" : ""}{pct.toFixed(0)}%
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : <span className="text-gray-300">—</span>}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                          {isGroupExpanded && groupAccounts.map(acct => (
+                            <AccountRow
+                              key={acct.id}
+                              account={acct}
+                              values={periodData.map(d => (d?.byAccount.get(acct.id) ?? 0) !== 0 ? (d?.byAccount.get(acct.id) ?? null) : null)}
+                              baseIdx={0}
+                            />
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
                     {sec === "cost_of_goods" && (
                       <CompRow label="= רווח גולמי" isSubtotal baseIdx={0} values={periodData.map(d => d?.grossProfit ?? null)} />
                     )}
@@ -621,7 +856,7 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, year }: {
 
 // ── Main Component ────────────────────────────────────────────
 
-export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups, year }: Props) {
+export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: Props) {
   const [mode, setMode] = useState<CompareMode>("yoy");
 
   if (!yearlyPnl) {
@@ -654,7 +889,7 @@ export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups,
       {mode === "yoy" && (
         prevYearlyPnl ? (
           <div className="space-y-5">
-            <YoyTable yearlyPnl={yearlyPnl} prevYearlyPnl={prevYearlyPnl} customGroups={customGroups} year={year} />
+            <YoyTable yearlyPnl={yearlyPnl} prevYearlyPnl={prevYearlyPnl} customGroups={customGroups} accounts={accounts} year={year} />
             <HeatmapTable yearlyPnl={yearlyPnl} />
           </div>
         ) : (
@@ -667,7 +902,7 @@ export default function ComparisonsTab({ yearlyPnl, prevYearlyPnl, customGroups,
       )}
 
       {mode === "months" && (
-        <FlexComparison yearlyPnl={yearlyPnl} prevYearlyPnl={prevYearlyPnl} customGroups={customGroups} year={year} />
+        <FlexComparison yearlyPnl={yearlyPnl} prevYearlyPnl={prevYearlyPnl} customGroups={customGroups} accounts={accounts} year={year} />
       )}
 
       {mode === "quarterly" && (

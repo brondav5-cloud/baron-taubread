@@ -271,6 +271,12 @@ export default function DashboardTab({
     );
   }
 
+  // Detect if revenue accounts might be misclassified
+  const revenueAccounts = accounts.filter(a => a.account_type === "revenue");
+  const hasRevenueData = curr.revenue > 0;
+  const hasExpenseData = (curr.bySection.cost_of_goods + curr.bySection.operating + curr.bySection.admin + curr.bySection.finance + curr.bySection.other) > 0;
+  const showRevenueWarning = !hasRevenueData && hasExpenseData;
+
   const totalExpenses = curr.bySection.cost_of_goods + curr.bySection.operating + curr.bySection.admin + curr.bySection.finance + curr.bySection.other;
   const netProfitPct = curr.revenue > 0 ? (curr.netProfit / curr.revenue) * 100 : 0;
   const grossMarginPct = curr.revenue > 0 ? (curr.grossProfit / curr.revenue) * 100 : 0;
@@ -308,6 +314,12 @@ export default function DashboardTab({
       {classificationMode === "original" && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-700 font-medium">
           מצב תצוגה: סיווג מקורי — כל תנועה מוצגת לפי הסיווג מהקובץ המקורי
+        </div>
+      )}
+      {showRevenueWarning && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-800">
+          <strong>⚠️ אזהרה:</strong> לא נמצאו חשבונות הכנסות — {revenueAccounts.length} חשבון{revenueAccounts.length !== 1 ? "ות" : ""} מסווג{revenueAccounts.length !== 1 ? "ים" : ""} כ&quot;הכנסות&quot; אך ללא תנועות.
+          ייתכן שחשבונות הכנסות מסווגים בטעות כהוצאות. ניתן לתקן בטאב <strong>חשבונות → ספקים</strong>.
         </div>
       )}
 

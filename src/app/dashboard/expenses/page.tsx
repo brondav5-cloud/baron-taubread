@@ -355,6 +355,7 @@ export default function ExpensesPage() {
                   yearlyPnl={data.yearlyPnl}
                   prevYearlyPnl={data.prevYearlyPnl}
                   customGroups={data.customGroups}
+                  accounts={data.accounts}
                   year={year}
                 />
               )}
