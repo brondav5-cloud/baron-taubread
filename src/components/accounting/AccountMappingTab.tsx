@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import {
   Search, ChevronDown, Plus, Check, RotateCcw,
   GripVertical, Pencil, Trash2, Tag, Users, LayoutGrid, FileText,
@@ -465,14 +465,13 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
 
   const groupMap = useMemo(() => new Map(customGroups.map(g => [g.id, g])), [customGroups]);
 
-  // Get the effective group considering pending changes
-  const getDisplayGroup = (acct: DbAccount) => {
+  const getDisplayGroup = useCallback((acct: DbAccount) => {
     if (pending.has(acct.id)) {
       const pendingGroupId = pending.get(acct.id);
       return pendingGroupId ? (groupMap.get(pendingGroupId) ?? null) : null;
     }
     return getEffectiveGroup(acct, customGroups, classificationOverrides);
-  };
+  }, [pending, groupMap, customGroups, classificationOverrides]);
 
   const filtered = useMemo(() => {
     let list = accounts.filter(a => a.account_type === "expense");
@@ -496,7 +495,6 @@ function ClassificationTab({ accounts, customGroups, classificationOverrides, on
         : a.account.name.localeCompare(b.account.name, "he")
     );
     return filtered;
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- getEffectiveGroup is a pure function derived from customGroups+classificationOverrides already in deps
   }, [accounts, customGroups, classificationOverrides, overrideMap, search, filterType, sortField]);
 
   const stats = useMemo(() => {
@@ -963,7 +961,7 @@ function SuppliersTab({
     return Array.from(years).sort((a, b) => b - a);
   }, [accountStats]);
 
-  const getDisplayGroup = (acct: DbAccount): DbCustomGroup | null => {
+  const getDisplayGroup = useCallback((acct: DbAccount): DbCustomGroup | null => {
     if (pending.has(acct.id)) {
       const pgid = pending.get(acct.id);
       return pgid ? (groupMap.get(pgid) ?? null) : null;
@@ -973,14 +971,13 @@ function SuppliersTab({
     const byCode = acToGroup.get(acct.code);
     if (byCode) return byCode;
     return gcToGroup.get(acct.latest_group_code ?? "") ?? null;
-  };
+  }, [pending, groupMap, overrideMap, acToGroup, gcToGroup]);
 
   const filtered = useMemo(() => {
     let list = [...accounts];
     if (filterType === "expenses") list = list.filter(a => a.account_type === "expense");
     else if (filterType === "unclassified") list = list.filter(a => a.account_type === "expense" && !getDisplayGroup(a));
     else if (filterType === "revenue") list = list.filter(a => a.account_type === "revenue");
-    // "all" = show everything
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(a => a.name.toLowerCase().includes(q) || a.code.includes(q));
@@ -991,8 +988,7 @@ function SuppliersTab({
       return a.code.localeCompare(b.code, undefined, { numeric: true });
     });
     return list;
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- getDisplayGroup is derived from customGroups+classificationOverrides+pending already in deps
-  }, [accounts, filterType, search, sortBy, classificationOverrides, customGroups, pending, accountStats]);
+  }, [accounts, filterType, search, sortBy, accountStats, getDisplayGroup]);
 
   const handleBatchSave = async () => {
     if (pending.size === 0) return;

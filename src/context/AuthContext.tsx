@@ -213,8 +213,7 @@ export function useRequireRole(minRole: UserRole, redirectTo = "/dashboard") {
     if (!auth.isLoading && auth.isAuthenticated && !auth.hasMinRole(minRole)) {
       window.location.href = redirectTo;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- auth.hasMinRole is a stable method; only re-run when auth state or role/redirect changes
-  }, [auth.isLoading, auth.isAuthenticated, minRole, redirectTo]);
+  }, [auth.isLoading, auth.isAuthenticated, auth.hasMinRole, minRole, redirectTo]);
 
   return auth;
 }

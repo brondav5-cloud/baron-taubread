@@ -309,8 +309,8 @@ export function useStoresPageSupabase() {
   const compareEnabled = periodSelector.compare.enabled;
 
   const storesWithPeriodData = useMemo(() => {
-    const selectedMonths = periodSelector.primary.months;
-    const compareMonths = compareEnabled ? periodSelector.compare.months : [];
+    const selectedMonths = primaryMonthsKey ? primaryMonthsKey.split(",") : [];
+    const compareMonths = compareEnabled && compareMonthsKey ? compareMonthsKey.split(",") : [];
 
     return filteredStores.map((store) => {
       // Calculate totals for selected period
@@ -358,7 +358,6 @@ export function useStoresPageSupabase() {
         compareData,
       };
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- period data computed from key strings, not full arrays; all relevant inputs captured
   }, [
     filteredStores,
     primaryMonthsKey,
