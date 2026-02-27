@@ -30,7 +30,6 @@ export interface MissingProduct {
 
 /**
  * Fetches store products via API (uses service_role, bypasses RLS).
- * This works even when using Firebase Auth instead of Supabase Auth.
  */
 export function useStoreProducts(store: DbStore | null) {
   const [storeProducts, setStoreProducts] = useState<StoreProduct[]>([]);

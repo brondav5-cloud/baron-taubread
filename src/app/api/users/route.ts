@@ -1,6 +1,5 @@
 /**
  * API route for adding users - bypasses RLS using service role.
- * Fixes 403 Forbidden when inserting users (Firebase Auth + Supabase RLS).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";

@@ -5,8 +5,6 @@ import { usePathname } from "next/navigation";
 import { QueryProvider } from "./QueryProvider";
 import { ToastProvider } from "./ToastProvider";
 import { SupabaseAuthProvider } from "@/context/SupabaseAuthContext";
-import { AuthProvider } from "@/context/AuthContext";
-import { CompanyProvider } from "@/context/CompanyContext";
 import { StoresAndProductsProvider } from "@/context/StoresAndProductsContext";
 import { VisitsProvider } from "@/context/VisitsContext";
 import { TreatmentProvider } from "@/context/TreatmentContext";
@@ -52,25 +50,21 @@ function InnerProviders({ children }: ProvidersProps) {
     <QueryProvider>
       <ToastProvider>
         <SupabaseAuthProvider>
-          <AuthProvider>
-            <PushNotificationProvider>
-              <CompanyProvider>
-                <UsersProvider>
-                  <TasksProvider>
-                    <WorkflowProvider>
-                      <FaultsProvider>
-                        <StoresAndProductsProvider>
-                          <VisitsProvider>
-                            <TreatmentProvider>{children}</TreatmentProvider>
-                          </VisitsProvider>
-                        </StoresAndProductsProvider>
-                      </FaultsProvider>
-                    </WorkflowProvider>
-                  </TasksProvider>
-                </UsersProvider>
-              </CompanyProvider>
-            </PushNotificationProvider>
-          </AuthProvider>
+          <PushNotificationProvider>
+            <UsersProvider>
+              <TasksProvider>
+                <WorkflowProvider>
+                  <FaultsProvider>
+                    <StoresAndProductsProvider>
+                      <VisitsProvider>
+                        <TreatmentProvider>{children}</TreatmentProvider>
+                      </VisitsProvider>
+                    </StoresAndProductsProvider>
+                  </FaultsProvider>
+                </WorkflowProvider>
+              </TasksProvider>
+            </UsersProvider>
+          </PushNotificationProvider>
         </SupabaseAuthProvider>
       </ToastProvider>
     </QueryProvider>

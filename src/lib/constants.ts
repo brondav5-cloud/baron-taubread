@@ -193,26 +193,6 @@ export const VALIDATION_MESSAGES = {
 } as const;
 
 // ============================================
-// FIREBASE ERROR MESSAGES (Hebrew)
-// ============================================
-
-export const FIREBASE_ERROR_MESSAGES: Record<string, string> = {
-  "auth/user-not-found": "משתמש לא נמצא",
-  "auth/wrong-password": "סיסמה שגויה",
-  "auth/email-already-in-use": "כתובת האימייל כבר בשימוש",
-  "auth/weak-password": "הסיסמה חלשה מדי",
-  "auth/invalid-email": "כתובת אימייל לא תקינה",
-  "auth/too-many-requests": "יותר מדי ניסיונות, נסה שוב מאוחר יותר",
-  "auth/network-request-failed": "בעיית תקשורת, בדוק את החיבור לאינטרנט",
-  "auth/invalid-credential": "פרטי ההתחברות שגויים",
-  "auth/user-disabled": "החשבון הושבת",
-  "permission-denied": "אין לך הרשאה לביצוע פעולה זו",
-  "not-found": "הפריט לא נמצא",
-  "already-exists": "הפריט כבר קיים",
-  default: "אירעה שגיאה, נסה שוב",
-};
-
-// ============================================
 // QUERY KEYS (for React Query)
 // ============================================
 

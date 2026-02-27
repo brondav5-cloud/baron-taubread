@@ -25,7 +25,7 @@ export function useSettings() {
   const [returnsThreshold, setReturnsThreshold] = useState(20);
 
   const handleSave = () => {
-    // In production, this would save to Firebase/API
+    // In production, this would save to API
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
