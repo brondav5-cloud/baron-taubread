@@ -32,7 +32,7 @@ export function useRealtimeTable(
           table,
           filter: `company_id=eq.${companyId}`,
         },
-        (payload) => {
+        () => {
           onSync();
         },
       )
