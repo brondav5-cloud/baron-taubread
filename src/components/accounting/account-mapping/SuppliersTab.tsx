@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Search, ChevronDown, ChevronLeft, ChevronUp, ChevronsUpDown, RefreshCw, Loader2 } from "lucide-react";
+import { Search, ChevronDown, ChevronLeft, ChevronUp, ChevronsUpDown, RefreshCw, Loader2, X } from "lucide-react";
 import { clsx } from "clsx";
 import { useSuppliers, type SupplierWithDetails } from "@/hooks/useSuppliers";
 import type { DbAccount } from "@/types/accounting";
@@ -15,6 +15,14 @@ function getParentSectionFromGroupCode(gc: string): ParentSection {
   return "other";
 }
 
+const SECTION_BADGE_COLORS: Record<ParentSection, string> = {
+  cost_of_goods: "bg-orange-100 text-orange-700 border-orange-200",
+  operating:     "bg-blue-100 text-blue-700 border-blue-200",
+  admin:         "bg-green-100 text-green-700 border-green-200",
+  finance:       "bg-purple-100 text-purple-700 border-purple-200",
+  other:         "bg-gray-100 text-gray-600 border-gray-200",
+};
+
 interface SuppliersTabProps {
   accounts?: DbAccount[];
 }
@@ -23,11 +31,13 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
   const { suppliers, isLoading, error, refetch } = useSuppliers();
   const [search, setSearch] = useState("");
   const [filterSection, setFilterSection] = useState<ParentSection | "all" | "unclassified">("all");
+  const [filterCode, setFilterCode] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [editingClassify, setEditingClassify] = useState<string | null>(null);
   const [classifyCode, setClassifyCode] = useState("");
   const [classifyName, setClassifyName] = useState("");
+  const [saving, setSaving] = useState(false);
   type SortKey = "counter_account" | "display_name" | "code" | "account_name" | "names";
   const [sortBy, setSortBy] = useState<SortKey>("display_name");
   const [sortAsc, setSortAsc] = useState(true);
@@ -40,6 +50,36 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
     return m;
   }, [accounts]);
 
+  const getDisplayCode = (s: SupplierWithDetails) =>
+    s.classification?.manual_account_code ?? s.auto_account_code ?? "—";
+
+  const getDisplayName = (s: SupplierWithDetails) =>
+    s.classification?.manual_account_name ?? s.auto_account_name ?? null;
+
+  const isManuallyClassified = (s: SupplierWithDetails) =>
+    !!s.classification?.manual_account_code;
+
+  // All unique account codes that appear in the supplier list (sorted)
+  const uniqueCodes = useMemo(() => {
+    const set = new Set<string>();
+    for (const s of suppliers) {
+      const c = getDisplayCode(s);
+      if (c && c !== "—") set.add(c);
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+  }, [suppliers]);
+
+  // Name of each code (first account name found)
+  const codeToName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of suppliers) {
+      const c = getDisplayCode(s);
+      const n = getDisplayName(s);
+      if (c && c !== "—" && n && !m.has(c)) m.set(c, n);
+    }
+    return m;
+  }, [suppliers]);
+
   const filtered = useMemo(() => {
     let list = suppliers;
     if (search.trim()) {
@@ -50,12 +90,14 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
           s.display_name.toLowerCase().includes(q),
       );
     }
-    if (filterSection !== "all") {
+    if (filterCode) {
+      list = list.filter((s) => getDisplayCode(s) === filterCode);
+    } else if (filterSection !== "all") {
       list = list.filter((s) => {
         const code = s.classification?.manual_account_code ?? s.auto_account_code ?? "";
         if (filterSection === "unclassified") return !code;
         if (!code) return false;
-        const sec = codeToSection.get(code) ?? "other";
+        const sec = codeToSection.get(code) ?? getParentSectionFromGroupCode(code);
         return sec === filterSection;
       });
     }
@@ -73,7 +115,7 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
       return sortAsc ? cmp : -cmp;
     });
     return list;
-  }, [suppliers, search, filterSection, sortBy, sortAsc, codeToSection]);
+  }, [suppliers, search, filterSection, filterCode, sortBy, sortAsc, codeToSection]);
 
   const handleBuild = async () => {
     setBuilding(true);
@@ -93,8 +135,16 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
     }
   };
 
+  const startClassify = (s: SupplierWithDetails) => {
+    setEditingClassify(s.id);
+    const code = getDisplayCode(s);
+    setClassifyCode(code === "—" ? "" : code);
+    setClassifyName(getDisplayName(s) ?? "");
+  };
+
   const handleClassify = async (supplierId: string) => {
     if (!classifyCode.trim()) return;
+    setSaving(true);
     try {
       const res = await fetch(`/api/accounting/suppliers/${supplierId}/classify`, {
         method: "PUT",
@@ -114,6 +164,27 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
       await refetch();
     } catch (err) {
       alert(err instanceof Error ? err.message : "שגיאה");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClearClassify = async (supplierId: string) => {
+    if (!confirm("האם לנקות את הסיווג הידני? הסיווג האוטומטי יחזור להיות פעיל.")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/accounting/suppliers/${supplierId}/classify`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "שגיאה");
+      }
+      await refetch();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "שגיאה");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -134,32 +205,31 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
     }
   };
 
-  const getDisplayCode = (s: SupplierWithDetails) =>
-    s.classification?.manual_account_code ?? s.auto_account_code ?? "—";
-
-  const getDisplayName = (s: SupplierWithDetails) =>
-    s.classification?.manual_account_name ?? s.auto_account_name ?? null;
-
   const sectionCounts = useMemo(() => {
     const counts: Record<ParentSection | "unclassified", number> = {
-      cost_of_goods: 0,
-      operating: 0,
-      admin: 0,
-      finance: 0,
-      other: 0,
-      unclassified: 0,
+      cost_of_goods: 0, operating: 0, admin: 0, finance: 0, other: 0, unclassified: 0,
     };
     for (const s of suppliers) {
       const code = getDisplayCode(s);
       if (!code || code === "—") {
         counts.unclassified++;
       } else {
-        const section = codeToSection.get(code) ?? "other";
+        const section = codeToSection.get(code) ?? getParentSectionFromGroupCode(code);
         counts[section]++;
       }
     }
     return counts;
   }, [suppliers, codeToSection]);
+
+  // How many suppliers per code
+  const codeCounts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of suppliers) {
+      const c = getDisplayCode(s);
+      if (c && c !== "—") m.set(c, (m.get(c) ?? 0) + 1);
+    }
+    return m;
+  }, [suppliers]);
 
   const toggleSort = (key: SortKey) => {
     setSortBy(key);
@@ -190,42 +260,93 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
     );
   }
 
+  const activeFilterCode = filterCode;
+
   return (
     <div className="space-y-4">
-      <div className="space-y-4">
-        {accounts.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {PARENT_SECTION_ORDER.map((sec) => (
-              <button
-                key={sec}
-                onClick={() => setFilterSection(filterSection === sec ? "all" : sec)}
-                className={clsx(
-                  "px-3 py-2 rounded-xl border text-sm font-medium transition-colors",
-                  filterSection === sec
-                    ? "border-primary-500 bg-primary-50 text-primary-700"
-                    : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700",
-                )}
-              >
-                <span className="text-gray-500">{PARENT_SECTION_LABELS[sec]}:</span>{" "}
-                <span className="font-bold">{sectionCounts[sec]}</span>
-              </button>
-            ))}
+      {/* ── Section filter chips ── */}
+      {accounts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {PARENT_SECTION_ORDER.map((sec) => (
             <button
-              onClick={() => setFilterSection(filterSection === "unclassified" ? "all" : "unclassified")}
+              key={sec}
+              onClick={() => { setFilterSection(filterSection === sec && !filterCode ? "all" : sec); setFilterCode(null); }}
               className={clsx(
                 "px-3 py-2 rounded-xl border text-sm font-medium transition-colors",
-                filterSection === "unclassified"
-                  ? "border-amber-500 bg-amber-50 text-amber-700"
+                filterSection === sec && !filterCode
+                  ? "border-primary-500 bg-primary-50 text-primary-700"
                   : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700",
               )}
             >
-              <span className="text-gray-500">ללא סיווג:</span>{" "}
-              <span className="font-bold">{sectionCounts.unclassified}</span>
+              <span className="text-gray-500">{PARENT_SECTION_LABELS[sec]}:</span>{" "}
+              <span className="font-bold">{sectionCounts[sec]}</span>
             </button>
+          ))}
+          <button
+            onClick={() => { setFilterSection(filterSection === "unclassified" && !filterCode ? "all" : "unclassified"); setFilterCode(null); }}
+            className={clsx(
+              "px-3 py-2 rounded-xl border text-sm font-medium transition-colors",
+              filterSection === "unclassified" && !filterCode
+                ? "border-amber-500 bg-amber-50 text-amber-700"
+                : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700",
+            )}
+          >
+            <span className="text-gray-500">ללא סיווג:</span>{" "}
+            <span className="font-bold">{sectionCounts.unclassified}</span>
+          </button>
+        </div>
+      )}
+
+      {/* ── Group-code chips (collapsible list) ── */}
+      {uniqueCodes.length > 0 && (
+        <div className="bg-gray-50 border border-gray-200 rounded-2xl px-3 py-2.5 space-y-1.5">
+          <p className="text-[11px] text-gray-500 font-medium">סינון לפי קוד קבוצה — לחץ לסינון, לחץ שוב לביטול:</p>
+          <div className="flex flex-wrap gap-1.5">
+            {uniqueCodes.map((code) => {
+              const sec = codeToSection.get(code) ?? getParentSectionFromGroupCode(code);
+              const colorClass = SECTION_BADGE_COLORS[sec];
+              const isActive = activeFilterCode === code;
+              const count = codeCounts.get(code) ?? 0;
+              const name = codeToName.get(code);
+              return (
+                <button
+                  key={code}
+                  onClick={() => { setFilterCode(isActive ? null : code); setFilterSection("all"); }}
+                  className={clsx(
+                    "inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-medium transition-all",
+                    isActive
+                      ? "ring-2 ring-primary-400 ring-offset-1 " + colorClass
+                      : colorClass + " hover:brightness-95",
+                  )}
+                  title={name ?? code}
+                >
+                  <code className="font-mono">{code}</code>
+                  <span className="opacity-70">({count})</span>
+                  {isActive && <X className="w-2.5 h-2.5" />}
+                </button>
+              );
+            })}
           </div>
-        )}
-        <div className="flex flex-wrap items-center gap-3 justify-between">
-          <div className="flex gap-2 flex-wrap items-center">
+        </div>
+      )}
+
+      {/* Active filter banner */}
+      {activeFilterCode && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-primary-50 border border-primary-200 rounded-xl text-xs text-primary-700">
+          <span>מסנן לפי קוד: <strong>{activeFilterCode}</strong></span>
+          {codeToName.get(activeFilterCode) && (
+            <span className="text-primary-500">— {codeToName.get(activeFilterCode)}</span>
+          )}
+          <span className="text-primary-400">({filtered.length} ספקים)</span>
+          <button onClick={() => setFilterCode(null)} className="mr-auto text-primary-600 hover:text-primary-800 flex items-center gap-1">
+            <X className="w-3 h-3" /> נקה סינון
+          </button>
+        </div>
+      )}
+
+      {/* ── Toolbar ── */}
+      <div className="flex flex-wrap items-center gap-3 justify-between">
+        <div className="flex gap-2 flex-wrap items-center">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -235,17 +356,19 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
               className="pr-9 pl-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300 w-52"
             />
           </div>
-          <select
-            value={filterSection}
-            onChange={(e) => setFilterSection(e.target.value as typeof filterSection)}
-            className="px-3 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300"
-          >
-            <option value="all">כל הסעיפים</option>
-            <option value="unclassified">ללא סיווג</option>
-            {PARENT_SECTION_ORDER.map((sec) => (
-              <option key={sec} value={sec}>{PARENT_SECTION_LABELS[sec]}</option>
-            ))}
-          </select>
+          {!activeFilterCode && (
+            <select
+              value={filterSection}
+              onChange={(e) => setFilterSection(e.target.value as typeof filterSection)}
+              className="px-3 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300"
+            >
+              <option value="all">כל הסעיפים</option>
+              <option value="unclassified">ללא סיווג</option>
+              {PARENT_SECTION_ORDER.map((sec) => (
+                <option key={sec} value={sec}>{PARENT_SECTION_LABELS[sec]}</option>
+              ))}
+            </select>
+          )}
           <button
             onClick={() => void refetch()}
             disabled={isLoading}
@@ -269,9 +392,9 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
             )}
           </button>
         </div>
-        </div>
       </div>
 
+      {/* ── Table ── */}
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
         {isLoading ? (
           <div className="py-16 flex justify-center">
@@ -294,17 +417,19 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                   <SortTh label="מפתח סיווג" sortKey="code" className="min-w-[90px]" />
                   <SortTh label="שם חשבון" sortKey="account_name" className="min-w-[100px]" />
                   <SortTh label="שמות" sortKey="names" className="min-w-[50px] text-center" />
-                  <th className="text-right py-3 px-2 font-semibold min-w-[80px]">פעולות</th>
+                  <th className="text-right py-3 px-2 font-semibold min-w-[110px]">פעולות</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((s) => {
                   const isExpanded = expandedId === s.id;
                   const isEditing = editingClassify === s.id;
+                  const displayCode = getDisplayCode(s);
+                  const displayName = getDisplayName(s);
+                  const isManual = isManuallyClassified(s);
                   return (
                     <React.Fragment key={s.id}>
                       <tr
-                        key={s.id}
                         className={clsx(
                           "border-b border-gray-50 hover:bg-gray-50/60 transition-colors",
                           isExpanded && "bg-gray-50/80",
@@ -330,16 +455,42 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                         <td className="py-2 px-4 font-medium text-gray-800">{s.display_name}</td>
                         <td className="py-2 px-3">
                           {isEditing ? (
-                            <input
-                              value={classifyCode}
-                              onChange={(e) => setClassifyCode(e.target.value)}
-                              placeholder="מפתח"
-                              className="w-20 px-1.5 py-0.5 text-xs border rounded"
-                              autoFocus
-                            />
+                            <div className="flex items-center gap-1">
+                              {/* Dropdown + free text for code */}
+                              <select
+                                value={classifyCode}
+                                onChange={(e) => {
+                                  setClassifyCode(e.target.value);
+                                  if (e.target.value) {
+                                    setClassifyName(codeToName.get(e.target.value) ?? "");
+                                  }
+                                }}
+                                className="w-24 px-1 py-0.5 text-xs border rounded focus:ring-1 focus:ring-primary-300"
+                              >
+                                <option value="">— בחר —</option>
+                                {uniqueCodes.map((c) => (
+                                  <option key={c} value={c}>
+                                    {c}{codeToName.get(c) ? ` - ${codeToName.get(c)}` : ""}
+                                  </option>
+                                ))}
+                              </select>
+                              <span className="text-gray-300 text-xs">|</span>
+                              <input
+                                value={classifyCode}
+                                onChange={(e) => setClassifyCode(e.target.value)}
+                                placeholder="או הקלד"
+                                className="w-16 px-1.5 py-0.5 text-xs border rounded focus:ring-1 focus:ring-primary-300"
+                              />
+                            </div>
                           ) : (
-                            <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">
-                              {getDisplayCode(s)}
+                            <span className={clsx(
+                              "font-mono px-1.5 py-0.5 rounded text-[10px]",
+                              isManual
+                                ? "bg-primary-100 text-primary-700 border border-primary-200"
+                                : "bg-gray-100 text-gray-600",
+                            )}>
+                              {displayCode}
+                              {isManual && <span className="mr-1 text-primary-400">✎</span>}
                             </span>
                           )}
                         </td>
@@ -349,10 +500,12 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                               value={classifyName}
                               onChange={(e) => setClassifyName(e.target.value)}
                               placeholder="שם חשבון"
-                              className="w-28 px-1.5 py-0.5 text-xs border rounded"
+                              className="w-32 px-1.5 py-0.5 text-xs border rounded focus:ring-1 focus:ring-primary-300"
                             />
                           ) : (
-                            getDisplayName(s) ?? "—"
+                            <span className={clsx(isManual && "text-primary-700 font-medium")}>
+                              {displayName ?? "—"}
+                            </span>
                           )}
                         </td>
                         <td className="py-2 px-2 text-center">
@@ -360,11 +513,13 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                         </td>
                         <td className="py-2 px-2">
                           {isEditing ? (
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 flex-wrap">
                               <button
-                                onClick={() => handleClassify(s.id)}
-                                className="px-2 py-0.5 text-[10px] bg-primary-600 text-white rounded"
+                                onClick={() => void handleClassify(s.id)}
+                                disabled={saving || !classifyCode.trim()}
+                                className="px-2 py-0.5 text-[10px] bg-primary-600 text-white rounded disabled:opacity-50 flex items-center gap-0.5"
                               >
+                                {saving ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
                                 שמור
                               </button>
                               <button
@@ -373,22 +528,31 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                                   setClassifyCode("");
                                   setClassifyName("");
                                 }}
-                                className="px-2 py-0.5 text-[10px] border rounded"
+                                className="px-2 py-0.5 text-[10px] border rounded hover:bg-gray-50"
                               >
                                 ביטול
                               </button>
                             </div>
                           ) : (
-                            <button
-                              onClick={() => {
-                                setEditingClassify(s.id);
-                                setClassifyCode(getDisplayCode(s) === "—" ? "" : getDisplayCode(s));
-                                setClassifyName(getDisplayName(s) ?? "");
-                              }}
-                              className="px-2 py-0.5 text-[10px] border rounded hover:bg-gray-100"
-                            >
-                              סווג
-                            </button>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => startClassify(s)}
+                                className="px-2 py-0.5 text-[10px] border rounded hover:bg-gray-100 text-gray-700"
+                                title="שנה סיווג ידני"
+                              >
+                                סווג
+                              </button>
+                              {isManual && (
+                                <button
+                                  onClick={() => void handleClearClassify(s.id)}
+                                  disabled={saving}
+                                  className="px-1.5 py-0.5 text-[10px] border border-red-200 text-red-500 rounded hover:bg-red-50"
+                                  title="נקה סיווג ידני — חזור לאוטומטי"
+                                >
+                                  <X className="w-2.5 h-2.5" />
+                                </button>
+                              )}
+                            </div>
                           )}
                         </td>
                       </tr>
@@ -396,6 +560,7 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                         <tr className="bg-gray-50/50 border-b border-gray-100">
                           <td colSpan={7} className="py-2 px-4">
                             <div className="text-[11px] space-y-1 pr-8">
+                              <p className="text-gray-400 text-[10px] mb-1">שמות שנראו בתנועות:</p>
                               {s.names.map((n) => (
                                 <div key={n.id} className="flex items-center justify-between gap-2">
                                   <span>
@@ -437,6 +602,7 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
             ? `${suppliers.length} ספקים`
             : `${filtered.length} מתוך ${suppliers.length} ספקים`}
           {" · סיווג אוטומטי מתנועות הוצאה"}
+          {activeFilterCode && ` · מסנן: ${activeFilterCode}`}
         </div>
       </div>
     </div>

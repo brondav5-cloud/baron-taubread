@@ -1,7 +1,6 @@
 /**
- * PUT /api/accounting/suppliers/[id]/classify
- * Set manual classification for a supplier.
- * Body: { manual_account_code: string; manual_account_name?: string; match_by_name?: boolean; match_name?: string }
+ * PUT    /api/accounting/suppliers/[id]/classify  — set manual classification
+ * DELETE /api/accounting/suppliers/[id]/classify  — clear manual classification (revert to auto)
  */
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -70,6 +69,45 @@ export async function PUT(
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error("Classify error:", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Unknown error" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  try {
+    const authClient = createServerSupabaseClient();
+    const { data: { user }, error: authError } = await authClient.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
+    }
+
+    const { id } = await params;
+    const supabase = getSupabaseAdmin();
+
+    const { error: delErr } = await supabase
+      .from("supplier_classifications")
+      .delete()
+      .eq("supplier_id", id)
+      .eq("company_id", companyId);
+
+    if (delErr) {
+      return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Classify DELETE error:", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 },
