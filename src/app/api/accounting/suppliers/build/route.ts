@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     let transitCreated = 0;
     if (existingTransitSet.size === 0) {
       const toInsert: { company_id: string; counter_account: string }[] = [];
-      for (const [h, names] of hToNames) {
+      for (const [h, names] of Array.from(hToNames.entries())) {
         const isTransit = hasNonDigit(h) || names.size > 10;
         if (isTransit && h) {
           toInsert.push({ company_id: companyId, counter_account: h });
@@ -169,7 +169,6 @@ export async function POST(request: Request) {
         nm.set(m, (nm.get(m) ?? 0) + 1);
       } else {
         if (!h) continue;
-        const ident = `counter_account:${h}`;
         if (!hToNameCounts.has(h)) {
           hToNameCounts.set(h, new Map());
         }
@@ -179,11 +178,11 @@ export async function POST(request: Request) {
     }
 
     // For counter_account: compute mode(M) and add to supplierRows
-    for (const [h, nameCounts] of hToNameCounts) {
+    for (const [h, nameCounts] of Array.from(hToNameCounts.entries())) {
       if (!h) continue;
       let bestName = "";
       let bestCount = 0;
-      for (const [name, count] of nameCounts) {
+      for (const [name, count] of Array.from(nameCounts.entries())) {
         if (count > bestCount) {
           bestCount = count;
           bestName = name;
@@ -200,7 +199,7 @@ export async function POST(request: Request) {
         is_manually_classified: false,
       });
       const nm = new Map<string, number>();
-      for (const [name, count] of nameCounts) {
+      for (const [name, count] of Array.from(nameCounts.entries())) {
         nm.set(name, count);
       }
       supplierNamesMap.set(ident, nm);
@@ -255,7 +254,7 @@ export async function POST(request: Request) {
         `${row.identifier_type}:${row.identifier_value}`,
       );
       if (namesMap) {
-        for (const [name, count] of namesMap) {
+        for (const [name, count] of Array.from(namesMap.entries())) {
           const { data: existingName } = await supabase
             .from("supplier_names")
             .select("id, occurrence_count")

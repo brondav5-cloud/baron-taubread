@@ -206,7 +206,7 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
       });
       const buildData = await safeJson(buildRes);
       const supplierNote = buildRes.ok && (buildData.suppliersCreated || buildData.suppliersUpdated)
-        ? ` · ${(buildData.suppliersCreated ?? 0) + (buildData.suppliersUpdated ?? 0)} ספקים עודכנו`
+        ? ` · ${Number(buildData.suppliersCreated ?? 0) + Number(buildData.suppliersUpdated ?? 0)} ספקים עודכנו`
         : "";
 
       setLastResult({
