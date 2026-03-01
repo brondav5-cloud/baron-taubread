@@ -1,82 +1,99 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { Search } from "lucide-react";
+import React, { useState, useMemo } from "react";
+import { Search, ChevronDown, ChevronLeft, RefreshCw, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
-import type { DbAccount } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
-import type { AccountTransaction } from "./shared";
+import { useSuppliers, type SupplierWithDetails } from "@/hooks/useSuppliers";
 
-interface SuppliersTabProps {
-  accounts: DbAccount[];
-  customGroups: VirtualGroup[];
-  transactions: AccountTransaction[];
-}
-
-export function SuppliersTab({
-  accounts, customGroups, transactions,
-}: SuppliersTabProps) {
+export function SuppliersTab() {
+  const { suppliers, isLoading, error, refetch } = useSuppliers();
   const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<"all" | "expenses" | "revenue">("all");
-  const [sortBy, setSortBy] = useState<"code" | "name" | "amount">("amount");
-
-  const gcToGroup = useMemo(() => {
-    const map = new Map<string, VirtualGroup>();
-    for (const g of customGroups) {
-      map.set(g.id, g);
-    }
-    return map;
-  }, [customGroups]);
-
-  const accountStats = useMemo(() => {
-    const amountMap = new Map<string, number>();
-    const yearData = new Map<string, Map<number, Set<string>>>();
-    for (const tx of transactions) {
-      const amt = (tx.debit ?? 0) - (tx.credit ?? 0);
-      amountMap.set(tx.account_id, (amountMap.get(tx.account_id) ?? 0) + Math.abs(amt));
-      const year = new Date(tx.transaction_date).getFullYear();
-      if (!yearData.has(tx.account_id)) yearData.set(tx.account_id, new Map());
-      const ym = yearData.get(tx.account_id)!;
-      if (!ym.has(year)) ym.set(year, new Set());
-      ym.get(year)!.add(tx.group_code);
-    }
-    return { amountMap, yearData };
-  }, [transactions]);
-
-  const allYears = useMemo(() => {
-    const years = new Set<number>();
-    for (const ym of Array.from(accountStats.yearData.values())) ym.forEach((_, y) => years.add(y));
-    return Array.from(years).sort((a, b) => b - a);
-  }, [accountStats]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [building, setBuilding] = useState(false);
+  const [editingClassify, setEditingClassify] = useState<string | null>(null);
+  const [classifyCode, setClassifyCode] = useState("");
+  const [classifyName, setClassifyName] = useState("");
 
   const filtered = useMemo(() => {
-    let list = [...accounts];
-    if (filterType === "expenses") list = list.filter(a => a.account_type === "expense");
-    else if (filterType === "revenue") list = list.filter(a => a.account_type === "revenue");
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      list = list.filter(a => a.name.toLowerCase().includes(q) || a.code.includes(q));
+    if (!search.trim()) return suppliers;
+    const q = search.trim().toLowerCase();
+    return suppliers.filter(
+      (s) =>
+        s.counter_account.toLowerCase().includes(q) ||
+        s.display_name.toLowerCase().includes(q),
+    );
+  }, [suppliers, search]);
+
+  const handleBuild = async () => {
+    setBuilding(true);
+    try {
+      const res = await fetch("/api/accounting/suppliers/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "שגיאה");
+      await refetch();
+    } finally {
+      setBuilding(false);
     }
-    list.sort((a, b) => {
-      if (sortBy === "amount") return (accountStats.amountMap.get(b.id) ?? 0) - (accountStats.amountMap.get(a.id) ?? 0);
-      if (sortBy === "name") return a.name.localeCompare(b.name, "he");
-      return a.code.localeCompare(b.code, undefined, { numeric: true });
-    });
-    return list;
-  }, [accounts, filterType, search, sortBy, accountStats]);
-
-  const fmtAmt = (v: number) => {
-    if (v === 0) return "—";
-    if (v >= 1_000_000) return `${(v / 1_000_000).toFixed(1)}M`;
-    if (v >= 10_000) return `${(v / 1_000).toFixed(0)}K`;
-    return `${Math.round(v).toLocaleString()}`;
   };
 
-  const statsTotal = {
-    all: accounts.length,
-    expenses: accounts.filter(a => a.account_type === "expense").length,
-    revenue: accounts.filter(a => a.account_type === "revenue").length,
+  const handleClassify = async (supplierId: string) => {
+    if (!classifyCode.trim()) return;
+    try {
+      const res = await fetch(`/api/accounting/suppliers/${supplierId}/classify`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          manual_account_code: classifyCode.trim(),
+          manual_account_name: classifyName.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "שגיאה");
+      }
+      setEditingClassify(null);
+      setClassifyCode("");
+      setClassifyName("");
+      await refetch();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "שגיאה");
+    }
   };
+
+  const handleReassign = async (nameId: string, counter_account_override: string | null) => {
+    try {
+      const res = await fetch(`/api/accounting/supplier-names/${nameId}/reassign`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ counter_account_override }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error ?? "שגיאה");
+      }
+      await refetch();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "שגיאה");
+    }
+  };
+
+  const getDisplayCode = (s: SupplierWithDetails) =>
+    s.classification?.manual_account_code ?? s.auto_account_code ?? "—";
+
+  const getDisplayName = (s: SupplierWithDetails) =>
+    s.classification?.manual_account_name ?? s.auto_account_name ?? null;
+
+  if (error) {
+    return (
+      <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-700">
+        {error}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -84,111 +101,194 @@ export function SuppliersTab({
         <div className="flex gap-2 flex-wrap items-center">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="חיפוש שם / מפתח..."
-              className="pr-9 pl-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300 w-52" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="חיפוש ח״ן / שם..."
+              className="pr-9 pl-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300 w-52"
+            />
           </div>
-          {([
-            { id: "all", label: `הכל (${statsTotal.all})` },
-            { id: "expenses", label: `הוצאות (${statsTotal.expenses})` },
-            { id: "revenue", label: `הכנסות (${statsTotal.revenue})` },
-          ] as const).map(f => (
-            <button key={f.id} onClick={() => setFilterType(f.id)}
-              className={clsx("px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors",
-                filterType === f.id ? "bg-primary-600 text-white border-primary-600" : "bg-white text-gray-600 border-gray-200 hover:border-primary-300",
-              )}>
-              {f.label}
-            </button>
-          ))}
+          <button
+            onClick={() => void refetch()}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50"
+          >
+            {isLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            רענן
+          </button>
+          <button
+            onClick={() => void handleBuild()}
+            disabled={building || isLoading}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50"
+          >
+            {building ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+            בנה ספקים מחדש
+          </button>
         </div>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value as "code" | "name" | "amount")}
-          className="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-white focus:ring-2 focus:ring-primary-300">
-          <option value="amount">מיין לפי סכום</option>
-          <option value="code">מיין לפי מפתח</option>
-          <option value="name">מיין לפי שם</option>
-        </select>
       </div>
 
       <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto" dir="rtl">
-          <table className="text-[11px] border-collapse" style={{ minWidth: `${420 + allYears.length * 80}px` }}>
-            <thead>
-              <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
-                <th className="text-right py-3 px-4 font-semibold sticky right-0 bg-slate-800 z-20 min-w-[60px] cursor-pointer hover:bg-slate-700" onClick={() => setSortBy("code")}>
-                  מפתח {sortBy === "code" && "▾"}
-                </th>
-                <th className="text-right py-3 px-4 font-semibold min-w-[200px] cursor-pointer hover:bg-slate-700" onClick={() => setSortBy("name")}>
-                  שם חשבון {sortBy === "name" && "▾"}
-                </th>
-                <th className="text-center py-3 px-3 font-semibold min-w-[80px] cursor-pointer hover:bg-slate-700" onClick={() => setSortBy("amount")}>
-                  סה&quot;כ {sortBy === "amount" && "▾"}
-                </th>
-                <th className="text-right py-3 px-4 font-semibold min-w-[120px]">מפתח סיווג</th>
-                {allYears.map(yr => (
-                  <th key={yr} className="text-center py-3 px-3 font-semibold min-w-[80px]">{yr}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={4 + allYears.length} className="py-12 text-center text-gray-400">לא נמצאו חשבונות</td>
+        {isLoading ? (
+          <div className="py-16 flex justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-12 text-center text-gray-400 text-sm">
+            {suppliers.length === 0
+              ? "אין ספקים. העלה קובץ כרטסת והפעל ״בנה ספקים מחדש״."
+              : "לא נמצאו ספקים תואמים לחיפוש."}
+          </div>
+        ) : (
+          <div className="overflow-x-auto" dir="rtl">
+            <table className="text-[11px] border-collapse w-full">
+              <thead>
+                <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
+                  <th className="w-8 py-2" />
+                  <th className="text-right py-3 px-4 font-semibold min-w-[100px]">ח״ן</th>
+                  <th className="text-right py-3 px-4 font-semibold min-w-[180px]">שם תצוגה</th>
+                  <th className="text-right py-3 px-4 font-semibold min-w-[90px]">מפתח סיווג</th>
+                  <th className="text-right py-3 px-4 font-semibold min-w-[100px]">שם חשבון</th>
+                  <th className="text-center py-3 px-2 font-semibold min-w-[50px]">שמות</th>
+                  <th className="text-right py-3 px-2 font-semibold min-w-[80px]">פעולות</th>
                 </tr>
-              ) : filtered.map(acct => {
-                const yearData = accountStats.yearData.get(acct.id);
-                const total = accountStats.amountMap.get(acct.id) ?? 0;
-                const isRevenue = acct.account_type === "revenue";
-                const mainGc = acct.latest_group_code || (yearData && Array.from(yearData.values()).flatMap(s => Array.from(s))[0]) || "—";
-
-                return (
-                  <tr key={acct.id} className={clsx("border-b border-gray-50 hover:bg-gray-50/60 transition-colors", isRevenue && "bg-teal-50/20")}>
-                    <td className="py-2 px-4 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6]" style={{ background: isRevenue ? "rgb(240,253,250,0.8)" : undefined }}>
-                      <code className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono text-[10px]">{acct.code}</code>
-                    </td>
-                    <td className="py-2 px-4">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-medium text-gray-800 text-[12px]">{acct.name}</span>
-                        {isRevenue && <span className="text-[9px] bg-teal-100 text-teal-700 px-1 py-0.5 rounded font-bold">הכנסה</span>}
-                      </div>
-                    </td>
-                    <td className="py-2 px-3 text-center tabular-nums font-mono text-[11px] text-gray-700">{fmtAmt(total)}</td>
-                    <td className="py-2 px-3">
-                      {isRevenue ? (
-                        <span className="text-teal-600 text-[11px] font-medium">— הכנסות</span>
-                      ) : (
-                        <span className="text-[11px] font-mono bg-gray-100 px-1.5 py-0.5 rounded">{mainGc}</span>
-                      )}
-                    </td>
-                    {allYears.map(yr => {
-                      const gcSet = yearData?.get(yr);
-                      const gcs = gcSet ? Array.from(gcSet) : [];
-                      return (
-                        <td key={yr} className="py-2 px-3 text-center">
-                          {gcs.length > 0 ? (
-                            <div className="flex flex-col gap-0.5 items-center">
-                              {gcs.slice(0, 2).map(gc => {
-                                const g = gcToGroup.get(gc);
-                                return (
-                                  <span key={gc} className="inline-flex items-center gap-1 text-[10px] bg-gray-100 px-1.5 py-0.5 rounded font-mono">
-                                    {g && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: g.parent_section === "cost_of_goods" ? "#EF4444" : g.parent_section === "operating" ? "#F97316" : "#6B7280" }} />}
-                                    {gc}
-                                  </span>
-                                );
-                              })}
-                              {gcs.length > 2 && <span className="text-[9px] text-gray-400">+{gcs.length - 2}</span>}
-                            </div>
-                          ) : <span className="text-gray-200">—</span>}
+              </thead>
+              <tbody>
+                {filtered.map((s) => {
+                  const isExpanded = expandedId === s.id;
+                  const isEditing = editingClassify === s.id;
+                  return (
+                    <React.Fragment key={s.id}>
+                      <tr
+                        key={s.id}
+                        className={clsx(
+                          "border-b border-gray-50 hover:bg-gray-50/60 transition-colors",
+                          isExpanded && "bg-gray-50/80",
+                        )}
+                      >
+                        <td className="py-1 px-1">
+                          <button
+                            onClick={() => setExpandedId(isExpanded ? null : s.id)}
+                            className="p-1 rounded hover:bg-gray-200"
+                          >
+                            {isExpanded ? (
+                              <ChevronDown className="w-4 h-4" />
+                            ) : (
+                              <ChevronLeft className="w-4 h-4" />
+                            )}
+                          </button>
                         </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                        <td className="py-2 px-4">
+                          <code className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                            {s.counter_account}
+                          </code>
+                        </td>
+                        <td className="py-2 px-4 font-medium text-gray-800">{s.display_name}</td>
+                        <td className="py-2 px-3">
+                          {isEditing ? (
+                            <input
+                              value={classifyCode}
+                              onChange={(e) => setClassifyCode(e.target.value)}
+                              placeholder="מפתח"
+                              className="w-20 px-1.5 py-0.5 text-xs border rounded"
+                              autoFocus
+                            />
+                          ) : (
+                            <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded">
+                              {getDisplayCode(s)}
+                            </span>
+                          )}
+                        </td>
+                        <td className="py-2 px-3 text-gray-600">
+                          {isEditing ? (
+                            <input
+                              value={classifyName}
+                              onChange={(e) => setClassifyName(e.target.value)}
+                              placeholder="שם חשבון"
+                              className="w-28 px-1.5 py-0.5 text-xs border rounded"
+                            />
+                          ) : (
+                            getDisplayName(s) ?? "—"
+                          )}
+                        </td>
+                        <td className="py-2 px-2 text-center">
+                          {s.names.length}
+                        </td>
+                        <td className="py-2 px-2">
+                          {isEditing ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleClassify(s.id)}
+                                className="px-2 py-0.5 text-[10px] bg-primary-600 text-white rounded"
+                              >
+                                שמור
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingClassify(null);
+                                  setClassifyCode("");
+                                  setClassifyName("");
+                                }}
+                                className="px-2 py-0.5 text-[10px] border rounded"
+                              >
+                                ביטול
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => {
+                                setEditingClassify(s.id);
+                                setClassifyCode(getDisplayCode(s) === "—" ? "" : getDisplayCode(s));
+                                setClassifyName(getDisplayName(s) ?? "");
+                              }}
+                              className="px-2 py-0.5 text-[10px] border rounded hover:bg-gray-100"
+                            >
+                              סווג
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                      {isExpanded && s.names.length > 0 && (
+                        <tr className="bg-gray-50/50 border-b border-gray-100">
+                          <td colSpan={7} className="py-2 px-4">
+                            <div className="text-[11px] space-y-1 pr-8">
+                              {s.names.map((n) => (
+                                <div key={n.id} className="flex items-center justify-between gap-2">
+                                  <span>
+                                    {n.name}
+                                    {n.occurrence_count > 1 && (
+                                      <span className="text-gray-400 mr-1">×{n.occurrence_count}</span>
+                                    )}
+                                  </span>
+                                  {n.counter_account_override ? (
+                                    <span className="text-amber-600">
+                                      ← ח״ן {n.counter_account_override}
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => {
+                                        const v = prompt("הזן ח״ן נגדי להעברה (או ריק לביטול):");
+                                        void handleReassign(n.id, v?.trim() || null);
+                                      }}
+                                      className="text-[10px] text-primary-600 hover:underline"
+                                    >
+                                      העבר ל-H אחר
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
-          מציג {filtered.length} מתוך {accounts.length} חשבונות · סיווג נקבע בהעלאת הקובץ
+          {suppliers.length} ספקים · סיווג אוטומטי מתנועות הוצאה
         </div>
       </div>
     </div>

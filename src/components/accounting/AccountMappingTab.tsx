@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Tag, FileText } from "lucide-react";
+import { Search, Tag, FileText, DollarSign } from "lucide-react";
 import { clsx } from "clsx";
 import type {
   DbAccount, DbCustomTag, DbAccountTag, DbCounterAccountName,
@@ -11,6 +11,7 @@ import type { AccountTransaction } from "./account-mapping/shared";
 import { TagsTab } from "./account-mapping/TagsTab";
 import { CounterNamesTab } from "./account-mapping/CounterNamesTab";
 import { SuppliersTab } from "./account-mapping/SuppliersTab";
+import { RevenueGroupsTab } from "./account-mapping/RevenueGroupsTab";
 
 interface Props {
   accounts: DbAccount[];
@@ -18,20 +19,22 @@ interface Props {
   tags: DbCustomTag[];
   accountTags: DbAccountTag[];
   counterNames: DbCounterAccountName[];
+  revenueGroups: { group_code: string }[];
   transactions?: AccountTransaction[];
   onSaveTag: (tag: Partial<DbCustomTag> & { name: string; color: string }) => Promise<boolean>;
   onDeleteTag: (id: string) => Promise<boolean>;
   onAssignTag: (accountId: string, tagId: string) => Promise<boolean>;
   onRemoveTag: (accountId: string, tagId: string) => Promise<boolean>;
   onSaveCounterName: (code: string, displayName: string) => Promise<boolean>;
+  onRefetch: () => Promise<void>;
 }
 
-type InnerTab = "suppliers" | "tags" | "counter";
+type InnerTab = "suppliers" | "tags" | "counter" | "revenue";
 
 export default function AccountMappingTab({
-  accounts, customGroups, tags, accountTags, counterNames,
+  accounts, customGroups: _customGroups, tags, accountTags, counterNames, revenueGroups,
   transactions: txProp,
-  onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName,
+  onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName, onRefetch,
 }: Props) {
   const [activeTab, setActiveTab] = useState<InnerTab>("suppliers");
 
@@ -39,6 +42,7 @@ export default function AccountMappingTab({
     { id: "suppliers", label: "ספקים", icon: <Search className="w-3.5 h-3.5" /> },
     { id: "tags", label: "תגיות", icon: <Tag className="w-3.5 h-3.5" /> },
     { id: "counter", label: "שמות נגדיים", icon: <FileText className="w-3.5 h-3.5" /> },
+    { id: "revenue", label: "קבוצות הכנסה", icon: <DollarSign className="w-3.5 h-3.5" /> },
   ];
 
   const transactions = txProp ?? [];
@@ -62,13 +66,7 @@ export default function AccountMappingTab({
       </div>
 
       <div className="pt-1">
-        {activeTab === "suppliers" && (
-          <SuppliersTab
-            accounts={accounts}
-            customGroups={customGroups}
-            transactions={transactions}
-          />
-        )}
+        {activeTab === "suppliers" && <SuppliersTab />}
         {activeTab === "tags" && (
           <TagsTab
             tags={tags}
@@ -86,6 +84,12 @@ export default function AccountMappingTab({
             accounts={accounts}
             transactions={transactions}
             onSaveCounterName={onSaveCounterName}
+          />
+        )}
+        {activeTab === "revenue" && (
+          <RevenueGroupsTab
+            groupCodes={revenueGroups.map((r) => r.group_code)}
+            onRefetch={onRefetch}
           />
         )}
       </div>

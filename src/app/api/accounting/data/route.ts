@@ -82,6 +82,15 @@ export async function GET(request: Request) {
         .order("year", { ascending: false }),
     ]);
 
+    let suppliers: { id: string; counter_account: string; display_name: string; auto_account_code: string | null; auto_account_name: string | null }[] = [];
+    let revenueGroups: { group_code: string }[] = [];
+    const [sRes, rRes] = await Promise.all([
+      supabase.from("suppliers").select("id, counter_account, display_name, auto_account_code, auto_account_name").eq("company_id", companyId),
+      supabase.from("revenue_groups").select("group_code").eq("company_id", companyId),
+    ]);
+    if (!sRes.error) suppliers = (sRes.data ?? []) as typeof suppliers;
+    if (!rRes.error) revenueGroups = (rRes.data ?? []) as typeof revenueGroups;
+
     const metaErrors = [
       accountsRes, overridesRes, tagsRes, accountTagsRes, counterNamesRes, alertRulesRes, filesRes,
     ]
@@ -115,6 +124,8 @@ export async function GET(request: Request) {
       counterNames:         counterNamesRes.data ?? [],
       alertRules:           alertRulesRes.data ?? [],
       files:                filesRes.data ?? [],
+      suppliers,
+      revenueGroups,
     });
   } catch (err) {
     console.error("Data API error:", err);

@@ -31,6 +31,8 @@ interface AccountingApiData {
   counterNames: DbCounterAccountName[];
   alertRules: DbAlertRule[];
   files: DbUploadedFile[];
+  suppliers: { id: string; counter_account: string; display_name: string; auto_account_code: string | null; auto_account_name: string | null }[];
+  revenueGroups: { group_code: string }[];
 }
 
 export interface AccountingData extends AccountingApiData, AccountingMutations {
@@ -144,6 +146,8 @@ export function useAccountingData(year: number): AccountingData {
     counterNames: [],
     alertRules: [],
     files: [],
+    suppliers: [],
+    revenueGroups: [],
   };
 
   return {

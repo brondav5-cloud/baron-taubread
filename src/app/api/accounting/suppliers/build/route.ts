@@ -1,8 +1,8 @@
 /**
  * POST /api/accounting/suppliers/build
- * Phase 3: Build/update suppliers from transactions.
- * - Detects transit accounts (H with >10 unique names OR H contains letters)
- * - Creates/updates suppliers from counter_account (H) and description (M)
+ * Phase 3: Build/update suppliers from transactions (schema v2).
+ * - H (counter_account) only — no transit_accounts
+ * - display_name = mode(M), auto_account_code/name from expense ledger
  *
  * normalize(M) = trim().replace(/\s+/g, ' ')
  */
@@ -18,16 +18,19 @@ function normalizeName(m: string): string {
   return (m || "").trim().replace(/\s+/g, " ");
 }
 
-/** H contains non-digit → transit (e.g. "כ.א 2805", "מע\"מ") */
-function hasNonDigit(h: string): boolean {
-  return /[^0-9]/.test(String(h || "").trim());
-}
+type TxRow = {
+  counter_account: string | null;
+  description: string | null;
+  account_id: string;
+};
+
+type AccountRow = { id: string; code: string; name: string; account_type: string };
 
 async function fetchAllTransactionsForCompany(
   supabase: SupabaseClient,
   companyId: string,
-) {
-  const all: { counter_account: string | null; description: string | null; account_id: string }[] = [];
+): Promise<TxRow[]> {
+  const all: TxRow[] = [];
   let from = 0;
 
   while (true) {
@@ -39,12 +42,56 @@ async function fetchAllTransactionsForCompany(
 
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) break;
-    all.push(...(data as typeof all));
+    all.push(...(data as TxRow[]));
     if (data.length < PAGE) break;
     from += PAGE;
   }
 
   return all;
+}
+
+async function fetchAccountsForCompany(
+  supabase: SupabaseClient,
+  companyId: string,
+): Promise<Map<string, AccountRow>> {
+  const map = new Map<string, AccountRow>();
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("accounts")
+      .select("id, code, name, account_type")
+      .eq("company_id", companyId)
+      .range(from, from + PAGE - 1);
+
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    for (const row of data as AccountRow[]) {
+      map.set(row.id, row);
+    }
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+
+  return map;
+}
+
+/** Mode of array elements (most frequent). */
+function mode<T>(arr: T[]): T | null {
+  if (arr.length === 0) return null;
+  const counts = new Map<T, number>();
+  for (const x of arr) {
+    counts.set(x, (counts.get(x) ?? 0) + 1);
+  }
+  let best: T | null = null;
+  let bestCount = 0;
+  for (const [k, c] of Array.from(counts.entries())) {
+    if (c > bestCount) {
+      bestCount = c;
+      best = k;
+    }
+  }
+  return best;
 }
 
 export async function POST(request: Request) {
@@ -63,123 +110,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
     }
 
-    await request.json().catch(() => ({})); // Body: { company_id?, file_id? } — company from cookie
+    await request.json().catch(() => ({}));
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch all company transactions
-    const transactions = await fetchAllTransactionsForCompany(supabase, companyId);
+    const [transactions, accountMap] = await Promise.all([
+      fetchAllTransactionsForCompany(supabase, companyId),
+      fetchAccountsForCompany(supabase, companyId),
+    ]);
+
+    const codeToAccount = new Map<string, AccountRow>();
+    for (const a of Array.from(accountMap.values())) {
+      codeToAccount.set(a.code, a);
+    }
 
     if (transactions.length === 0) {
       return NextResponse.json({
         success: true,
-        transitCreated: 0,
         suppliersCreated: 0,
         suppliersUpdated: 0,
         message: "אין תנועות לעיבוד",
       });
     }
 
-    // ── 3.1 Transit detection ─────────────────────────────────
-    const hToNames = new Map<string, Set<string>>();
-    for (const tx of transactions) {
-      const h = (tx.counter_account || "").trim();
-      if (!h) continue;
-      const m = normalizeName(tx.description || "");
-      if (!m) continue;
-      let set = hToNames.get(h);
-      if (!set) {
-        set = new Set();
-        hToNames.set(h, set);
-      }
-      set.add(m);
-    }
-
-    const { data: existingTransit } = await supabase
-      .from("transit_accounts")
-      .select("counter_account")
-      .eq("company_id", companyId);
-
-    const existingTransitSet = new Set(
-      (existingTransit ?? []).map((r: { counter_account: string }) => r.counter_account),
-    );
-
-    let transitCreated = 0;
-    if (existingTransitSet.size === 0) {
-      const toInsert: { company_id: string; counter_account: string }[] = [];
-      for (const [h, names] of Array.from(hToNames.entries())) {
-        const isTransit = hasNonDigit(h) || names.size > 10;
-        if (isTransit && h) {
-          toInsert.push({ company_id: companyId, counter_account: h });
-        }
-      }
-      if (toInsert.length > 0) {
-        const { error } = await supabase
-          .from("transit_accounts")
-          .upsert(toInsert, {
-            onConflict: "company_id,counter_account",
-            ignoreDuplicates: false,
-          });
-        if (!error) transitCreated = toInsert.length;
-      }
-    }
-
-    // Re-fetch transit for supplier logic
-    const { data: transitRows } = await supabase
-      .from("transit_accounts")
-      .select("counter_account")
-      .eq("company_id", companyId);
-    const transitSet = new Set(
-      (transitRows ?? []).map((r: { counter_account: string }) => r.counter_account),
-    );
-
-    // ── 3.2 Build suppliers ───────────────────────────────────
-    // For counter_account: need mode(M) per H
+    // Build per H: names (M) with counts, account_codes from expense txs
     const hToNameCounts = new Map<string, Map<string, number>>();
-    const supplierRows: {
-      company_id: string;
-      display_name: string;
-      identifier_type: "counter_account" | "name_based";
-      identifier_value: string;
-      is_auto_created: boolean;
-      is_manually_classified: boolean;
-    }[] = [];
-    const supplierNamesMap = new Map<string, Map<string, number>>(); // identifier_key -> { name -> count }
+    const hToAccountCodes = new Map<string, string[]>();
 
     for (const tx of transactions) {
       const h = (tx.counter_account || "").trim();
       const m = normalizeName(tx.description || "");
-      if (!h && !m) continue;
+      if (!h) continue;
 
-      if (transitSet.has(h)) {
-        if (!m) continue;
-        const ident = `name_based:${m}`;
-        if (!supplierNamesMap.has(ident)) {
-          supplierNamesMap.set(ident, new Map());
-          supplierRows.push({
-            company_id: companyId,
-            display_name: m,
-            identifier_type: "name_based",
-            identifier_value: m,
-            is_auto_created: true,
-            is_manually_classified: false,
-          });
-        }
-        const nm = supplierNamesMap.get(ident)!;
-        nm.set(m, (nm.get(m) ?? 0) + 1);
-      } else {
-        if (!h) continue;
-        if (!hToNameCounts.has(h)) {
-          hToNameCounts.set(h, new Map());
-        }
-        const nc = hToNameCounts.get(h)!;
-        if (m) nc.set(m, (nc.get(m) ?? 0) + 1);
+      if (!hToNameCounts.has(h)) {
+        hToNameCounts.set(h, new Map());
+      }
+      const nc = hToNameCounts.get(h)!;
+      if (m) nc.set(m, (nc.get(m) ?? 0) + 1);
+
+      const acc = accountMap.get(tx.account_id);
+      if (acc && acc.account_type === "expense") {
+        if (!hToAccountCodes.has(h)) hToAccountCodes.set(h, []);
+        hToAccountCodes.get(h)!.push(acc.code);
       }
     }
 
-    // For counter_account: compute mode(M) and add to supplierRows
+    const supplierRows: {
+      counter_account: string;
+      display_name: string;
+      auto_account_code: string | null;
+      auto_account_name: string | null;
+      namesMap: Map<string, number>;
+    }[] = [];
+
     for (const [h, nameCounts] of Array.from(hToNameCounts.entries())) {
       if (!h) continue;
+
       let bestName = "";
       let bestCount = 0;
       for (const [name, count] of Array.from(nameCounts.entries())) {
@@ -189,25 +175,19 @@ export async function POST(request: Request) {
         }
       }
       const displayName = bestName || h;
-      const ident = `counter_account:${h}`;
-      supplierRows.push({
-        company_id: companyId,
-        display_name: displayName,
-        identifier_type: "counter_account",
-        identifier_value: h,
-        is_auto_created: true,
-        is_manually_classified: false,
-      });
-      const nm = new Map<string, number>();
-      for (const [name, count] of Array.from(nameCounts.entries())) {
-        nm.set(name, count);
-      }
-      supplierNamesMap.set(ident, nm);
-    }
 
-    // Add name_based supplier_names from transactions (we already collected in loop above)
-    // For counter_account we have hToNameCounts - the ident for supplierRows is different
-    // We need to map: supplierRows index or identifier_value -> names
+      const codes = hToAccountCodes.get(h) ?? [];
+      const autoCode = mode(codes);
+      const accName = autoCode ? codeToAccount.get(autoCode)?.name ?? null : null;
+
+      supplierRows.push({
+        counter_account: h,
+        display_name: displayName,
+        auto_account_code: autoCode,
+        auto_account_name: accName,
+        namesMap: nameCounts,
+      });
+    }
 
     let suppliersCreated = 0;
     let suppliersUpdated = 0;
@@ -215,10 +195,9 @@ export async function POST(request: Request) {
     for (const row of supplierRows) {
       const { data: existing } = await supabase
         .from("suppliers")
-        .select("id, display_name")
+        .select("id, display_name, auto_account_code, auto_account_name")
         .eq("company_id", companyId)
-        .eq("identifier_type", row.identifier_type)
-        .eq("identifier_value", row.identifier_value)
+        .eq("counter_account", row.counter_account)
         .maybeSingle();
 
       let supplierId: string;
@@ -226,23 +205,25 @@ export async function POST(request: Request) {
       if (existing) {
         supplierId = existing.id;
         suppliersUpdated++;
-
-        // Update display_name only if not manually overridden
-        const { data: full } = await supabase
+        await supabase
           .from("suppliers")
-          .select("is_manually_classified")
-          .eq("id", supplierId)
-          .single();
-        if (full && !full.is_manually_classified) {
-          await supabase
-            .from("suppliers")
-            .update({ display_name: row.display_name, updated_at: new Date().toISOString() })
-            .eq("id", supplierId);
-        }
+          .update({
+            display_name: row.display_name,
+            auto_account_code: row.auto_account_code,
+            auto_account_name: row.auto_account_name,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", supplierId);
       } else {
         const { data: inserted, error } = await supabase
           .from("suppliers")
-          .insert(row)
+          .insert({
+            company_id: companyId,
+            counter_account: row.counter_account,
+            display_name: row.display_name,
+            auto_account_code: row.auto_account_code,
+            auto_account_name: row.auto_account_name,
+          })
           .select("id")
           .single();
         if (error) continue;
@@ -250,37 +231,31 @@ export async function POST(request: Request) {
         suppliersCreated++;
       }
 
-      const namesMap = supplierNamesMap.get(
-        `${row.identifier_type}:${row.identifier_value}`,
-      );
-      if (namesMap) {
-        for (const [name, count] of Array.from(namesMap.entries())) {
-          const { data: existingName } = await supabase
-            .from("supplier_names")
-            .select("id, occurrence_count")
-            .eq("supplier_id", supplierId)
-            .eq("name", name)
-            .maybeSingle();
+      for (const [name, count] of Array.from(row.namesMap.entries())) {
+        const { data: existingName } = await supabase
+          .from("supplier_names")
+          .select("id, occurrence_count")
+          .eq("supplier_id", supplierId)
+          .eq("name", name)
+          .maybeSingle();
 
-          if (existingName) {
-            await supabase
-              .from("supplier_names")
-              .update({ occurrence_count: count })
-              .eq("id", existingName.id);
-          } else {
-            await supabase.from("supplier_names").insert({
-              supplier_id: supplierId,
-              name,
-              occurrence_count: count,
-            });
-          }
+        if (existingName) {
+          await supabase
+            .from("supplier_names")
+            .update({ occurrence_count: count })
+            .eq("id", existingName.id);
+        } else {
+          await supabase.from("supplier_names").insert({
+            supplier_id: supplierId,
+            name,
+            occurrence_count: count,
+          });
         }
       }
     }
 
     return NextResponse.json({
       success: true,
-      transitCreated,
       suppliersCreated,
       suppliersUpdated,
       transactionsProcessed: transactions.length,

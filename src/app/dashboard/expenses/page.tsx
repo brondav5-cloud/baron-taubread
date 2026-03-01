@@ -256,7 +256,9 @@ export default function ExpensesPage() {
                   tags={data.tags}
                   accountTags={data.accountTags}
                   counterNames={data.counterNames}
+                  revenueGroups={data.revenueGroups}
                   transactions={data.transactions}
+                  onRefetch={data.refetch}
                   onSaveTag={(tag) =>
                     withToast(
                       () => data.saveTag(tag),
