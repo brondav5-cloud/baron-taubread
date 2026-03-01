@@ -240,6 +240,8 @@ export default function ExpensesPage() {
                   customGroups={data.customGroups}
                   accounts={data.accounts}
                   year={year}
+                  groupLabels={data.groupLabels}
+                  pnlCustomSections={data.pnlCustomSections}
                   onGroupClick={(groupId) => setOpenGroupId(groupId)}
                   onAmountClick={(accountId, month) => {
                     setOpenAccountId(accountId === "revenue" ? null : accountId);
@@ -258,8 +260,11 @@ export default function ExpensesPage() {
                   counterNames={data.counterNames}
                   revenueGroups={data.revenueGroups}
                   revenueAccountCodes={data.revenueAccountCodes}
+                  groupLabels={data.groupLabels}
+                  pnlCustomSections={data.pnlCustomSections}
                   transactions={data.transactions}
                   onRefetch={data.refetch}
+                  onRefetchStructure={data.refetchStructure}
                   onSaveTag={(tag) =>
                     withToast(
                       () => data.saveTag(tag),

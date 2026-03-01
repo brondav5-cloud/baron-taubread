@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import type { YearlyPnl, DbAccount } from "@/types/accounting";
 import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import type { ViewMode } from "./pnlHelpers";
 import PnlYearlyView from "./PnlYearlyView";
 import PnlCompareView from "./PnlCompareView";
@@ -13,6 +14,8 @@ interface Props {
   customGroups: VirtualGroup[];
   accounts: DbAccount[];
   year: number;
+  groupLabels?: Record<string, string>;
+  pnlCustomSections?: PnlCustomSection[];
   onGroupClick?: (groupId: string, month?: number) => void;
   onAmountClick?: (accountId: string, month?: number) => void;
   onAccountClick?: (accountId: string) => void;
@@ -20,7 +23,8 @@ interface Props {
 
 export default function PnlTableTab({
   yearlyPnl, prevYearlyPnl, customGroups, accounts,
-  year, onGroupClick, onAmountClick, onAccountClick,
+  year, groupLabels, pnlCustomSections,
+  onGroupClick, onAmountClick, onAccountClick,
 }: Props) {
   const [viewMode, setViewMode] = useState<ViewMode>("yearly");
 
@@ -57,6 +61,8 @@ export default function PnlTableTab({
       onGroupClick={onGroupClick}
       onAmountClick={onAmountClick}
       onAccountClick={onAccountClick}
+      groupLabels={groupLabels}
+      pnlCustomSections={pnlCustomSections}
     />
   );
 }

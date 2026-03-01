@@ -17,6 +17,15 @@ import { calcYearlyPnl, detectAnomalies, countClosingEntries, getVirtualGroupsFr
 import type { VirtualGroup } from "./accountingCalc";
 import { useAccountingMutations, type AccountingMutations } from "./useAccountingMutations";
 
+export interface PnlCustomSection {
+  id: string;
+  company_id: string;
+  name: string;
+  parent_section: string;
+  sort_order: number;
+  group_codes: string[];
+}
+
 interface AccountingApiData {
   year: number;
   prevYear: number;
@@ -49,6 +58,12 @@ export interface AccountingData extends AccountingApiData, AccountingMutations {
   /** Virtual groups derived from group_code (no stored classifications) */
   customGroups: VirtualGroup[];
   getEffectiveGroup: (accountId: string, txGroupCode: string) => VirtualGroup | null;
+  /** User-defined custom labels for group_codes */
+  groupLabels: Record<string, string>;
+  /** User-defined PnL sub-sections */
+  pnlCustomSections: PnlCustomSection[];
+  /** Refetch only pnl-structure (labels + sections) without full data reload */
+  refetchStructure: () => Promise<void>;
 }
 
 export function useAccountingData(year: number): AccountingData {
@@ -56,24 +71,42 @@ export function useAccountingData(year: number): AccountingData {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [excludeClosingEntries, setExcludeClosingEntries] = useState(true);
+  const [groupLabels, setGroupLabels] = useState<Record<string, string>>({});
+  const [pnlCustomSections, setPnlCustomSections] = useState<PnlCustomSection[]>([]);
+
+  const fetchStructure = useCallback(async () => {
+    try {
+      const res = await fetch("/api/accounting/pnl-structure");
+      if (res.ok) {
+        const json = await res.json();
+        setGroupLabels(json.groupLabels ?? {});
+        setPnlCustomSections(json.customSections ?? []);
+      }
+    } catch {
+      // non-fatal — pnl-structure table might not exist yet
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounting/data?year=${year}`);
-      if (!res.ok) {
-        const err = await res.json();
+      const [dataRes] = await Promise.all([
+        fetch(`/api/accounting/data?year=${year}`),
+        fetchStructure(),
+      ]);
+      if (!dataRes.ok) {
+        const err = await dataRes.json();
         throw new Error(err.error ?? "שגיאה בטעינת נתונים");
       }
-      const data: AccountingApiData = await res.json();
+      const data: AccountingApiData = await dataRes.json();
       setRaw(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה לא ידועה");
     } finally {
       setIsLoading(false);
     }
-  }, [year]);
+  }, [year, fetchStructure]);
 
   useEffect(() => {
     void fetchData();
@@ -132,8 +165,8 @@ export function useAccountingData(year: number): AccountingData {
 
   const customGroups: VirtualGroup[] = useMemo(() => {
     if (!yearlyPnl) return [];
-    return getVirtualGroupsFromPnl(yearlyPnl, raw?.accounts ?? []);
-  }, [yearlyPnl, raw?.accounts]);
+    return getVirtualGroupsFromPnl(yearlyPnl, raw?.accounts ?? [], groupLabels);
+  }, [yearlyPnl, raw?.accounts, groupLabels]);
 
   const anomalies = useMemo(() => {
     if (!yearlyPnl || !raw) return [];
@@ -171,7 +204,10 @@ export function useAccountingData(year: number): AccountingData {
     prevYearlyPnl,
     anomalies,
     refetch: fetchData,
+    refetchStructure: fetchStructure,
     getEffectiveGroup,
+    groupLabels,
+    pnlCustomSections,
     ...mutations,
   };
 }

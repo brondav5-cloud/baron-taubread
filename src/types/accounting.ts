@@ -198,6 +198,7 @@ export interface MonthlyGroupAmount {
 export interface MonthlyPnl {
   month: number; // 1-12
   revenue: number;
+  byRevenueGroup: Map<string, number>; // groupCode → revenue amount (for revenue breakdown)
   bySection: Record<ParentSection, number>;
   byGroup: Map<string, number>; // groupId → amount
   byAccount: Map<string, number>; // accountId → amount

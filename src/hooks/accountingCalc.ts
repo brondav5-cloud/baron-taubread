@@ -81,6 +81,7 @@ export function calcYearlyPnl(
   const emptyMonth = (month: number): MonthlyPnl => ({
     month,
     revenue: 0,
+    byRevenueGroup: new Map(),
     bySection: { cost_of_goods: 0, operating: 0, admin: 0, finance: 0, other: 0 },
     byGroup: new Map(),
     byAccount: new Map(),
@@ -123,7 +124,10 @@ export function calcYearlyPnl(
       revenueGroupCodes.has(txGroupCode) || account.account_type === "revenue";
 
     if (isRevenue) {
-      md.revenue += credit - debit;
+      const revAmount = credit - debit;
+      md.revenue += revAmount;
+      const revGroupCode = txGroupCode || "revenue";
+      md.byRevenueGroup.set(revGroupCode, (md.byRevenueGroup.get(revGroupCode) ?? 0) + revAmount);
     } else {
       const amount = debit - credit;
       const groupCode = txGroupCode || "other";
@@ -168,6 +172,9 @@ export function calcYearlyPnl(
     md.byAccount.forEach((val, key) => {
       total.byAccount.set(key, (total.byAccount.get(key) ?? 0) + val);
     });
+    md.byRevenueGroup.forEach((val, key) => {
+      total.byRevenueGroup.set(key, (total.byRevenueGroup.get(key) ?? 0) + val);
+    });
   }
   total.grossProfit = total.revenue - total.bySection.cost_of_goods;
   total.operatingProfit = total.grossProfit - total.bySection.operating;
@@ -179,10 +186,22 @@ export function calcYearlyPnl(
   return { year, months: monthlyData, total, groupToAccountIds };
 }
 
+/** Resolve the display name for a group_code, preferring custom label then account name */
+export function resolveGroupName(
+  groupCode: string,
+  groupLabels: Record<string, string> = {},
+  codeToAccountName: Map<string, string> = new Map(),
+): string {
+  if (groupLabels[groupCode]) return groupLabels[groupCode];
+  const accountName = codeToAccountName.get(groupCode);
+  return accountName ? `${groupCode} - ${accountName}` : groupCode;
+}
+
 /** Build virtual groups from yearly PnL (group_code as id) */
 export function getVirtualGroupsFromPnl(
   pnl: YearlyPnl,
   accounts: DbAccount[] = [],
+  groupLabels: Record<string, string> = {},
 ): VirtualGroup[] {
   const codeToName = new Map<string, string>();
   for (const a of accounts) {
@@ -195,10 +214,9 @@ export function getVirtualGroupsFromPnl(
   for (const [groupCode, amount] of Array.from(pnl.total.byGroup.entries())) {
     if (seen.has(groupCode) || amount === 0) continue;
     seen.add(groupCode);
-    const accountName = codeToName.get(groupCode);
     result.push({
       id: groupCode,
-      name: accountName ? `${groupCode} - ${accountName}` : groupCode,
+      name: resolveGroupName(groupCode, groupLabels, codeToName),
       parent_section: getParentSectionFromGroupCode(groupCode),
     });
   }

@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Download, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, ChevronDown, ChevronRight, X } from "lucide-react";
 import { clsx } from "clsx";
 import type { YearlyPnl, DbAccount, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
 import type { VirtualGroup } from "@/hooks/accountingCalc";
+import { resolveGroupName } from "@/hooks/accountingCalc";
+import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import { SECTION_COLORS } from "./account-mapping/shared";
 import {
   type ViewMode, type TooltipData,
@@ -26,12 +28,196 @@ interface Props {
   onGroupClick?: (groupId: string, month?: number) => void;
   onAmountClick?: (accountId: string, month?: number) => void;
   onAccountClick?: (accountId: string) => void;
+  groupLabels?: Record<string, string>;
+  pnlCustomSections?: PnlCustomSection[];
 }
+
+// ── Revenue Breakdown Modal ─────────────────────────────────
+
+interface RevenueModalProps {
+  yearlyPnl: YearlyPnl;
+  year: number;
+  codeToName: Map<string, string>;
+  groupLabels: Record<string, string>;
+  customSections: PnlCustomSection[];
+  onClose: () => void;
+}
+
+function RevenueBreakdownModal({ yearlyPnl, year, codeToName, groupLabels, customSections, onClose }: RevenueModalProps) {
+  const revSections = customSections.filter((s) => s.parent_section === "revenue");
+
+  const allRevGroups: Array<{ code: string; name: string; total: number }> = useMemo(() => {
+    const result: Array<{ code: string; name: string; total: number }> = [];
+    yearlyPnl.total.byRevenueGroup.forEach((total, code) => {
+      if (total === 0) return;
+      result.push({ code, name: resolveGroupName(code, groupLabels, codeToName), total });
+    });
+    return result.sort((a, b) => b.total - a.total);
+  }, [yearlyPnl, groupLabels, codeToName]);
+
+  const totalRevenue = yearlyPnl.total.revenue;
+
+  const getRevGroupVal = (code: string, month: number) =>
+    yearlyPnl.months[month - 1]?.byRevenueGroup.get(code) ?? 0;
+
+  const getRevGroupTotal = (code: string) =>
+    yearlyPnl.total.byRevenueGroup.get(code) ?? 0;
+
+  // Group by custom sections
+  const assignedCodes = new Set(revSections.flatMap((s) => s.group_codes));
+  const ungroupedRevGroups = allRevGroups.filter((g) => !assignedCodes.has(g.code));
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={onClose}>
+      <div
+        className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-5xl mx-4 overflow-hidden"
+        style={{ maxHeight: "85vh" }}
+        onClick={(e) => e.stopPropagation()}
+        dir="rtl"
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gradient-to-l from-emerald-50 to-teal-50">
+          <div>
+            <h2 className="text-base font-bold text-emerald-900">פירוט הכנסות — {year}</h2>
+            <p className="text-sm text-emerald-700 mt-0.5">
+              סה&quot;כ: <strong>{fmtFull(totalRevenue)}</strong>
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-emerald-100 text-emerald-700">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="overflow-auto" style={{ maxHeight: "calc(85vh - 80px)" }}>
+          <table className="text-[11px] border-collapse w-full" style={{ minWidth: "700px" }}>
+            <thead className="sticky top-0 z-10">
+              <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
+                <th className="sticky right-0 z-20 bg-slate-800 text-right py-3 px-4 font-bold min-w-[200px]">
+                  קבוצה
+                </th>
+                {MONTHS.map((m) => (
+                  <th key={m} className="text-center py-3 px-1 font-semibold min-w-[55px]">
+                    {MONTH_SHORT[m - 1]}
+                  </th>
+                ))}
+                <th className="text-center py-3 px-3 font-bold min-w-[90px] bg-slate-900">
+                  סה&quot;כ
+                </th>
+                <th className="text-center py-3 px-2 font-semibold min-w-[48px] text-slate-300">%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {/* Sections with assigned groups */}
+              {revSections.map((sec) => {
+                const secGroups = allRevGroups.filter((g) => sec.group_codes.includes(g.code));
+                if (secGroups.length === 0) return null;
+                const secTotal = secGroups.reduce((s, g) => s + getRevGroupTotal(g.code), 0);
+                return (
+                  <React.Fragment key={sec.id}>
+                    <tr className="bg-teal-50 border-b border-teal-100">
+                      <td className="py-2 px-4 font-semibold text-teal-800 text-xs sticky right-0 bg-teal-50 z-10">
+                        {sec.name}
+                      </td>
+                      {MONTHS.map((m) => {
+                        const v = secGroups.reduce((s, g) => s + getRevGroupVal(g.code, m), 0);
+                        return (
+                          <td key={m} className="py-2 px-1.5 text-center tabular-nums font-medium text-teal-700">
+                            {v !== 0 ? fmt(v) : <span className="text-gray-200">—</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="py-2 px-3 text-center tabular-nums font-bold text-teal-800 bg-teal-100">
+                        {fmtFull(secTotal)}
+                      </td>
+                      <td className="py-2 px-2 text-center text-[10px] text-teal-600 bg-teal-50">
+                        {pctOfRev(secTotal, totalRevenue)}
+                      </td>
+                    </tr>
+                    {secGroups.map((g) => (
+                      <tr key={g.code} className="border-b border-gray-50 hover:bg-gray-50/60">
+                        <td className="py-2 px-4 text-gray-600 sticky right-0 bg-white z-10" style={{ paddingRight: "32px" }}>
+                          <span className="font-mono text-[10px] text-gray-400 ml-1">{g.code}</span>
+                          {g.name !== g.code ? g.name.replace(`${g.code} - `, "") : ""}
+                        </td>
+                        {MONTHS.map((m) => {
+                          const v = getRevGroupVal(g.code, m);
+                          return (
+                            <td key={m} className="py-2 px-1.5 text-center tabular-nums text-emerald-700">
+                              {v !== 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className="py-2 px-3 text-center tabular-nums font-medium text-emerald-800 bg-gray-50">
+                          {fmtFull(g.total)}
+                        </td>
+                        <td className="py-2 px-2 text-center text-[10px] text-gray-400 bg-gray-50">
+                          {pctOfRev(g.total, totalRevenue)}
+                        </td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+
+              {/* Ungrouped revenue groups */}
+              {ungroupedRevGroups.map((g) => (
+                <tr key={g.code} className="border-b border-gray-50 hover:bg-gray-50/60">
+                  <td className="py-2 px-4 text-gray-600 sticky right-0 bg-white z-10">
+                    <span className="font-mono text-[10px] text-gray-400 ml-1">{g.code}</span>
+                    {g.name !== g.code ? g.name.replace(`${g.code} - `, "") : ""}
+                  </td>
+                  {MONTHS.map((m) => {
+                    const v = getRevGroupVal(g.code, m);
+                    return (
+                      <td key={m} className="py-2 px-1.5 text-center tabular-nums text-emerald-700">
+                        {v !== 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                      </td>
+                    );
+                  })}
+                  <td className="py-2 px-3 text-center tabular-nums font-medium text-emerald-800 bg-gray-50">
+                    {fmtFull(g.total)}
+                  </td>
+                  <td className="py-2 px-2 text-center text-[10px] text-gray-400 bg-gray-50">
+                    {pctOfRev(g.total, totalRevenue)}
+                  </td>
+                </tr>
+              ))}
+
+              {/* Grand total row */}
+              <tr className="bg-gradient-to-l from-emerald-100 to-teal-100 border-t-2 border-emerald-300">
+                <td className="py-3 px-4 font-bold text-emerald-900 text-sm sticky right-0 bg-emerald-100 z-10">
+                  = סה&quot;כ הכנסות
+                </td>
+                {MONTHS.map((m) => {
+                  const v = yearlyPnl.months[m - 1]?.revenue ?? 0;
+                  return (
+                    <td key={m} className="py-3 px-1.5 text-center tabular-nums font-bold text-emerald-800">
+                      {v !== 0 ? fmt(v) : <span className="text-gray-200">—</span>}
+                    </td>
+                  );
+                })}
+                <td className="py-3 px-3 text-center tabular-nums font-bold text-emerald-900 bg-emerald-200">
+                  {fmtFull(totalRevenue)}
+                </td>
+                <td className="py-3 px-2 text-center text-[10px] font-bold text-emerald-700 bg-emerald-100">
+                  100%
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main Component ──────────────────────────────────────────
 
 function PnlYearlyView({
   yearlyPnl, prevYearlyPnl, customGroups, accounts,
   year, viewMode, onViewModeChange,
   onGroupClick, onAmountClick, onAccountClick,
+  groupLabels = {},
+  pnlCustomSections = [],
 }: Props) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set(["cost_of_goods", "operating", "admin", "finance"])
@@ -41,6 +227,7 @@ function PnlYearlyView({
   const [showPct, setShowPct] = useState(false);
   const [showPrevYear, setShowPrevYear] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipData | null>(null);
+  const [revenueModalOpen, setRevenueModalOpen] = useState(false);
   const tooltipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const toggleSection = (sec: string) => {
@@ -59,13 +246,24 @@ function PnlYearlyView({
     });
   };
 
+  // Map account.id → account for quick lookup
+  const accountById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+
+  // Map group_code → account name (for resolving revenue group names)
+  const codeToAccountName = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const a of accounts) {
+      if (a.latest_group_code && !m.has(a.latest_group_code)) m.set(a.latest_group_code, a.name);
+    }
+    return m;
+  }, [accounts]);
+
   const accountsByGroup = useMemo(() => {
-    const accountMap = new Map(accounts.map((a) => [a.id, a]));
     const map = new Map<string, DbAccount[]>();
     yearlyPnl.groupToAccountIds.forEach((accountIds, groupId) => {
       const accs: DbAccount[] = [];
       for (const aid of accountIds) {
-        const acct = accountMap.get(aid);
+        const acct = accountById.get(aid);
         if (!acct) continue;
         if ((yearlyPnl.total.byAccount.get(aid) ?? 0) <= 0) continue;
         accs.push(acct);
@@ -76,31 +274,27 @@ function PnlYearlyView({
       if (accs.length > 0) map.set(groupId, accs);
     });
     return map;
-  }, [yearlyPnl, accounts]);
+  }, [yearlyPnl, accountById]);
 
   const uncategorizedAccounts = useMemo(() => {
     const classifiedIds = new Set<string>();
     yearlyPnl.groupToAccountIds.forEach((ids) => {
       for (const id of ids) classifiedIds.add(id);
     });
-
-    const accountMap = new Map(accounts.map((a) => [a.id, a]));
     const result: DbAccount[] = [];
-
     yearlyPnl.total.byAccount.forEach((amount, id) => {
       if (classifiedIds.has(id)) return;
       if (amount <= 0) return;
-      const acct = accountMap.get(id);
+      const acct = accountById.get(id);
       if (!acct || acct.account_type !== "expense") return;
       result.push(acct);
     });
-
     return result.sort(
       (a, b) =>
         (yearlyPnl.total.byAccount.get(b.id) ?? 0) -
         (yearlyPnl.total.byAccount.get(a.id) ?? 0),
     );
-  }, [yearlyPnl, accounts]);
+  }, [yearlyPnl, accountById]);
 
   const groupsBySection = useMemo(() => {
     const map = new Map<string, VirtualGroup[]>();
@@ -111,6 +305,18 @@ function PnlYearlyView({
     }
     return map;
   }, [customGroups]);
+
+  // Map customSection.id → custom section (for expense sub-sections)
+  const customSectionsByParent = useMemo(() => {
+    const m = new Map<string, PnlCustomSection[]>();
+    for (const s of pnlCustomSections) {
+      if (s.parent_section === "revenue") continue; // handled in modal
+      const list = m.get(s.parent_section) ?? [];
+      list.push(s);
+      m.set(s.parent_section, list);
+    }
+    return m;
+  }, [pnlCustomSections]);
 
   const showTooltipFn = useCallback((
     e: React.MouseEvent,
@@ -142,6 +348,153 @@ function PnlYearlyView({
   const getTot = (fn: (m: MonthlyPnl) => number) => fn(yearlyPnl.total);
   const getPrevVal = (fn: (m: MonthlyPnl) => number, month: number) =>
     prevYearlyPnl ? fn(prevYearlyPnl.months[month - 1]!) : null;
+
+  // ── Render a group row + its account rows ────────────────
+  function renderGroupRow(g: VirtualGroup, indent = "28px") {
+    const groupAccounts = accountsByGroup.get(g.id) ?? [];
+    const isGroupExpanded = expandedGroups.has(g.id);
+    const groupTotal = yearlyPnl.total.byGroup.get(g.id) ?? 0;
+    if (groupTotal === 0) return null;
+
+    return (
+      <React.Fragment key={g.id}>
+        <tr className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
+          <td
+            className="py-2 px-4 text-gray-600 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6]"
+            style={{ paddingRight: indent }}
+          >
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleGroup(g.id)}
+                className="flex items-center gap-1.5 hover:text-gray-900 transition-colors"
+              >
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SECTION_COLORS[g.parent_section] }} />
+                <span className="text-[11px] font-medium">{g.name}</span>
+                {groupAccounts.length > 0 && (
+                  isGroupExpanded
+                    ? <ChevronDown className="w-3 h-3 text-gray-400" />
+                    : <ChevronRight className="w-3 h-3 text-gray-400" />
+                )}
+                {groupAccounts.length > 0 && (
+                  <span className="text-[9px] text-gray-400 bg-gray-100 px-1 rounded-full">
+                    {groupAccounts.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </td>
+          {MONTHS.map(m => {
+            const v = getVal(md => md.byGroup.get(g.id) ?? 0, m);
+            const pv = getPrevVal(md => md.byGroup.get(g.id) ?? 0, m);
+            return (
+              <td key={m}
+                className={clsx("py-2 px-1.5 text-center tabular-nums cursor-pointer hover:bg-blue-50 transition-colors",
+                  getCellColor(v, showPrevYear && pv !== null ? pv : null, true),
+                )}
+                onMouseEnter={e => showTooltipFn(e, {
+                  name: g.name,
+                  monthLabel: `${MONTH_LONG[m-1]} ${year}`,
+                  value: v,
+                  prevValue: pv,
+                  pctOfRevenue: revTotal > 0 ? (v / revTotal) * 100 : null,
+                  isExpense: true,
+                })}
+                onMouseLeave={hideTooltip}
+                onClick={e => { e.stopPropagation(); onGroupClick?.(g.id, m); }}
+              >
+                {v !== 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                {showPrevYear && pv !== null && pv !== 0 && (
+                  <div className="text-[9px] text-gray-400 leading-none mt-0.5">{fmt(pv)}</div>
+                )}
+              </td>
+            );
+          })}
+          <td className="py-2 px-3 text-center tabular-nums font-semibold text-red-700 bg-gray-50">
+            {groupTotal !== 0 ? fmtFull(groupTotal) : "—"}
+          </td>
+          <td className="py-2 px-2 text-center text-[10px] text-gray-400 bg-gray-50">
+            {pctOfRev(Math.abs(groupTotal), revTotal)}
+          </td>
+        </tr>
+
+        {/* Account rows */}
+        {isGroupExpanded && groupAccounts.map(acct => {
+          const aTotal = yearlyPnl.total.byAccount.get(acct.id) ?? 0;
+          return (
+            <tr key={acct.id} className="border-b border-gray-50/50 hover:bg-gray-50/60 transition-colors">
+              <td
+                className="py-1.5 text-gray-500 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6] text-[11px]"
+                style={{ paddingRight: "48px", paddingLeft: "8px" }}
+              >
+                <span className="font-mono text-[10px] text-gray-400 ml-1">{acct.code}</span>
+                <button
+                  className="hover:text-primary-700 hover:underline text-right transition-colors"
+                  onClick={() => onAccountClick?.(acct.id)}
+                  title="לחץ לפתיחת כרטיס חשבון"
+                >
+                  {acct.name}
+                </button>
+              </td>
+              {MONTHS.map(m => {
+                const v = getVal(md => md.byAccount.get(acct.id) ?? 0, m);
+                const pv = getPrevVal(md => md.byAccount.get(acct.id) ?? 0, m);
+                return (
+                  <td key={m}
+                    className={clsx("py-1.5 px-1.5 text-center tabular-nums text-[10px] cursor-pointer hover:bg-blue-50 transition-colors",
+                      v > 0 ? getCellColor(v, showPrevYear && pv !== null ? pv : null, true) : "text-gray-300",
+                    )}
+                    onMouseEnter={e => showTooltipFn(e, {
+                      name: `${acct.code} ${acct.name}`,
+                      monthLabel: `${MONTH_LONG[m-1]} ${year}`,
+                      value: v,
+                      prevValue: pv,
+                      pctOfRevenue: revTotal > 0 ? (v / revTotal) * 100 : null,
+                      isExpense: true,
+                      accountId: acct.id,
+                      month: m,
+                    })}
+                    onMouseLeave={hideTooltip}
+                    onClick={() => { if (v > 0) onAmountClick?.(acct.id, m); }}
+                  >
+                    {v > 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                  </td>
+                );
+              })}
+              <td className="py-1.5 px-3 text-center tabular-nums text-[10px] text-red-600 font-medium bg-gray-50">
+                {aTotal > 0 ? fmtFull(aTotal) : "—"}
+              </td>
+              <td className="py-1.5 px-2 text-center text-[9px] text-gray-400 bg-gray-50">
+                {pctOfRev(Math.abs(aTotal), revTotal)}
+              </td>
+            </tr>
+          );
+        })}
+
+        {/* % row (showPct) */}
+        {showPct && (
+          <tr className="border-b border-dashed border-gray-100 bg-gray-50/40">
+            <td className="py-1 px-4 text-[10px] text-gray-400 italic sticky right-0 bg-gray-50/40 z-10 shadow-[inset_-1px_0_0_#f3f4f6]"
+              style={{ paddingRight: "32px" }}>
+              % מהכנסות
+            </td>
+            {MONTHS.map(m => {
+              const v = getVal(md => md.byGroup.get(g.id) ?? 0, m);
+              const rev = getVal(md => md.revenue, m);
+              return (
+                <td key={m} className="py-1 px-1.5 text-center text-[10px] text-gray-400 tabular-nums">
+                  {rev > 0 && v > 0 ? `${((v / rev) * 100).toFixed(1)}%` : "—"}
+                </td>
+              );
+            })}
+            <td className="py-1 px-3 text-center text-[10px] text-gray-400 tabular-nums bg-gray-50">
+              {pctOfRev(Math.abs(groupTotal), revTotal)}
+            </td>
+            <td className="bg-gray-50" />
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  }
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -201,7 +554,14 @@ function PnlYearlyView({
               {/* ── Revenue ── */}
               <tr className="bg-gradient-to-l from-emerald-50 to-teal-50 border-b-2 border-emerald-200">
                 <td className="py-3 px-4 font-bold text-emerald-800 text-sm sticky right-0 bg-gradient-to-l from-emerald-50 to-teal-50 z-10 shadow-[inset_-1px_0_0_#a7f3d0]">
-                  הכנסות
+                  <button
+                    className="flex items-center gap-1.5 hover:text-emerald-600 transition-colors"
+                    onClick={() => setRevenueModalOpen(true)}
+                    title="לחץ לפירוט הכנסות"
+                  >
+                    <span>הכנסות</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-emerald-500" />
+                  </button>
                 </td>
                 {MONTHS.map(m => {
                   const v = getVal(md => md.revenue, m);
@@ -248,6 +608,11 @@ function PnlYearlyView({
                 const isExpanded = expandedSections.has(section);
                 const ss = SECTION_STYLES[section] ?? SECTION_STYLES["other"]!;
 
+                // Custom sub-sections for this parent section
+                const subSections = customSectionsByParent.get(section) ?? [];
+                const assignedGroupCodes = new Set(subSections.flatMap((s) => s.group_codes));
+                const ungroupedGroups = groups.filter((g) => !assignedGroupCodes.has(g.id));
+
                 return (
                   <React.Fragment key={section}>
                     {/* Section header row */}
@@ -281,154 +646,57 @@ function PnlYearlyView({
                       </td>
                     </tr>
 
-                    {/* Group rows */}
-                    {isExpanded && groups.map(g => {
-                      const groupAccounts = accountsByGroup.get(g.id) ?? [];
-                      const isGroupExpanded = expandedGroups.has(g.id);
-                      const groupTotal = yearlyPnl.total.byGroup.get(g.id) ?? 0;
-
-                      return (
-                        <React.Fragment key={g.id}>
-                          {/* Group row */}
-                          <tr className="border-b border-gray-50 hover:bg-gray-50/80 transition-colors">
-                            <td
-                              className="py-2 px-4 text-gray-600 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6]"
-                              style={{ paddingRight: "28px" }}
-                            >
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => toggleGroup(g.id)}
-                                  className="flex items-center gap-1.5 hover:text-gray-900 transition-colors"
-                                >
-                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SECTION_COLORS[g.parent_section] }} />
-                                  <span className="text-[11px] font-medium">{g.name}</span>
-                                  {groupAccounts.length > 0 && (
-                                    isGroupExpanded
-                                      ? <ChevronDown className="w-3 h-3 text-gray-400" />
-                                      : <ChevronRight className="w-3 h-3 text-gray-400" />
-                                  )}
-                                  {groupAccounts.length > 0 && (
-                                    <span className="text-[9px] text-gray-400 bg-gray-100 px-1 rounded-full">
-                                      {groupAccounts.length}
-                                    </span>
-                                  )}
-                                </button>
-                              </div>
-                            </td>
-                            {MONTHS.map(m => {
-                              const v = getVal(md => md.byGroup.get(g.id) ?? 0, m);
-                              const pv = getPrevVal(md => md.byGroup.get(g.id) ?? 0, m);
-                              return (
-                                <td key={m}
-                                  className={clsx("py-2 px-1.5 text-center tabular-nums cursor-pointer hover:bg-blue-50 transition-colors",
-                                    getCellColor(v, showPrevYear && pv !== null ? pv : null, true),
-                                  )}
-                                  onMouseEnter={e => showTooltipFn(e, {
-                                    name: g.name,
-                                    monthLabel: `${MONTH_LONG[m-1]} ${year}`,
-                                    value: v,
-                                    prevValue: pv,
-                                    pctOfRevenue: revTotal > 0 ? (v / revTotal) * 100 : null,
-                                    isExpense: true,
-                                  })}
-                                  onMouseLeave={hideTooltip}
-                                  onClick={e => { e.stopPropagation(); onGroupClick?.(g.id, m); }}
-                                >
-                                  {v !== 0 ? fmt(v) : <span className="text-gray-100">—</span>}
-                                  {showPrevYear && pv !== null && pv !== 0 && (
-                                    <div className="text-[9px] text-gray-400 leading-none mt-0.5">{fmt(pv)}</div>
-                                  )}
-                                </td>
-                              );
-                            })}
-                            <td className="py-2 px-3 text-center tabular-nums font-semibold text-red-700 bg-gray-50">
-                              {groupTotal !== 0 ? fmtFull(groupTotal) : "—"}
-                            </td>
-                            <td className="py-2 px-2 text-center text-[10px] text-gray-400 bg-gray-50">
-                              {pctOfRev(Math.abs(groupTotal), revTotal)}
-                            </td>
-                          </tr>
-
-                          {/* Account rows (level 3) */}
-                          {isGroupExpanded && groupAccounts.map(acct => {
-                            const aTotal = yearlyPnl.total.byAccount.get(acct.id) ?? 0;
-                            return (
-                              <tr key={acct.id}
-                                className="border-b border-gray-50/50 hover:bg-gray-50/60 transition-colors"
+                    {isExpanded && (
+                      <>
+                        {/* Custom sub-sections */}
+                        {subSections.map((sub) => {
+                          const subGroups = groups.filter((g) => sub.group_codes.includes(g.id));
+                          if (subGroups.length === 0) return null;
+                          const subTotal = subGroups.reduce(
+                            (s, g) => s + (yearlyPnl.total.byGroup.get(g.id) ?? 0), 0
+                          );
+                          const isSubExpanded = expandedSections.has(`sub_${sub.id}`);
+                          return (
+                            <React.Fragment key={sub.id}>
+                              {/* Sub-section header */}
+                              <tr
+                                className="border-b border-gray-100 bg-gray-50/80 cursor-pointer hover:bg-gray-100/60 transition-colors"
+                                onClick={() => toggleSection(`sub_${sub.id}`)}
                               >
-                                <td
-                                  className="py-1.5 text-gray-500 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6] text-[11px]"
-                                  style={{ paddingRight: "48px", paddingLeft: "8px" }}
-                                >
-                                  <span className="font-mono text-[10px] text-gray-400 ml-1">{acct.code}</span>
-                                  <button
-                                    className="hover:text-primary-700 hover:underline text-right transition-colors"
-                                    onClick={() => onAccountClick?.(acct.id)}
-                                    title="לחץ לפתיחת כרטיס חשבון"
-                                  >
-                                    {acct.name}
-                                  </button>
+                                <td className="py-1.5 px-4 font-semibold text-[11px] text-gray-600 sticky right-0 bg-gray-50/80 z-10 shadow-[inset_-1px_0_0_#e5e7eb]" style={{ paddingRight: "20px" }}>
+                                  <div className="flex items-center gap-1.5">
+                                    {isSubExpanded
+                                      ? <ChevronDown className="w-3 h-3 shrink-0 text-gray-400" />
+                                      : <ChevronRight className="w-3 h-3 shrink-0 text-gray-400" />}
+                                    <span>{sub.name}</span>
+                                    <span className="text-[9px] text-gray-400 bg-gray-200 px-1 rounded-full">{subGroups.length}</span>
+                                  </div>
                                 </td>
                                 {MONTHS.map(m => {
-                                  const v = getVal(md => md.byAccount.get(acct.id) ?? 0, m);
-                                  const pv = getPrevVal(md => md.byAccount.get(acct.id) ?? 0, m);
+                                  const v = subGroups.reduce((s, g) => s + getVal(md => md.byGroup.get(g.id) ?? 0, m), 0);
                                   return (
-                                    <td key={m}
-                                      className={clsx("py-1.5 px-1.5 text-center tabular-nums text-[10px] cursor-pointer hover:bg-blue-50 transition-colors",
-                                        v > 0 ? getCellColor(v, showPrevYear && pv !== null ? pv : null, true) : "text-gray-300",
-                                      )}
-                                      onMouseEnter={e => showTooltipFn(e, {
-                                        name: `${acct.code} ${acct.name}`,
-                                        monthLabel: `${MONTH_LONG[m-1]} ${year}`,
-                                        value: v,
-                                        prevValue: pv,
-                                        pctOfRevenue: revTotal > 0 ? (v / revTotal) * 100 : null,
-                                        isExpense: true,
-                                        accountId: acct.id,
-                                        month: m,
-                                      })}
-                                      onMouseLeave={hideTooltip}
-                                      onClick={() => { if (v > 0) onAmountClick?.(acct.id, m); }}
-                                    >
-                                      {v > 0 ? fmt(v) : <span className="text-gray-100">—</span>}
+                                    <td key={m} className="py-1.5 px-1.5 text-center tabular-nums font-medium text-gray-500">
+                                      {v !== 0 ? fmt(v) : <span className="text-gray-200">—</span>}
                                     </td>
                                   );
                                 })}
-                                <td className="py-1.5 px-3 text-center tabular-nums text-[10px] text-red-600 font-medium bg-gray-50">
-                                  {aTotal > 0 ? fmtFull(aTotal) : "—"}
+                                <td className="py-1.5 px-3 text-center tabular-nums font-semibold text-gray-600 bg-gray-100">
+                                  {subTotal !== 0 ? fmtFull(subTotal) : "—"}
                                 </td>
-                                <td className="py-1.5 px-2 text-center text-[9px] text-gray-400 bg-gray-50">
-                                  {pctOfRev(Math.abs(aTotal), revTotal)}
+                                <td className="py-1.5 px-2 text-center text-[10px] text-gray-400 bg-gray-50">
+                                  {pctOfRev(Math.abs(subTotal), revTotal)}
                                 </td>
                               </tr>
-                            );
-                          })}
+                              {/* Groups within sub-section */}
+                              {isSubExpanded && subGroups.map((g) => renderGroupRow(g, "36px"))}
+                            </React.Fragment>
+                          );
+                        })}
 
-                          {/* % row (showPct) */}
-                          {showPct && (
-                            <tr className="border-b border-dashed border-gray-100 bg-gray-50/40">
-                              <td className="py-1 px-4 text-[10px] text-gray-400 italic sticky right-0 bg-gray-50/40 z-10 shadow-[inset_-1px_0_0_#f3f4f6]"
-                                style={{ paddingRight: "32px" }}>
-                                % מהכנסות
-                              </td>
-                              {MONTHS.map(m => {
-                                const v = getVal(md => md.byGroup.get(g.id) ?? 0, m);
-                                const rev = getVal(md => md.revenue, m);
-                                return (
-                                  <td key={m} className="py-1 px-1.5 text-center text-[10px] text-gray-400 tabular-nums">
-                                    {rev > 0 && v > 0 ? `${((v / rev) * 100).toFixed(1)}%` : "—"}
-                                  </td>
-                                );
-                              })}
-                              <td className="py-1 px-3 text-center text-[10px] text-gray-400 tabular-nums bg-gray-50">
-                                {pctOfRev(Math.abs(groupTotal), revTotal)}
-                              </td>
-                              <td className="bg-gray-50" />
-                            </tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
+                        {/* Ungrouped groups (not assigned to any sub-section) */}
+                        {ungroupedGroups.map((g) => renderGroupRow(g, "28px"))}
+                      </>
+                    )}
 
                     {/* Gross profit subtotal */}
                     {section === "cost_of_goods" && (
@@ -544,17 +812,12 @@ function PnlYearlyView({
                     uncategorizedAccounts.map((acct) => {
                       const aTotal = yearlyPnl.total.byAccount.get(acct.id) ?? 0;
                       return (
-                        <tr
-                          key={acct.id}
-                          className="border-b border-gray-50/50 hover:bg-gray-50/60 transition-colors"
-                        >
+                        <tr key={acct.id} className="border-b border-gray-50/50 hover:bg-gray-50/60 transition-colors">
                           <td
                             className="py-1.5 text-gray-500 sticky right-0 bg-white z-10 shadow-[inset_-1px_0_0_#f3f4f6] text-[11px]"
                             style={{ paddingRight: "28px", paddingLeft: "8px" }}
                           >
-                            <span className="font-mono text-[10px] text-gray-400 ml-1">
-                              {acct.code}
-                            </span>
+                            <span className="font-mono text-[10px] text-gray-400 ml-1">{acct.code}</span>
                             <button
                               className="hover:text-primary-700 hover:underline text-right transition-colors"
                               onClick={() => onAccountClick?.(acct.id)}
@@ -564,20 +827,14 @@ function PnlYearlyView({
                             </button>
                           </td>
                           {MONTHS.map((m) => {
-                            const v = getVal(
-                              (md) => md.byAccount.get(acct.id) ?? 0,
-                              m,
-                            );
+                            const v = getVal((md) => md.byAccount.get(acct.id) ?? 0, m);
                             return (
-                              <td
-                                key={m}
+                              <td key={m}
                                 className={clsx(
                                   "py-1.5 px-1.5 text-center tabular-nums text-[10px] cursor-pointer hover:bg-blue-50 transition-colors",
                                   v > 0 ? "text-gray-700" : "text-gray-300",
                                 )}
-                                onClick={() => {
-                                  if (v > 0) onAmountClick?.(acct.id, m);
-                                }}
+                                onClick={() => { if (v > 0) onAmountClick?.(acct.id, m); }}
                               >
                                 {v > 0 ? fmt(v) : <span className="text-gray-100">—</span>}
                               </td>
@@ -637,6 +894,10 @@ function PnlYearlyView({
         <span>לחץ על ערך חודשי לצפייה בתנועות</span>
         <span className="mx-1">·</span>
         <span className="flex items-center gap-1">
+          לחץ <strong>הכנסות</strong> לפירוט
+        </span>
+        <span className="mx-1">·</span>
+        <span className="flex items-center gap-1">
           <span className="w-2 h-2 bg-red-500 rounded-full" /> עלייה בהוצאה
           <span className="w-2 h-2 bg-green-500 rounded-full mr-1" /> ירידה בהוצאה
         </span>
@@ -644,6 +905,18 @@ function PnlYearlyView({
 
       {/* Fixed tooltip */}
       {tooltip && <CellTooltip data={tooltip} />}
+
+      {/* Revenue breakdown modal */}
+      {revenueModalOpen && (
+        <RevenueBreakdownModal
+          yearlyPnl={yearlyPnl}
+          year={year}
+          codeToName={codeToAccountName}
+          groupLabels={groupLabels}
+          customSections={pnlCustomSections}
+          onClose={() => setRevenueModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

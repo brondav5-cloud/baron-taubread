@@ -1,18 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Tag, FileText, DollarSign, Users } from "lucide-react";
+import { Search, Tag, FileText, DollarSign, Users, List } from "lucide-react";
 import { clsx } from "clsx";
 import type {
   DbAccount, DbCustomTag, DbAccountTag, DbCounterAccountName,
 } from "@/types/accounting";
 import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import type { AccountTransaction } from "./account-mapping/shared";
 import { TagsTab } from "./account-mapping/TagsTab";
 import { CounterNamesTab } from "./account-mapping/CounterNamesTab";
 import { SuppliersTab } from "./account-mapping/SuppliersTab";
 import { RevenueGroupsTab } from "./account-mapping/RevenueGroupsTab";
 import { CustomersTab } from "./account-mapping/CustomersTab";
+import { PnlStructureTab } from "./account-mapping/PnlStructureTab";
 
 interface Props {
   accounts: DbAccount[];
@@ -22,6 +24,8 @@ interface Props {
   counterNames: DbCounterAccountName[];
   revenueGroups: { group_code: string }[];
   revenueAccountCodes: { account_code: string; display_name: string | null }[];
+  groupLabels: Record<string, string>;
+  pnlCustomSections: PnlCustomSection[];
   transactions?: AccountTransaction[];
   onSaveTag: (tag: Partial<DbCustomTag> & { name: string; color: string }) => Promise<boolean>;
   onDeleteTag: (id: string) => Promise<boolean>;
@@ -29,20 +33,24 @@ interface Props {
   onRemoveTag: (accountId: string, tagId: string) => Promise<boolean>;
   onSaveCounterName: (code: string, displayName: string) => Promise<boolean>;
   onRefetch: () => Promise<void>;
+  onRefetchStructure: () => Promise<void>;
 }
 
-type InnerTab = "suppliers" | "customers" | "tags" | "counter" | "revenue";
+type InnerTab = "suppliers" | "customers" | "tags" | "counter" | "revenue" | "structure";
 
 export default function AccountMappingTab({
-  accounts, customGroups: _customGroups, tags, accountTags, counterNames, revenueGroups, revenueAccountCodes,
+  accounts, customGroups, tags, accountTags, counterNames,
+  revenueGroups, revenueAccountCodes, groupLabels, pnlCustomSections,
   transactions: txProp,
-  onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName, onRefetch,
+  onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName,
+  onRefetch, onRefetchStructure,
 }: Props) {
   const [activeTab, setActiveTab] = useState<InnerTab>("suppliers");
 
   const innerTabs: Array<{ id: InnerTab; label: string; icon: React.ReactNode }> = [
     { id: "suppliers", label: "ספקים", icon: <Search className="w-3.5 h-3.5" /> },
     { id: "customers", label: "לקוחות", icon: <Users className="w-3.5 h-3.5" /> },
+    { id: "structure", label: "מבנה דוח", icon: <List className="w-3.5 h-3.5" /> },
     { id: "tags", label: "תגיות", icon: <Tag className="w-3.5 h-3.5" /> },
     { id: "counter", label: "שמות נגדיים", icon: <FileText className="w-3.5 h-3.5" /> },
     { id: "revenue", label: "קבוצות הכנסה", icon: <DollarSign className="w-3.5 h-3.5" /> },
@@ -52,7 +60,7 @@ export default function AccountMappingTab({
 
   return (
     <div className="space-y-4" dir="rtl">
-      <div className="flex gap-1 border-b border-gray-200 pb-0">
+      <div className="flex gap-1 border-b border-gray-200 pb-0 flex-wrap">
         {innerTabs.map(tab => (
           <button key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -74,6 +82,14 @@ export default function AccountMappingTab({
           <CustomersTab
             revenueAccountCodes={revenueAccountCodes}
             onRefetch={onRefetch}
+          />
+        )}
+        {activeTab === "structure" && (
+          <PnlStructureTab
+            customGroups={customGroups}
+            groupLabels={groupLabels}
+            pnlCustomSections={pnlCustomSections}
+            onRefetchStructure={onRefetchStructure}
           />
         )}
         {activeTab === "tags" && (

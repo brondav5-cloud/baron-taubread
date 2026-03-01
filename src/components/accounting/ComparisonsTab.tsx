@@ -77,6 +77,7 @@ function sumMonths(pnl: YearlyPnl, from: number, to: number): MonthlyPnl {
   const result: MonthlyPnl = {
     month: 0,
     revenue: 0,
+    byRevenueGroup: new Map(),
     bySection: { cost_of_goods: 0, operating: 0, admin: 0, finance: 0, other: 0 },
     byGroup: new Map(),
     byAccount: new Map(),
@@ -421,6 +422,7 @@ function QuarterlyTable({ yearlyPnl, prevYearlyPnl }: {
     const result: MonthlyPnl = {
       month: q,
       revenue: 0,
+      byRevenueGroup: new Map(),
       bySection: { cost_of_goods: 0, operating: 0, admin: 0, finance: 0, other: 0 },
       byGroup: new Map(),
       byAccount: new Map(),
