@@ -454,109 +454,147 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                         </td>
                         <td className="py-2 px-4 font-medium text-gray-800">{s.display_name}</td>
                         <td className="py-2 px-3">
-                          {isEditing ? (
-                            <div className="flex items-center gap-1">
-                              {/* Dropdown + free text for code */}
-                              <select
-                                value={classifyCode}
-                                onChange={(e) => {
-                                  setClassifyCode(e.target.value);
-                                  if (e.target.value) {
-                                    setClassifyName(codeToName.get(e.target.value) ?? "");
-                                  }
-                                }}
-                                className="w-24 px-1 py-0.5 text-xs border rounded focus:ring-1 focus:ring-primary-300"
-                              >
-                                <option value="">— בחר —</option>
-                                {uniqueCodes.map((c) => (
-                                  <option key={c} value={c}>
-                                    {c}{codeToName.get(c) ? ` - ${codeToName.get(c)}` : ""}
-                                  </option>
-                                ))}
-                              </select>
-                              <span className="text-gray-300 text-xs">|</span>
-                              <input
-                                value={classifyCode}
-                                onChange={(e) => setClassifyCode(e.target.value)}
-                                placeholder="או הקלד"
-                                className="w-16 px-1.5 py-0.5 text-xs border rounded focus:ring-1 focus:ring-primary-300"
-                              />
-                            </div>
-                          ) : (
-                            <span className={clsx(
-                              "font-mono px-1.5 py-0.5 rounded text-[10px]",
-                              isManual
-                                ? "bg-primary-100 text-primary-700 border border-primary-200"
-                                : "bg-gray-100 text-gray-600",
-                            )}>
-                              {displayCode}
-                              {isManual && <span className="mr-1 text-primary-400">✎</span>}
-                            </span>
-                          )}
+                          <span className={clsx(
+                            "font-mono px-1.5 py-0.5 rounded text-[10px]",
+                            isManual
+                              ? "bg-primary-100 text-primary-700 border border-primary-200"
+                              : "bg-gray-100 text-gray-600",
+                          )}>
+                            {displayCode}
+                            {isManual && <span className="mr-1 text-primary-400">✎</span>}
+                          </span>
                         </td>
                         <td className="py-2 px-3 text-gray-600">
-                          {isEditing ? (
-                            <input
-                              value={classifyName}
-                              onChange={(e) => setClassifyName(e.target.value)}
-                              placeholder="שם חשבון"
-                              className="w-32 px-1.5 py-0.5 text-xs border rounded focus:ring-1 focus:ring-primary-300"
-                            />
-                          ) : (
-                            <span className={clsx(isManual && "text-primary-700 font-medium")}>
-                              {displayName ?? "—"}
-                            </span>
-                          )}
+                          <span className={clsx(isManual && "text-primary-700 font-medium")}>
+                            {displayName ?? "—"}
+                          </span>
                         </td>
                         <td className="py-2 px-2 text-center">
                           {s.names.length}
                         </td>
                         <td className="py-2 px-2">
-                          {isEditing ? (
-                            <div className="flex gap-1 flex-wrap">
-                              <button
-                                onClick={() => void handleClassify(s.id)}
-                                disabled={saving || !classifyCode.trim()}
-                                className="px-2 py-0.5 text-[10px] bg-primary-600 text-white rounded disabled:opacity-50 flex items-center gap-0.5"
-                              >
-                                {saving ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : null}
-                                שמור
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingClassify(null);
-                                  setClassifyCode("");
-                                  setClassifyName("");
-                                }}
-                                className="px-2 py-0.5 text-[10px] border rounded hover:bg-gray-50"
-                              >
-                                ביטול
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => startClassify(s)}
-                                className="px-2 py-0.5 text-[10px] border rounded hover:bg-gray-100 text-gray-700"
-                                title="שנה סיווג ידני"
-                              >
-                                סווג
-                              </button>
-                              {isManual && (
-                                <button
-                                  onClick={() => void handleClearClassify(s.id)}
-                                  disabled={saving}
-                                  className="px-1.5 py-0.5 text-[10px] border border-red-200 text-red-500 rounded hover:bg-red-50"
-                                  title="נקה סיווג ידני — חזור לאוטומטי"
-                                >
-                                  <X className="w-2.5 h-2.5" />
-                                </button>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => startClassify(s)}
+                              className={clsx(
+                                "px-2 py-0.5 text-[10px] border rounded transition-colors",
+                                isEditing
+                                  ? "bg-primary-50 border-primary-300 text-primary-700 font-medium"
+                                  : "hover:bg-gray-100 text-gray-700",
                               )}
-                            </div>
-                          )}
+                              title="שנה קוד קבוצה"
+                            >
+                              {isEditing ? "↑ סוגר" : "שנה קוד"}
+                            </button>
+                            {isManual && !isEditing && (
+                              <button
+                                onClick={() => void handleClearClassify(s.id)}
+                                disabled={saving}
+                                className="px-1.5 py-0.5 text-[10px] border border-red-200 text-red-500 rounded hover:bg-red-50"
+                                title="נקה סיווג ידני — חזור לאוטומטי"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
-                      {isExpanded && s.names.length > 0 && (
+
+                      {/* ── Classify panel (open below the row) ── */}
+                      {isEditing && (
+                        <tr className="bg-primary-50/60 border-b border-primary-100">
+                          <td colSpan={7} className="px-4 py-3">
+                            <div className="space-y-3 max-w-lg">
+                              <p className="text-xs font-semibold text-primary-800">
+                                שינוי קוד קבוצה עבור: <span className="text-gray-700">{s.display_name}</span>
+                              </p>
+
+                              {/* Step 1 — pick from existing codes */}
+                              <div>
+                                <label className="block text-[10px] text-gray-500 mb-1">
+                                  בחר קוד קיים:
+                                </label>
+                                <select
+                                  value={uniqueCodes.includes(classifyCode) ? classifyCode : ""}
+                                  onChange={(e) => {
+                                    if (e.target.value) {
+                                      setClassifyCode(e.target.value);
+                                      setClassifyName(codeToName.get(e.target.value) ?? "");
+                                    }
+                                  }}
+                                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:ring-2 focus:ring-primary-300"
+                                >
+                                  <option value="">— בחר מרשימה —</option>
+                                  {uniqueCodes.map((c) => (
+                                    <option key={c} value={c}>
+                                      {c}{codeToName.get(c) ? ` — ${codeToName.get(c)}` : ""}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* Divider */}
+                              <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                                <div className="flex-1 border-t border-gray-200" />
+                                <span>או הכנס קוד חדש</span>
+                                <div className="flex-1 border-t border-gray-200" />
+                              </div>
+
+                              {/* Step 2 — free input */}
+                              <div className="flex gap-2">
+                                <div className="flex-1">
+                                  <label className="block text-[10px] text-gray-500 mb-1">קוד קבוצה:</label>
+                                  <input
+                                    value={classifyCode}
+                                    onChange={(e) => setClassifyCode(e.target.value)}
+                                    placeholder="לדוגמה: 700"
+                                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-300"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") void handleClassify(s.id);
+                                      if (e.key === "Escape") { setEditingClassify(null); setClassifyCode(""); setClassifyName(""); }
+                                    }}
+                                  />
+                                </div>
+                                <div className="flex-1">
+                                  <label className="block text-[10px] text-gray-500 mb-1">שם חשבון (אופציונלי):</label>
+                                  <input
+                                    value={classifyName}
+                                    onChange={(e) => setClassifyName(e.target.value)}
+                                    placeholder="לדוגמה: קניות חומרי גלם"
+                                    className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-300"
+                                  />
+                                </div>
+                              </div>
+
+                              <div className="flex gap-2 pt-1">
+                                <button
+                                  onClick={() => void handleClassify(s.id)}
+                                  disabled={saving || !classifyCode.trim()}
+                                  className="flex items-center gap-1.5 px-4 py-1.5 text-xs bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+                                >
+                                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                                  שמור שינוי
+                                </button>
+                                <button
+                                  onClick={() => { setEditingClassify(null); setClassifyCode(""); setClassifyName(""); }}
+                                  className="px-4 py-1.5 text-xs border rounded-lg hover:bg-gray-50"
+                                >
+                                  ביטול
+                                </button>
+                                {classifyCode && (
+                                  <span className="text-[10px] text-gray-400 self-center">
+                                    קוד נבחר: <strong className="text-gray-600">{classifyCode}</strong>
+                                    {classifyName && ` — ${classifyName}`}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+
+                      {isExpanded && !isEditing && s.names.length > 0 && (
                         <tr className="bg-gray-50/50 border-b border-gray-100">
                           <td colSpan={7} className="py-2 px-4">
                             <div className="text-[11px] space-y-1 pr-8">
