@@ -62,6 +62,7 @@ export function calcYearlyPnl(
   transactionOverrides: DbTransactionOverride[],
   _mode: "latest" | "original",
   excludeClosingEntries = true,
+  revenueGroupCodes: Set<string> = new Set(),
 ): YearlyPnl {
   const filteredTx = excludeClosingEntries
     ? transactions.filter((tx) => !isClosingEntry(tx))
@@ -117,11 +118,15 @@ export function calcYearlyPnl(
     const account = accountById.get(tx.account_id);
     if (!account) continue;
 
-    if (account.account_type === "revenue") {
+    const txGroupCode = (tx.group_code || "").trim();
+    const isRevenue =
+      revenueGroupCodes.has(txGroupCode) || account.account_type === "revenue";
+
+    if (isRevenue) {
       md.revenue += credit - debit;
     } else {
       const amount = debit - credit;
-      const groupCode = tx.group_code || "other";
+      const groupCode = txGroupCode || "other";
       const section = getParentSectionFromGroupCode(groupCode);
 
       md.bySection[section] += amount;

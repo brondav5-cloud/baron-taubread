@@ -66,7 +66,7 @@ export default function AccountMappingTab({
       </div>
 
       <div className="pt-1">
-        {activeTab === "suppliers" && <SuppliersTab />}
+        {activeTab === "suppliers" && <SuppliersTab accounts={accounts} />}
         {activeTab === "tags" && (
           <TagsTab
             tags={tags}

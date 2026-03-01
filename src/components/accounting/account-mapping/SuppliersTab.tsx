@@ -1,11 +1,25 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Search, ChevronDown, ChevronLeft, RefreshCw, Loader2 } from "lucide-react";
+import { Search, ChevronDown, ChevronLeft, ChevronUp, ChevronsUpDown, RefreshCw, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
 import { useSuppliers, type SupplierWithDetails } from "@/hooks/useSuppliers";
+import type { DbAccount } from "@/types/accounting";
+import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER, type ParentSection } from "@/types/accounting";
 
-export function SuppliersTab() {
+function getParentSectionFromGroupCode(gc: string): ParentSection {
+  const c = (gc || "").trim()[0];
+  if (c === "7") return "cost_of_goods";
+  if (c === "8") return "operating";
+  if (c === "9") return "admin";
+  return "other";
+}
+
+interface SuppliersTabProps {
+  accounts?: DbAccount[];
+}
+
+export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
   const { suppliers, isLoading, error, refetch } = useSuppliers();
   const [search, setSearch] = useState("");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -13,16 +27,35 @@ export function SuppliersTab() {
   const [editingClassify, setEditingClassify] = useState<string | null>(null);
   const [classifyCode, setClassifyCode] = useState("");
   const [classifyName, setClassifyName] = useState("");
+  type SortKey = "counter_account" | "display_name" | "code" | "account_name" | "names";
+  const [sortBy, setSortBy] = useState<SortKey>("display_name");
+  const [sortAsc, setSortAsc] = useState(true);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return suppliers;
-    const q = search.trim().toLowerCase();
-    return suppliers.filter(
-      (s) =>
-        s.counter_account.toLowerCase().includes(q) ||
-        s.display_name.toLowerCase().includes(q),
-    );
-  }, [suppliers, search]);
+    let list = suppliers;
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (s) =>
+          s.counter_account.toLowerCase().includes(q) ||
+          s.display_name.toLowerCase().includes(q),
+      );
+    }
+    const code = (s: SupplierWithDetails) =>
+      s.classification?.manual_account_code ?? s.auto_account_code ?? "";
+    const name = (s: SupplierWithDetails) =>
+      s.classification?.manual_account_name ?? s.auto_account_name ?? "";
+    list = [...list].sort((a, b) => {
+      let cmp = 0;
+      if (sortBy === "counter_account") cmp = a.counter_account.localeCompare(b.counter_account, undefined, { numeric: true });
+      else if (sortBy === "display_name") cmp = a.display_name.localeCompare(b.display_name, "he");
+      else if (sortBy === "code") cmp = code(a).localeCompare(code(b), undefined, { numeric: true });
+      else if (sortBy === "account_name") cmp = name(a).localeCompare(name(b), "he");
+      else if (sortBy === "names") cmp = a.names.length - b.names.length;
+      return sortAsc ? cmp : -cmp;
+    });
+    return list;
+  }, [suppliers, search, sortBy, sortAsc]);
 
   const handleBuild = async () => {
     setBuilding(true);
@@ -35,6 +68,8 @@ export function SuppliersTab() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "שגיאה");
       await refetch();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "שגיאה בבניית ספקים");
     } finally {
       setBuilding(false);
     }
@@ -87,6 +122,47 @@ export function SuppliersTab() {
   const getDisplayName = (s: SupplierWithDetails) =>
     s.classification?.manual_account_name ?? s.auto_account_name ?? null;
 
+  const sectionCounts = useMemo(() => {
+    const codeToSection = new Map<string, ParentSection>();
+    for (const a of accounts) {
+      codeToSection.set(a.code, getParentSectionFromGroupCode(a.latest_group_code || ""));
+    }
+    const counts: Record<ParentSection, number> = {
+      cost_of_goods: 0,
+      operating: 0,
+      admin: 0,
+      finance: 0,
+      other: 0,
+    };
+    for (const s of suppliers) {
+      const code = getDisplayCode(s);
+      const section = code && code !== "—" ? (codeToSection.get(code) ?? "other") : "other";
+      counts[section]++;
+    }
+    return counts;
+  }, [suppliers, accounts]);
+
+  const toggleSort = (key: SortKey) => {
+    setSortBy(key);
+    setSortAsc((prev) => (sortBy === key ? !prev : true));
+  };
+
+  const SortTh = ({ label, sortKey, className = "" }: { label: string; sortKey: SortKey; className?: string }) => (
+    <th
+      className={clsx("text-right py-3 px-4 font-semibold cursor-pointer hover:bg-slate-600 select-none", className)}
+      onClick={() => toggleSort(sortKey)}
+    >
+      <span className="inline-flex items-center gap-0.5">
+        {label}
+        {sortBy === sortKey ? (
+          sortAsc ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />
+        ) : (
+          <ChevronsUpDown className="w-3.5 h-3.5 opacity-60" />
+        )}
+      </span>
+    </th>
+  );
+
   if (error) {
     return (
       <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-center text-red-700">
@@ -97,8 +173,22 @@ export function SuppliersTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3 justify-between">
-        <div className="flex gap-2 flex-wrap items-center">
+      <div className="space-y-4">
+        {accounts.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {PARENT_SECTION_ORDER.map((sec) => (
+              <div
+                key={sec}
+                className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium"
+              >
+                <span className="text-gray-500">{PARENT_SECTION_LABELS[sec]}:</span>{" "}
+                <span className="text-gray-800 font-bold">{sectionCounts[sec]}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-3 justify-between">
+          <div className="flex gap-2 flex-wrap items-center">
           <div className="relative">
             <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
@@ -121,9 +211,16 @@ export function SuppliersTab() {
             disabled={building || isLoading}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50"
           >
-            {building ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-            בנה ספקים מחדש
+            {building ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                <span>מעבד... (עשוי לקחת דקה)</span>
+              </>
+            ) : (
+              "בנה ספקים מחדש"
+            )}
           </button>
+        </div>
         </div>
       </div>
 
@@ -144,11 +241,11 @@ export function SuppliersTab() {
               <thead>
                 <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
                   <th className="w-8 py-2" />
-                  <th className="text-right py-3 px-4 font-semibold min-w-[100px]">ח״ן</th>
-                  <th className="text-right py-3 px-4 font-semibold min-w-[180px]">שם תצוגה</th>
-                  <th className="text-right py-3 px-4 font-semibold min-w-[90px]">מפתח סיווג</th>
-                  <th className="text-right py-3 px-4 font-semibold min-w-[100px]">שם חשבון</th>
-                  <th className="text-center py-3 px-2 font-semibold min-w-[50px]">שמות</th>
+                  <SortTh label="ח״ן" sortKey="counter_account" className="min-w-[100px]" />
+                  <SortTh label="שם תצוגה" sortKey="display_name" className="min-w-[180px]" />
+                  <SortTh label="מפתח סיווג" sortKey="code" className="min-w-[90px]" />
+                  <SortTh label="שם חשבון" sortKey="account_name" className="min-w-[100px]" />
+                  <SortTh label="שמות" sortKey="names" className="min-w-[50px] text-center" />
                   <th className="text-right py-3 px-2 font-semibold min-w-[80px]">פעולות</th>
                 </tr>
               </thead>

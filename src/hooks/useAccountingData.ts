@@ -94,6 +94,11 @@ export function useAccountingData(year: number): AccountingData {
     return countClosingEntries(raw.transactions);
   }, [raw]);
 
+  const revenueGroupCodes = useMemo(() => {
+    const codes = raw?.revenueGroups?.map((r) => r.group_code) ?? [];
+    return new Set(codes);
+  }, [raw?.revenueGroups]);
+
   const yearlyPnl = useMemo(() => {
     if (!raw || raw.transactions.length === 0) return null;
     return calcYearlyPnl(
@@ -105,8 +110,9 @@ export function useAccountingData(year: number): AccountingData {
       raw.transactionOverrides,
       "latest",
       excludeClosingEntries,
+      revenueGroupCodes,
     );
-  }, [raw, year, excludeClosingEntries]);
+  }, [raw, year, excludeClosingEntries, revenueGroupCodes]);
 
   const prevYearlyPnl = useMemo(() => {
     if (!raw || raw.prevTransactions.length === 0) return null;
@@ -119,8 +125,9 @@ export function useAccountingData(year: number): AccountingData {
       [],
       "latest",
       false,
+      revenueGroupCodes,
     );
-  }, [raw]);
+  }, [raw, revenueGroupCodes]);
 
   const customGroups: VirtualGroup[] = useMemo(() => {
     if (!yearlyPnl) return [];

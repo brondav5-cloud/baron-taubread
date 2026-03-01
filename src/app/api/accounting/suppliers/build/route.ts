@@ -133,26 +133,29 @@ export async function POST(request: Request) {
       });
     }
 
-    // Build per H: names (M) with counts, account_codes from expense txs
+    // Build per H: names (M) with counts, account_codes from expense txs only
+    // Only create suppliers for H that appear in expense transactions (exclude revenue-only = customers)
     const hToNameCounts = new Map<string, Map<string, number>>();
     const hToAccountCodes = new Map<string, string[]>();
+    const hHasExpense = new Set<string>();
 
     for (const tx of transactions) {
       const h = (tx.counter_account || "").trim();
       const m = normalizeName(tx.description || "");
       if (!h) continue;
 
+      const acc = accountMap.get(tx.account_id);
+      if (acc && acc.account_type === "expense") {
+        hHasExpense.add(h);
+        if (!hToAccountCodes.has(h)) hToAccountCodes.set(h, []);
+        hToAccountCodes.get(h)!.push(acc.code);
+      }
+
       if (!hToNameCounts.has(h)) {
         hToNameCounts.set(h, new Map());
       }
       const nc = hToNameCounts.get(h)!;
       if (m) nc.set(m, (nc.get(m) ?? 0) + 1);
-
-      const acc = accountMap.get(tx.account_id);
-      if (acc && acc.account_type === "expense") {
-        if (!hToAccountCodes.has(h)) hToAccountCodes.set(h, []);
-        hToAccountCodes.get(h)!.push(acc.code);
-      }
     }
 
     const supplierRows: {
@@ -164,7 +167,7 @@ export async function POST(request: Request) {
     }[] = [];
 
     for (const [h, nameCounts] of Array.from(hToNameCounts.entries())) {
-      if (!h) continue;
+      if (!h || !hHasExpense.has(h)) continue;
 
       let bestName = "";
       let bestCount = 0;
@@ -189,69 +192,79 @@ export async function POST(request: Request) {
       });
     }
 
+    // Fetch existing suppliers in one query
+    const { data: existingSuppliers } = await supabase
+      .from("suppliers")
+      .select("id, counter_account")
+      .eq("company_id", companyId);
+    const existingByH = new Map<string, { id: string }>();
+    const toRemove: string[] = [];
+    for (const s of existingSuppliers ?? []) {
+      if (!hHasExpense.has(s.counter_account)) {
+        toRemove.push(s.id);
+      } else {
+        existingByH.set(s.counter_account, { id: s.id });
+      }
+    }
+    if (toRemove.length > 0) {
+      await supabase.from("suppliers").delete().in("id", toRemove);
+    }
+
+    const now = new Date().toISOString();
+    const toUpsert = supplierRows.map((row) => ({
+      company_id: companyId,
+      counter_account: row.counter_account,
+      display_name: row.display_name,
+      auto_account_code: row.auto_account_code,
+      auto_account_name: row.auto_account_name,
+      updated_at: now,
+    }));
+
+    // Batch upsert suppliers (chunks of 100)
+    const BATCH = 100;
+    const supplierIdByH = new Map<string, string>();
     let suppliersCreated = 0;
     let suppliersUpdated = 0;
 
-    for (const row of supplierRows) {
-      const { data: existing } = await supabase
+    for (let i = 0; i < toUpsert.length; i += BATCH) {
+      const chunk = toUpsert.slice(i, i + BATCH);
+      const { data: upserted, error } = await supabase
         .from("suppliers")
-        .select("id, display_name, auto_account_code, auto_account_name")
-        .eq("company_id", companyId)
-        .eq("counter_account", row.counter_account)
-        .maybeSingle();
+        .upsert(chunk, {
+          onConflict: "company_id,counter_account",
+          ignoreDuplicates: false,
+        })
+        .select("id, counter_account");
 
-      let supplierId: string;
-
-      if (existing) {
-        supplierId = existing.id;
-        suppliersUpdated++;
-        await supabase
-          .from("suppliers")
-          .update({
-            display_name: row.display_name,
-            auto_account_code: row.auto_account_code,
-            auto_account_name: row.auto_account_name,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", supplierId);
-      } else {
-        const { data: inserted, error } = await supabase
-          .from("suppliers")
-          .insert({
-            company_id: companyId,
-            counter_account: row.counter_account,
-            display_name: row.display_name,
-            auto_account_code: row.auto_account_code,
-            auto_account_name: row.auto_account_name,
-          })
-          .select("id")
-          .single();
-        if (error) continue;
-        supplierId = inserted!.id;
-        suppliersCreated++;
-      }
-
-      for (const [name, count] of Array.from(row.namesMap.entries())) {
-        const { data: existingName } = await supabase
-          .from("supplier_names")
-          .select("id, occurrence_count")
-          .eq("supplier_id", supplierId)
-          .eq("name", name)
-          .maybeSingle();
-
-        if (existingName) {
-          await supabase
-            .from("supplier_names")
-            .update({ occurrence_count: count })
-            .eq("id", existingName.id);
-        } else {
-          await supabase.from("supplier_names").insert({
-            supplier_id: supplierId,
-            name,
-            occurrence_count: count,
-          });
+      if (!error && upserted) {
+        for (const s of upserted) {
+          supplierIdByH.set(s.counter_account, s.id);
         }
       }
+    }
+    suppliersCreated = supplierRows.filter((r) => !existingByH.has(r.counter_account)).length;
+    suppliersUpdated = supplierRows.filter((r) => existingByH.has(r.counter_account)).length;
+
+    // Batch upsert supplier_names (collect all rows, then upsert in chunks)
+    type NameRow = { supplier_id: string; name: string; occurrence_count: number };
+    const allNames: NameRow[] = [];
+    for (const row of supplierRows) {
+      const sid = supplierIdByH.get(row.counter_account);
+      if (!sid) continue;
+      for (const [name, count] of Array.from(row.namesMap.entries())) {
+        allNames.push({ supplier_id: sid, name, occurrence_count: count });
+      }
+    }
+
+    const NAME_BATCH = 200;
+    for (let i = 0; i < allNames.length; i += NAME_BATCH) {
+      const chunk = allNames.slice(i, i + NAME_BATCH);
+      await supabase
+        .from("supplier_names")
+        .upsert(chunk, {
+          onConflict: "supplier_id,name",
+          ignoreDuplicates: false,
+        });
     }
 
     return NextResponse.json({
