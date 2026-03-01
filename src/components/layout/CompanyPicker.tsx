@@ -28,7 +28,12 @@ export default function CompanyPicker() {
 
   const handleSelect = async (companyId: string) => {
     const ok = await selectCompany(companyId);
-    if (ok) setIsOpen(false);
+    if (ok) {
+      setIsOpen(false);
+      // Full page reload ensures all client-side state (data hooks, caches) is cleared
+      // before loading fresh data for the newly selected company.
+      window.location.reload();
+    }
   };
 
   const badgeContent = (

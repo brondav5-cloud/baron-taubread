@@ -72,7 +72,11 @@ export async function GET(request: Request) {
       supabase.from("accounts").select("*").eq("company_id", companyId),
       supabase.from("transaction_overrides").select("*").eq("company_id", companyId),
       supabase.from("custom_tags").select("*").eq("company_id", companyId),
-      supabase.from("account_tags").select("*"),
+      // account_tags has no company_id column — filter via accounts join to prevent cross-company leakage
+      supabase
+        .from("account_tags")
+        .select("account_id, tag_id, accounts!inner(company_id)")
+        .eq("accounts.company_id", companyId),
       supabase.from("counter_account_names").select("*").eq("company_id", companyId),
       supabase.from("alert_rules").select("*").eq("company_id", companyId),
       supabase
@@ -113,6 +117,11 @@ export async function GET(request: Request) {
       ),
     ]);
 
+    // Strip the nested "accounts" field from account_tags (only needed for the join filter)
+    const accountTags = (accountTagsRes.data ?? []).map(
+      ({ account_id, tag_id }: { account_id: string; tag_id: string }) => ({ account_id, tag_id }),
+    );
+
     return NextResponse.json({
       year,
       prevYear,
@@ -123,7 +132,7 @@ export async function GET(request: Request) {
       classificationOverrides: [],
       transactionOverrides: overridesRes.data ?? [],
       tags:                 tagsRes.data ?? [],
-      accountTags:          accountTagsRes.data ?? [],
+      accountTags,
       counterNames:         counterNamesRes.data ?? [],
       alertRules:           alertRulesRes.data ?? [],
       files:                filesRes.data ?? [],
