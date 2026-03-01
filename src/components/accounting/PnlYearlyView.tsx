@@ -3,8 +3,10 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Download, ChevronDown, ChevronRight } from "lucide-react";
 import { clsx } from "clsx";
-import type { YearlyPnl, DbCustomGroup, DbAccount, MonthlyPnl } from "@/types/accounting";
+import type { YearlyPnl, DbAccount, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
+import type { VirtualGroup } from "@/hooks/accountingCalc";
+import { SECTION_COLORS } from "./account-mapping/shared";
 import {
   type ViewMode, type TooltipData,
   MONTHS, MONTH_SHORT, MONTH_LONG,
@@ -16,7 +18,7 @@ import { exportPnlToExcel } from "./pnlExcelExport";
 interface Props {
   yearlyPnl: YearlyPnl;
   prevYearlyPnl: YearlyPnl | null;
-  customGroups: DbCustomGroup[];
+  customGroups: VirtualGroup[];
   accounts: DbAccount[];
   year: number;
   viewMode: ViewMode;
@@ -101,7 +103,7 @@ function PnlYearlyView({
   }, [yearlyPnl, accounts]);
 
   const groupsBySection = useMemo(() => {
-    const map = new Map<string, DbCustomGroup[]>();
+    const map = new Map<string, VirtualGroup[]>();
     for (const g of customGroups) {
       const list = map.get(g.parent_section) ?? [];
       list.push(g);
@@ -298,7 +300,7 @@ function PnlYearlyView({
                                   onClick={() => toggleGroup(g.id)}
                                   className="flex items-center gap-1.5 hover:text-gray-900 transition-colors"
                                 >
-                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />
+                                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SECTION_COLORS[g.parent_section] }} />
                                   <span className="text-[11px] font-medium">{g.name}</span>
                                   {groupAccounts.length > 0 && (
                                     isGroupExpanded

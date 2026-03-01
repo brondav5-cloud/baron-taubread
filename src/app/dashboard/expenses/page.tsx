@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import {
   FolderOpen, LayoutDashboard, FileSpreadsheet,
-  Settings, Bell, BarChart3, ArrowRight, CheckCircle, XCircle, AlertTriangle,
+  Settings, Bell, BarChart3, CheckCircle, XCircle, AlertTriangle,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useAccountingData } from "@/hooks/useAccountingData";
@@ -102,12 +102,6 @@ export default function ExpensesPage() {
   const data = useAccountingData(year);
   const YEARS = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
 
-  // Unclassified accounts banner
-  const unclassifiedCount = data.accounts.filter(a => {
-    if (a.account_type !== "expense") return false;
-    return !data.getEffectiveGroup(a.id, a.latest_group_code ?? "");
-  }).length;
-
   // Wrapped mutations with toast feedback
   const withToast = useCallback(
     async (fn: () => Promise<boolean>, successMsg: string, errorMsg?: string) => {
@@ -139,24 +133,6 @@ export default function ExpensesPage() {
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
 
-          <button
-            onClick={() =>
-              data.setClassificationMode(
-                data.classificationMode === "latest" ? "original" : "latest",
-              )
-            }
-            className={clsx(
-              "flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all",
-              data.classificationMode === "latest"
-                ? "bg-primary-50 border-primary-200 text-primary-700"
-                : "bg-amber-50 border-amber-200 text-amber-700",
-            )}
-            title="החלפת מצב סיווג"
-          >
-            <ArrowRight className="w-4 h-4" />
-            סיווג: {data.classificationMode === "latest" ? "אחרון" : "מקורי"}
-          </button>
-
           {data.closingEntriesCount > 0 && (
             <button
               onClick={() => data.setExcludeClosingEntries(!data.excludeClosingEntries)}
@@ -175,22 +151,6 @@ export default function ExpensesPage() {
         </div>
       </div>
 
-      {/* Unclassified banner */}
-      {unclassifiedCount > 0 && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
-          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-          <span>
-            <strong>{unclassifiedCount} חשבונות</strong> ללא סיווג — לא ייחשבו בדוח רווח והפסד
-          </span>
-          <button
-            onClick={() => setActiveTab("accounts")}
-            className="mr-auto px-3 py-1 bg-amber-100 hover:bg-amber-200 rounded-lg font-semibold text-xs transition-colors"
-          >
-            סווג עכשיו
-          </button>
-        </div>
-      )}
-
       {/* Main card */}
       <div className="bg-white rounded-2xl shadow-soft border border-gray-100">
         {/* Tabs */}
@@ -200,8 +160,6 @@ export default function ExpensesPage() {
               const Icon = tab.icon;
               const badge = tab.id === "alerts" && data.anomalies.length > 0
                 ? data.anomalies.length : 0;
-              const warnBadge = tab.id === "accounts" && unclassifiedCount > 0
-                ? unclassifiedCount : 0;
 
               return (
                 <button
@@ -219,11 +177,6 @@ export default function ExpensesPage() {
                   {badge > 0 && (
                     <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                       {badge > 9 ? "9+" : badge}
-                    </span>
-                  )}
-                  {warnBadge > 0 && (
-                    <span className="absolute -top-0.5 -left-0.5 w-4 h-4 bg-amber-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                      {warnBadge > 9 ? "9+" : warnBadge}
                     </span>
                   )}
                 </button>
@@ -269,9 +222,7 @@ export default function ExpensesPage() {
                   customGroups={data.customGroups}
                   accounts={data.accounts}
                   transactions={data.transactions}
-                  classificationOverrides={data.classificationOverrides}
                   year={year}
-                  classificationMode={data.classificationMode}
                   onGroupClick={(groupId) => {
                     setOpenGroupId(groupId);
                   }}
@@ -302,38 +253,10 @@ export default function ExpensesPage() {
                 <AccountMappingTab
                   accounts={data.accounts}
                   customGroups={data.customGroups}
-                  classificationOverrides={data.classificationOverrides}
                   tags={data.tags}
                   accountTags={data.accountTags}
                   counterNames={data.counterNames}
                   transactions={data.transactions}
-                  onSaveClassification={(accountId, groupId, note) =>
-                    withToast(
-                      () => data.saveClassificationOverride(accountId, groupId, note),
-                      "הסיווג עודכן בהצלחה",
-                    )
-                  }
-                  onDeleteClassification={(accountId) =>
-                    withToast(
-                      () => data.deleteClassificationOverride(accountId),
-                      "הסיווג אופס לברירת מחדל",
-                    )
-                  }
-                  onBatchSaveClassifications={(changes) =>
-                    withToast(
-                      () => data.batchSaveClassificationOverrides(changes),
-                      `${changes.length} סיווג${changes.length > 1 ? "ים" : ""} נשמרו בהצלחה`,
-                    )
-                  }
-                  onSaveGroup={(group) =>
-                    withToast(
-                      () => data.saveGroup(group),
-                      group.id ? "הקבוצה עודכנה" : "הקבוצה נוצרה בהצלחה",
-                    )
-                  }
-                  onDeleteGroup={(id) =>
-                    withToast(() => data.deleteGroup(id), "הקבוצה נמחקה")
-                  }
                   onSaveTag={(tag) =>
                     withToast(
                       () => data.saveTag(tag),
@@ -395,7 +318,6 @@ export default function ExpensesPage() {
         prevYearlyPnl={data.prevYearlyPnl}
         customGroups={data.customGroups}
         accounts={data.accounts}
-        classificationOverrides={data.classificationOverrides}
         onClose={() => setOpenGroupId(null)}
         onAccountClick={(accountId) => {
           setOpenAccountId(accountId);

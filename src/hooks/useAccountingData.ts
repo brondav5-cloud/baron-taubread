@@ -6,20 +6,16 @@ import type {
   DbAccount,
   DbTransaction,
   DbTransactionOverride,
-  DbCustomGroup,
   DbCustomTag,
   DbAccountTag,
   DbCounterAccountName,
-  DbAccountClassificationOverride,
   DbAlertRule,
-  ClassificationMode,
   YearlyPnl,
   AccountAnomaly,
 } from "@/types/accounting";
-import { buildClassifier, calcYearlyPnl, detectAnomalies, countClosingEntries } from "./accountingCalc";
+import { calcYearlyPnl, detectAnomalies, countClosingEntries, getVirtualGroupsFromPnl } from "./accountingCalc";
+import type { VirtualGroup } from "./accountingCalc";
 import { useAccountingMutations, type AccountingMutations } from "./useAccountingMutations";
-
-// ── Raw API response ─────────────────────────────────────────
 
 interface AccountingApiData {
   year: number;
@@ -27,8 +23,8 @@ interface AccountingApiData {
   accounts: DbAccount[];
   transactions: DbTransaction[];
   prevTransactions: Pick<DbTransaction, "id" | "account_id" | "group_code" | "transaction_date" | "debit" | "credit">[];
-  customGroups: DbCustomGroup[];
-  classificationOverrides: DbAccountClassificationOverride[];
+  customGroups: unknown[];
+  classificationOverrides: unknown[];
   transactionOverrides: DbTransactionOverride[];
   tags: DbCustomTag[];
   accountTags: DbAccountTag[];
@@ -37,13 +33,9 @@ interface AccountingApiData {
   files: DbUploadedFile[];
 }
 
-// ── Hook return type ─────────────────────────────────────────
-
 export interface AccountingData extends AccountingApiData, AccountingMutations {
   isLoading: boolean;
   error: string | null;
-  classificationMode: ClassificationMode;
-  setClassificationMode: (m: ClassificationMode) => void;
   excludeClosingEntries: boolean;
   setExcludeClosingEntries: (v: boolean) => void;
   closingEntriesCount: number;
@@ -51,16 +43,15 @@ export interface AccountingData extends AccountingApiData, AccountingMutations {
   prevYearlyPnl: YearlyPnl | null;
   anomalies: AccountAnomaly[];
   refetch: () => Promise<void>;
-  getEffectiveGroup: (accountId: string, txGroupCode: string) => DbCustomGroup | null;
+  /** Virtual groups derived from group_code (no stored classifications) */
+  customGroups: VirtualGroup[];
+  getEffectiveGroup: (accountId: string, txGroupCode: string) => VirtualGroup | null;
 }
-
-// ── Main Hook ────────────────────────────────────────────────
 
 export function useAccountingData(year: number): AccountingData {
   const [raw, setRaw] = useState<AccountingApiData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [classificationMode, setClassificationMode] = useState<ClassificationMode>("latest");
   const [excludeClosingEntries, setExcludeClosingEntries] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -87,23 +78,14 @@ export function useAccountingData(year: number): AccountingData {
 
   const mutations = useAccountingMutations(fetchData);
 
-  const classifier = useMemo(() => {
-    if (!raw) return null;
-    return buildClassifier(
-      raw.accounts,
-      raw.customGroups,
-      raw.classificationOverrides,
-      classificationMode,
-    );
-  }, [raw, classificationMode]);
-
-  const getEffectiveGroup = useCallback(
-    (accountId: string, txGroupCode: string) => {
-      if (!classifier) return null;
-      return classifier.getEffectiveGroup(accountId, txGroupCode);
-    },
-    [classifier],
-  );
+  const getEffectiveGroup = useCallback((_accountId: string, txGroupCode: string) => {
+    if (!txGroupCode) return null;
+    return {
+      id: txGroupCode,
+      name: txGroupCode,
+      parent_section: txGroupCode[0] === "7" ? "cost_of_goods" : txGroupCode[0] === "8" ? "operating" : txGroupCode[0] === "9" ? "admin" : "other",
+    } as VirtualGroup;
+  }, []);
 
   const closingEntriesCount = useMemo(() => {
     if (!raw) return 0;
@@ -116,13 +98,13 @@ export function useAccountingData(year: number): AccountingData {
       year,
       raw.transactions,
       raw.accounts,
-      raw.customGroups,
-      raw.classificationOverrides,
+      [],
+      [],
       raw.transactionOverrides,
-      classificationMode,
+      "latest",
       excludeClosingEntries,
     );
-  }, [raw, year, classificationMode, excludeClosingEntries]);
+  }, [raw, year, excludeClosingEntries]);
 
   const prevYearlyPnl = useMemo(() => {
     if (!raw || raw.prevTransactions.length === 0) return null;
@@ -130,13 +112,18 @@ export function useAccountingData(year: number): AccountingData {
       raw.prevYear,
       raw.prevTransactions as DbTransaction[],
       raw.accounts,
-      raw.customGroups,
-      raw.classificationOverrides,
       [],
-      classificationMode,
+      [],
+      [],
+      "latest",
       false,
     );
-  }, [raw, classificationMode]);
+  }, [raw]);
+
+  const customGroups: VirtualGroup[] = useMemo(() => {
+    if (!yearlyPnl) return [];
+    return getVirtualGroupsFromPnl(yearlyPnl);
+  }, [yearlyPnl]);
 
   const anomalies = useMemo(() => {
     if (!yearlyPnl || !raw) return [];
@@ -161,10 +148,9 @@ export function useAccountingData(year: number): AccountingData {
 
   return {
     ...(raw ?? emptyData),
+    customGroups,
     isLoading,
     error,
-    classificationMode,
-    setClassificationMode,
     excludeClosingEntries,
     setExcludeClosingEntries,
     closingEntriesCount,

@@ -2,7 +2,8 @@
 
 import React, { useState, useMemo } from "react";
 import { clsx } from "clsx";
-import type { YearlyPnl, DbCustomGroup, MonthlyPnl } from "@/types/accounting";
+import type { YearlyPnl, MonthlyPnl } from "@/types/accounting";
+import type { VirtualGroup } from "@/hooks/accountingCalc";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
 import {
   type ViewMode,
@@ -13,7 +14,7 @@ import {
 
 interface Props {
   yearlyPnl: YearlyPnl;
-  customGroups: DbCustomGroup[];
+  customGroups: VirtualGroup[];
   viewMode: ViewMode;
   onViewModeChange: (m: ViewMode) => void;
 }
@@ -25,7 +26,7 @@ function PnlCompareView({
   const [compareB, setCompareB] = useState(Math.min(new Date().getMonth() + 1, 12));
 
   const groupsBySection = useMemo(() => {
-    const map = new Map<string, DbCustomGroup[]>();
+    const map = new Map<string, VirtualGroup[]>();
     for (const g of customGroups) {
       const list = map.get(g.parent_section) ?? [];
       list.push(g);

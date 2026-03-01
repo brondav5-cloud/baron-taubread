@@ -7,17 +7,17 @@ import {
 } from "recharts";
 import { TrendingUp, TrendingDown, Minus, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
-import type { YearlyPnl, DbCustomGroup, ClassificationMode, DbTransaction, DbAccount, DbAccountClassificationOverride } from "@/types/accounting";
+import type { YearlyPnl, DbTransaction, DbAccount } from "@/types/accounting";
+import type { VirtualGroup } from "@/hooks/accountingCalc";
+import { SECTION_COLORS } from "./account-mapping/shared";
 
 interface Props {
   yearlyPnl: YearlyPnl | null;
   prevYearlyPnl: YearlyPnl | null;
-  customGroups: DbCustomGroup[];
+  customGroups: VirtualGroup[];
   accounts: DbAccount[];
   transactions: DbTransaction[];
-  classificationOverrides: DbAccountClassificationOverride[];
   year: number;
-  classificationMode: ClassificationMode;
   onGroupClick?: (groupId: string) => void;
   onAccountClick?: (accountId: string) => void;
 }
@@ -174,7 +174,7 @@ const WaterfallTooltip = ({ active, payload, label }: {
 
 export default function DashboardTab({
   yearlyPnl, prevYearlyPnl, customGroups, accounts,
-  year, classificationMode, onGroupClick, onAccountClick,
+  year, onGroupClick, onAccountClick,
 }: Props) {
   const [activePieIndex, setActivePieIndex] = useState(0);
   const [selectedKpi, setSelectedKpi] = useState<string | null>(null);
@@ -202,7 +202,7 @@ export default function DashboardTab({
   const donutData = useMemo(() => {
     if (!yearlyPnl) return [];
     return customGroups
-      .map(g => ({ name: g.name, value: yearlyPnl.total.byGroup.get(g.id) ?? 0, color: g.color, groupId: g.id }))
+      .map(g => ({ name: g.name, value: yearlyPnl.total.byGroup.get(g.id) ?? 0, color: SECTION_COLORS[g.parent_section], groupId: g.id }))
       .filter(d => d.value > 0)
       .sort((a, b) => b.value - a.value);
   }, [yearlyPnl, customGroups]);
@@ -310,11 +310,6 @@ export default function DashboardTab({
 
   return (
     <div className="space-y-6" dir="rtl">
-      {classificationMode === "original" && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2 text-xs text-amber-700 font-medium">
-          מצב תצוגה: סיווג מקורי — כל תנועה מוצגת לפי הסיווג מהקובץ המקורי
-        </div>
-      )}
       {showRevenueWarning && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-xs text-red-800">
           <strong>שים לב:</strong> הכנסות מוצגות כ-₪0 למרות ש-{revenueAccounts.length} חשבונות מסווגים כהכנסות.

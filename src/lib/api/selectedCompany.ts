@@ -60,10 +60,7 @@ export async function resolveSelectedCompanyId(
         return { companyId: cookieCompanyId, role: "super_admin" };
       }
     }
-    return {
-      companyId: userRow?.company_id ?? null,
-      role: "super_admin",
-    };
+    return { companyId: null, role: "super_admin" };
   }
 
   const { data: memberships } = await supabase
@@ -72,7 +69,7 @@ export async function resolveSelectedCompanyId(
     .eq("user_id", userId);
 
   if (!memberships || memberships.length === 0) {
-    return { companyId: userRow?.company_id ?? null, role: "viewer" };
+    return { companyId: null, role: "viewer" };
   }
 
   const cookieCompanyId = getSelectedCompanyIdCookie();

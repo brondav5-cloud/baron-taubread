@@ -6,13 +6,15 @@ import { clsx } from "clsx";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
-import type { YearlyPnl, DbCustomGroup, DbAccount, MonthlyPnl } from "@/types/accounting";
+import type { YearlyPnl, DbAccount, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
+import type { VirtualGroup } from "@/hooks/accountingCalc";
+import { SECTION_COLORS } from "./account-mapping/shared";
 
 interface Props {
   yearlyPnl: YearlyPnl | null;
   prevYearlyPnl: YearlyPnl | null;
-  customGroups: DbCustomGroup[];
+  customGroups: VirtualGroup[];
   accounts: DbAccount[];
   year: number;
 }
@@ -229,7 +231,7 @@ function AccountRow({ account, values, baseIdx = 0 }: {
 // ── YoY Table ─────────────────────────────────────────────────
 
 function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
-  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: DbCustomGroup[]; accounts: DbAccount[]; year: number;
+  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: VirtualGroup[]; accounts: DbAccount[]; year: number;
 }) {
   const curr = yearlyPnl.total;
   const prev = prevYearlyPnl?.total;
@@ -258,7 +260,7 @@ function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
   };
 
   const groupsBySection = useMemo(() => {
-    const map = new Map<string, DbCustomGroup[]>();
+    const map = new Map<string, VirtualGroup[]>();
     for (const g of customGroups) {
       const list = map.get(g.parent_section) ?? [];
       list.push(g);
@@ -346,7 +348,7 @@ function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
                                     ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
                                     : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
                                 )}
-                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SECTION_COLORS[g.parent_section] }} />
                                 <span className="text-[11px] font-medium text-gray-700">{g.name}</span>
                                 {groupAccounts.length > 0 && (
                                   <span className="text-[9px] text-gray-400 bg-gray-200 px-1 rounded-full">{groupAccounts.length}</span>
@@ -411,7 +413,7 @@ function YoyTable({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
 // ── Quarterly Table ───────────────────────────────────────────
 
 function QuarterlyTable({ yearlyPnl, prevYearlyPnl }: {
-  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups?: DbCustomGroup[]; year?: number;
+  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups?: VirtualGroup[]; year?: number;
 }) {
   // Aggregate months into quarters
   const getQuarter = (pnl: YearlyPnl, q: number): MonthlyPnl => {
@@ -610,7 +612,7 @@ function HeatmapTable({ yearlyPnl }: { yearlyPnl: YearlyPnl }) {
 // ── Flexible Multi-Period Comparison ─────────────────────────
 
 function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year }: {
-  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: DbCustomGroup[]; accounts: DbAccount[]; year: number;
+  yearlyPnl: YearlyPnl; prevYearlyPnl: YearlyPnl | null; customGroups: VirtualGroup[]; accounts: DbAccount[]; year: number;
 }) {
   const prevYear = year - 1;
   const [periods, setPeriods] = useState<Period[]>([
@@ -676,7 +678,7 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year
 
   const availableYears = [year, ...(prevYearlyPnl ? [prevYear] : [])];
   const groupsBySection = useMemo(() => {
-    const map = new Map<string, DbCustomGroup[]>();
+    const map = new Map<string, VirtualGroup[]>();
     for (const g of customGroups) {
       const list = map.get(g.parent_section) ?? [];
       list.push(g);
@@ -794,7 +796,7 @@ function FlexComparison({ yearlyPnl, prevYearlyPnl, customGroups, accounts, year
                                     ? <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" />
                                     : <ChevronRight className="w-3 h-3 text-gray-400 shrink-0" />
                                 )}
-                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: g.color }} />
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: SECTION_COLORS[g.parent_section] }} />
                                 <span className="text-[11px] font-medium text-gray-700">{g.name}</span>
                                 {groupAccounts.length > 0 && (
                                   <span className="text-[9px] text-gray-400 bg-gray-200 px-1 rounded-full">{groupAccounts.length}</span>

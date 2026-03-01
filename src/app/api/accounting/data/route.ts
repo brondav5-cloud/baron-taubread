@@ -59,11 +59,9 @@ export async function GET(request: Request) {
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch metadata in parallel (small tables — no pagination needed)
+    // Fetch metadata in parallel (no custom_groups / classifications — only at upload)
     const [
       accountsRes,
-      groupsRes,
-      classificationsRes,
       overridesRes,
       tagsRes,
       accountTagsRes,
@@ -72,8 +70,6 @@ export async function GET(request: Request) {
       filesRes,
     ] = await Promise.all([
       supabase.from("accounts").select("*").eq("company_id", companyId),
-      supabase.from("custom_groups").select("*").eq("company_id", companyId).order("display_order"),
-      supabase.from("account_classification_overrides").select("*").eq("company_id", companyId),
       supabase.from("transaction_overrides").select("*").eq("company_id", companyId),
       supabase.from("custom_tags").select("*").eq("company_id", companyId),
       supabase.from("account_tags").select("*"),
@@ -87,8 +83,7 @@ export async function GET(request: Request) {
     ]);
 
     const metaErrors = [
-      accountsRes, groupsRes, classificationsRes, overridesRes,
-      tagsRes, accountTagsRes, counterNamesRes, alertRulesRes, filesRes,
+      accountsRes, overridesRes, tagsRes, accountTagsRes, counterNamesRes, alertRulesRes, filesRes,
     ]
       .filter((r) => r.error)
       .map((r) => r.error!.message);
@@ -109,17 +104,17 @@ export async function GET(request: Request) {
     return NextResponse.json({
       year,
       prevYear,
-      accounts:                accountsRes.data ?? [],
-      transactions:            txCurrent,
-      prevTransactions:        txPrev,
-      customGroups:            groupsRes.data ?? [],
-      classificationOverrides: classificationsRes.data ?? [],
-      transactionOverrides:    overridesRes.data ?? [],
-      tags:                    tagsRes.data ?? [],
-      accountTags:             accountTagsRes.data ?? [],
-      counterNames:            counterNamesRes.data ?? [],
-      alertRules:              alertRulesRes.data ?? [],
-      files:                   filesRes.data ?? [],
+      accounts:             accountsRes.data ?? [],
+      transactions:         txCurrent,
+      prevTransactions:     txPrev,
+      customGroups:         [],
+      classificationOverrides: [],
+      transactionOverrides: overridesRes.data ?? [],
+      tags:                 tagsRes.data ?? [],
+      accountTags:          accountTagsRes.data ?? [],
+      counterNames:         counterNamesRes.data ?? [],
+      alertRules:           alertRulesRes.data ?? [],
+      files:                filesRes.data ?? [],
     });
   } catch (err) {
     console.error("Data API error:", err);

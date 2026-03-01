@@ -122,14 +122,6 @@ export async function POST(request: Request) {
         .update({ status: "completed", row_count: actualCount ?? inserted })
         .eq("id", fileId);
 
-      const { count: groupCount } = await supabase
-        .from("custom_groups")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", companyId);
-
-      if (!groupCount || groupCount === 0) {
-        await supabase.rpc("seed_default_custom_groups", { p_company_id: companyId });
-      }
     }
 
     return NextResponse.json({ success: true, inserted, skipped });

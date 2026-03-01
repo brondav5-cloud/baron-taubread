@@ -2,10 +2,7 @@ import type {
   DbAccount,
   DbTransaction,
   DbTransactionOverride,
-  DbCustomGroup,
-  DbAccountClassificationOverride,
   DbAlertRule,
-  ClassificationMode,
   MonthlyPnl,
   YearlyPnl,
   ParentSection,
@@ -13,58 +10,20 @@ import type {
 } from "@/types/accounting";
 import { PARENT_SECTION_ORDER } from "@/types/accounting";
 
-// ── 3-Layer classification ────────────────────────────────────
+/** Virtual group — derived from group_code at runtime (no stored classifications) */
+export interface VirtualGroup {
+  id: string;
+  name: string;
+  parent_section: ParentSection;
+}
 
-export function buildClassifier(
-  accounts: DbAccount[],
-  customGroups: DbCustomGroup[],
-  classificationOverrides: DbAccountClassificationOverride[],
-  mode: ClassificationMode,
-) {
-  const overrideMap = new Map<string, string>();
-  for (const co of classificationOverrides) {
-    overrideMap.set(co.account_id, co.custom_group_id);
-  }
-
-  const groupById = new Map<string, DbCustomGroup>();
-  for (const g of customGroups) groupById.set(g.id, g);
-
-  const accountById = new Map<string, DbAccount>();
-  for (const a of accounts) accountById.set(a.id, a);
-
-  const acToGroup = new Map<string, DbCustomGroup>();
-  for (const g of customGroups) {
-    for (const ac of (g.account_codes ?? [])) {
-      if (!acToGroup.has(ac)) acToGroup.set(ac, g);
-    }
-  }
-
-  const gcToGroup = new Map<string, DbCustomGroup>();
-  for (const g of customGroups) {
-    for (const gc of g.group_codes) {
-      if (!gcToGroup.has(gc)) gcToGroup.set(gc, g);
-    }
-  }
-
-  function getEffectiveGroup(accountId: string, txGroupCode: string): DbCustomGroup | null {
-    const overrideGroupId = overrideMap.get(accountId);
-    if (overrideGroupId) return groupById.get(overrideGroupId) ?? null;
-
-    const account = accountById.get(accountId);
-    if (account) {
-      const byCode = acToGroup.get(account.code);
-      if (byCode) return byCode;
-    }
-
-    const effectiveGc =
-      mode === "latest"
-        ? (account?.latest_group_code ?? txGroupCode)
-        : txGroupCode;
-
-    return gcToGroup.get(effectiveGc) ?? null;
-  }
-
-  return { getEffectiveGroup };
+/** Derive parent_section from group_code (upload-time classification) */
+function getParentSectionFromGroupCode(gc: string): ParentSection {
+  const c = (gc || "").trim()[0];
+  if (c === "7") return "cost_of_goods";
+  if (c === "8") return "operating";
+  if (c === "9") return "admin";
+  return "other";
 }
 
 // ── Closing Entry Detection ──────────────────────────────────
@@ -90,7 +49,7 @@ export function countClosingEntries(transactions: TransactionWithDesc[]): number
   return transactions.filter(isClosingEntry).length;
 }
 
-// ── P&L Calculation ──────────────────────────────────────────
+// ── P&L Calculation (group_code only — no stored classifications) ───────
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -98,17 +57,15 @@ export function calcYearlyPnl(
   year: number,
   transactions: TransactionWithDesc[],
   accounts: DbAccount[],
-  customGroups: DbCustomGroup[],
-  classificationOverrides: DbAccountClassificationOverride[],
+  _customGroups: unknown[],
+  _classificationOverrides: unknown[],
   transactionOverrides: DbTransactionOverride[],
-  mode: ClassificationMode,
+  _mode: "latest" | "original",
   excludeClosingEntries = true,
 ): YearlyPnl {
   const filteredTx = excludeClosingEntries
     ? transactions.filter((tx) => !isClosingEntry(tx))
     : transactions;
-
-  const { getEffectiveGroup } = buildClassifier(accounts, customGroups, classificationOverrides, mode);
 
   const overridesByTx = new Map<string, DbTransactionOverride[]>();
   for (const ov of transactionOverrides) {
@@ -164,31 +121,26 @@ export function calcYearlyPnl(
       md.revenue += credit - debit;
     } else {
       const amount = debit - credit;
-      const group = getEffectiveGroup(tx.account_id, tx.group_code);
-      const section: ParentSection = group?.parent_section ?? "other";
+      const groupCode = tx.group_code || "other";
+      const section = getParentSectionFromGroupCode(groupCode);
 
       md.bySection[section] += amount;
-      if (group) {
-        md.byGroup.set(group.id, (md.byGroup.get(group.id) ?? 0) + amount);
-      }
+      md.byGroup.set(groupCode, (md.byGroup.get(groupCode) ?? 0) + amount);
       md.byAccount.set(tx.account_id, (md.byAccount.get(tx.account_id) ?? 0) + amount);
     }
   }
 
-  // Build groupToAccountIds from actual transaction classifications
-  const groupToAccountIdsSet = new Map<string, Set<string>>();
-  const { getEffectiveGroup: geg2 } = buildClassifier(accounts, customGroups, classificationOverrides, mode);
-  for (const tx of filteredTx) {
-    const acct2 = accountById.get(tx.account_id);
-    if (!acct2 || acct2.account_type !== "expense") continue;
-    const g2 = geg2(tx.account_id, tx.group_code);
-    if (!g2) continue;
-    const s = groupToAccountIdsSet.get(g2.id) ?? new Set<string>();
-    s.add(tx.account_id);
-    groupToAccountIdsSet.set(g2.id, s);
-  }
   const groupToAccountIds = new Map<string, string[]>();
-  groupToAccountIdsSet.forEach((set, gid) => groupToAccountIds.set(gid, Array.from(set)));
+  const groupToAccountIdsSet = new Map<string, Set<string>>();
+  for (const tx of filteredTx) {
+    const acct = accountById.get(tx.account_id);
+    if (!acct || acct.account_type !== "expense") continue;
+    const gc = tx.group_code || "other";
+    const s = groupToAccountIdsSet.get(gc) ?? new Set<string>();
+    s.add(tx.account_id);
+    groupToAccountIdsSet.set(gc, s);
+  }
+  groupToAccountIdsSet.forEach((set, gc) => groupToAccountIds.set(gc, Array.from(set)));
 
   for (const md of monthlyData) {
     md.grossProfit = md.revenue - md.bySection.cost_of_goods;
@@ -222,6 +174,23 @@ export function calcYearlyPnl(
   return { year, months: monthlyData, total, groupToAccountIds };
 }
 
+/** Build virtual groups from yearly PnL (group_code as id) */
+export function getVirtualGroupsFromPnl(pnl: YearlyPnl): VirtualGroup[] {
+  const seen = new Set<string>();
+  const result: VirtualGroup[] = [];
+  for (const [groupCode, amount] of Array.from(pnl.total.byGroup.entries())) {
+    if (seen.has(groupCode) || amount === 0) continue;
+    seen.add(groupCode);
+    result.push({
+      id: groupCode,
+      name: groupCode,
+      parent_section: getParentSectionFromGroupCode(groupCode),
+    });
+  }
+  result.sort((a, b) => a.parent_section.localeCompare(b.parent_section) || a.name.localeCompare(b.name));
+  return result;
+}
+
 // ── Anomaly Detection ────────────────────────────────────────
 
 export function detectAnomalies(
@@ -238,7 +207,6 @@ export function detectAnomalies(
   const consecutiveCount = alertRules.find(r => r.rule_type === "consecutive_increase" && !r.account_id)?.threshold_value ?? 3;
   const marginThreshold = alertRules.find(r => r.rule_type === "margin_below")?.threshold_value ?? 30;
 
-  // ── margin_below: gross margin fallen below threshold ────────
   if (pnl.total.revenue > 0) {
     const grossMarginPct = (pnl.total.grossProfit / pnl.total.revenue) * 100;
     if (grossMarginPct < marginThreshold) {
@@ -256,7 +224,6 @@ export function detectAnomalies(
     }
   }
 
-  // ── new_account: accounts in current year that didn't exist in prev ──
   if (prevPnl) {
     const prevAccountIds = new Set<string>();
     prevPnl.total.byAccount.forEach((_, id) => prevAccountIds.add(id));
@@ -298,7 +265,6 @@ export function detectAnomalies(
     const variance = nonZeroMonths.reduce((s, v) => s + Math.pow(v - avg, 2), 0) / nonZeroMonths.length;
     const stddev = Math.sqrt(variance);
 
-    // Monthly spike detection
     for (let m = 0; m < 12; m++) {
       const val = monthlyAmounts[m] ?? 0;
       if (val === 0) continue;
@@ -330,7 +296,6 @@ export function detectAnomalies(
       }
     }
 
-    // YoY change
     if (prevPnl) {
       const currTotal = pnl.total.byAccount.get(accountId) ?? 0;
       const prevTotal = prevPnl.total.byAccount.get(accountId) ?? 0;
@@ -351,7 +316,6 @@ export function detectAnomalies(
       }
     }
 
-    // Consecutive increase detection
     let consecutiveUp = 0;
     let consecutiveStart = -1;
     for (let m = 1; m < 12; m++) {

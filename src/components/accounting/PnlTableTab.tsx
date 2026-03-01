@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import type { YearlyPnl, DbCustomGroup, DbAccount } from "@/types/accounting";
+import type { YearlyPnl, DbAccount } from "@/types/accounting";
+import type { VirtualGroup } from "@/hooks/accountingCalc";
 import type { ViewMode } from "./pnlHelpers";
 import PnlYearlyView from "./PnlYearlyView";
 import PnlCompareView from "./PnlCompareView";
@@ -9,7 +10,7 @@ import PnlCompareView from "./PnlCompareView";
 interface Props {
   yearlyPnl: YearlyPnl | null;
   prevYearlyPnl: YearlyPnl | null;
-  customGroups: DbCustomGroup[];
+  customGroups: VirtualGroup[];
   accounts: DbAccount[];
   year: number;
   onGroupClick?: (groupId: string, month?: number) => void;

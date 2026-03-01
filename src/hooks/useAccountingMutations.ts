@@ -3,20 +3,13 @@
 import { useCallback } from "react";
 import type {
   DbTransactionOverride,
-  DbCustomGroup,
   DbCustomTag,
   DbAlertRule,
-  ParentSection,
 } from "@/types/accounting";
 
 export interface AccountingMutations {
-  saveClassificationOverride: (accountId: string, groupId: string, note?: string) => Promise<boolean>;
-  deleteClassificationOverride: (accountId: string) => Promise<boolean>;
-  batchSaveClassificationOverrides: (changes: Array<{ accountId: string; groupId: string | null; note?: string }>) => Promise<boolean>;
   saveTransactionOverride: (txId: string, type: DbTransactionOverride["override_type"], newValue?: string, note?: string) => Promise<boolean>;
   deleteTransactionOverride: (id: string) => Promise<boolean>;
-  saveGroup: (group: Partial<DbCustomGroup> & { name: string; parent_section: ParentSection; group_codes: string[] }) => Promise<boolean>;
-  deleteGroup: (id: string) => Promise<boolean>;
   saveTag: (tag: Partial<DbCustomTag> & { name: string; color: string }) => Promise<boolean>;
   deleteTag: (id: string) => Promise<boolean>;
   assignTag: (accountId: string, tagId: string) => Promise<boolean>;
@@ -27,47 +20,6 @@ export interface AccountingMutations {
 }
 
 export function useAccountingMutations(refetch: () => Promise<void>): AccountingMutations {
-  const saveClassificationOverride = useCallback(
-    async (accountId: string, groupId: string, note?: string): Promise<boolean> => {
-      const res = await fetch("/api/accounting/classifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ account_id: accountId, custom_group_id: groupId, note }),
-      });
-      if (res.ok) await refetch();
-      return res.ok;
-    },
-    [refetch],
-  );
-
-  const deleteClassificationOverride = useCallback(
-    async (accountId: string): Promise<boolean> => {
-      const res = await fetch(`/api/accounting/classifications?account_id=${accountId}`, { method: "DELETE" });
-      if (res.ok) await refetch();
-      return res.ok;
-    },
-    [refetch],
-  );
-
-  const batchSaveClassificationOverrides = useCallback(
-    async (changes: Array<{ accountId: string; groupId: string | null; note?: string }>): Promise<boolean> => {
-      const res = await fetch("/api/accounting/classifications", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          changes: changes.map((c) => ({
-            account_id: c.accountId,
-            custom_group_id: c.groupId,
-            note: c.note,
-          })),
-        }),
-      });
-      if (res.ok) await refetch();
-      return res.ok;
-    },
-    [refetch],
-  );
-
   const saveTransactionOverride = useCallback(
     async (txId: string, type: DbTransactionOverride["override_type"], newValue?: string, note?: string): Promise<boolean> => {
       const res = await fetch("/api/accounting/overrides", {
@@ -84,29 +36,6 @@ export function useAccountingMutations(refetch: () => Promise<void>): Accounting
   const deleteTransactionOverride = useCallback(
     async (id: string): Promise<boolean> => {
       const res = await fetch(`/api/accounting/overrides?id=${id}`, { method: "DELETE" });
-      if (res.ok) await refetch();
-      return res.ok;
-    },
-    [refetch],
-  );
-
-  const saveGroup = useCallback(
-    async (group: Partial<DbCustomGroup> & { name: string; parent_section: ParentSection; group_codes: string[] }): Promise<boolean> => {
-      const method = group.id ? "PATCH" : "POST";
-      const res = await fetch("/api/accounting/groups", {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(group),
-      });
-      if (res.ok) await refetch();
-      return res.ok;
-    },
-    [refetch],
-  );
-
-  const deleteGroup = useCallback(
-    async (id: string): Promise<boolean> => {
-      const res = await fetch(`/api/accounting/groups?id=${id}`, { method: "DELETE" });
       if (res.ok) await refetch();
       return res.ok;
     },
@@ -195,13 +124,8 @@ export function useAccountingMutations(refetch: () => Promise<void>): Accounting
   );
 
   return {
-    saveClassificationOverride,
-    deleteClassificationOverride,
-    batchSaveClassificationOverrides,
     saveTransactionOverride,
     deleteTransactionOverride,
-    saveGroup,
-    deleteGroup,
     saveTag,
     deleteTag,
     assignTag,

@@ -1,12 +1,13 @@
-import type { YearlyPnl, DbCustomGroup, MonthlyPnl } from "@/types/accounting";
+import type { YearlyPnl, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
+import type { VirtualGroup } from "@/hooks/accountingCalc";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { MONTH_SHORT } from "./pnlHelpers";
 
 export async function exportPnlToExcel(
   yearlyPnl: YearlyPnl,
   year: number,
-  groupsBySection: Map<string, DbCustomGroup[]>,
+  groupsBySection: Map<string, VirtualGroup[]>,
 ): Promise<void> {
   const XLSX = await loadXlsx();
   const wb = XLSX.utils.book_new();
