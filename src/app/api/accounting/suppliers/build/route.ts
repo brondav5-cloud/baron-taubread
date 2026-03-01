@@ -120,9 +120,14 @@ export async function POST(request: Request) {
       supabase.from("revenue_account_codes").select("account_code").eq("company_id", companyId),
     ]);
 
-    const customerAccountCodes = new Set<string>(
-      (revenueACResult.data ?? []).map((r) => (r as { account_code: string }).account_code),
+    const customerAccountCodePrefixes = (revenueACResult.data ?? []).map(
+      (r) => (r as { account_code: string }).account_code,
     );
+
+    const isCustomerCode = (code: string | null): boolean => {
+      if (!code) return false;
+      return customerAccountCodePrefixes.some((prefix) => code.startsWith(prefix));
+    };
 
     const codeToAccount = new Map<string, AccountRow>();
     for (const a of Array.from(accountMap.values())) {
@@ -187,7 +192,7 @@ export async function POST(request: Request) {
       const codes = hToAccountCodes.get(h) ?? [];
       const autoCode = mode(codes);
 
-      if (autoCode && customerAccountCodes.has(autoCode)) continue;
+      if (isCustomerCode(autoCode)) continue;
 
       const accName = autoCode ? codeToAccount.get(autoCode)?.name ?? null : null;
 
@@ -210,9 +215,9 @@ export async function POST(request: Request) {
     const newSupplierHSet = new Set(supplierRows.map((r) => r.counter_account));
     for (const s of existingSuppliers ?? []) {
       const hasExpense = hHasExpense.has(s.counter_account);
-      const isCustomerCode = s.auto_account_code && customerAccountCodes.has(s.auto_account_code);
+      const supplierIsCustomer = isCustomerCode(s.auto_account_code);
       const stillValid = newSupplierHSet.has(s.counter_account);
-      if (!hasExpense || isCustomerCode || !stillValid) {
+      if (!hasExpense || supplierIsCustomer || !stillValid) {
         toRemove.push(s.id);
       } else {
         existingByH.set(s.counter_account, { id: s.id });
