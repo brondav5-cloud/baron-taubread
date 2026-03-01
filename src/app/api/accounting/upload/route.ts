@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import type { ParsedAccount } from "@/types/accounting";
 
 // POST /api/accounting/upload
@@ -16,6 +17,11 @@ export async function POST(request: Request) {
     } = await authClient.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה להעלאת נתונים" }, { status: 403 });
     }
 
     const body: {
@@ -39,6 +45,7 @@ export async function POST(request: Request) {
     const { data: uploadRecord, error: uploadErr } = await supabase
       .from("uploaded_files")
       .insert({
+        company_id: companyId,
         user_id: user.id,
         filename,
         year,
@@ -65,7 +72,7 @@ export async function POST(request: Request) {
     const { data: existingAccounts } = await supabase
       .from("accounts")
       .select("code")
-      .eq("user_id", user.id);
+      .eq("company_id", companyId);
 
     const existingCodes = new Set((existingAccounts ?? []).map((a: { code: string }) => a.code));
     const newAccounts = accounts.filter((a) => !existingCodes.has(a.code));
@@ -75,6 +82,7 @@ export async function POST(request: Request) {
     if (newAccounts.length > 0) {
       const { error: insertErr } = await supabase.from("accounts").insert(
         newAccounts.map((a) => ({
+          company_id: companyId,
           user_id: user.id,
           code: a.code,
           name: a.name,
@@ -93,7 +101,7 @@ export async function POST(request: Request) {
       await supabase
         .from("accounts")
         .update({ name: a.name, latest_group_code: a.group_code })
-        .eq("user_id", user.id)
+        .eq("company_id", companyId)
         .eq("code", a.code);
     }
 

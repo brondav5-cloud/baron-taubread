@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 
-// GET /api/accounting/files — list all uploaded files for the current user
+// GET /api/accounting/files — list all uploaded files for the current company
 export async function GET() {
   try {
     const authClient = createServerSupabaseClient();
@@ -11,11 +12,16 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
+    }
+
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase
       .from("uploaded_files")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("company_id", companyId)
       .order("year", { ascending: false })
       .order("uploaded_at", { ascending: false });
 
@@ -36,6 +42,11 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -45,7 +56,7 @@ export async function DELETE(request: Request) {
       .from("uploaded_files")
       .delete()
       .eq("id", id)
-      .eq("user_id", user.id);
+      .eq("company_id", companyId);
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 
 const PAGE = 5000;
 
 /** Fetch all rows bypassing the default 1000-row limit with pagination. */
 async function fetchAllTransactions(
   supabase: SupabaseClient,
-  uid: string,
+  companyId: string,
   startDate: string,
   endDate: string,
   columns = "*",
@@ -20,7 +21,7 @@ async function fetchAllTransactions(
     const { data, error } = await supabase
       .from("transactions")
       .select(columns)
-      .eq("user_id", uid)
+      .eq("company_id", companyId)
       .gte("transaction_date", startDate)
       .lte("transaction_date", endDate)
       .order("transaction_date", { ascending: true })
@@ -47,12 +48,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
+    }
+
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get("year") ?? String(new Date().getFullYear()), 10);
     const prevYear = year - 1;
 
     const supabase = getSupabaseAdmin();
-    const uid = user.id;
 
     // Fetch metadata in parallel (small tables — no pagination needed)
     const [
@@ -66,18 +71,18 @@ export async function GET(request: Request) {
       alertRulesRes,
       filesRes,
     ] = await Promise.all([
-      supabase.from("accounts").select("*").eq("user_id", uid),
-      supabase.from("custom_groups").select("*").eq("user_id", uid).order("display_order"),
-      supabase.from("account_classification_overrides").select("*").eq("user_id", uid),
-      supabase.from("transaction_overrides").select("*").eq("user_id", uid),
-      supabase.from("custom_tags").select("*").eq("user_id", uid),
+      supabase.from("accounts").select("*").eq("company_id", companyId),
+      supabase.from("custom_groups").select("*").eq("company_id", companyId).order("display_order"),
+      supabase.from("account_classification_overrides").select("*").eq("company_id", companyId),
+      supabase.from("transaction_overrides").select("*").eq("company_id", companyId),
+      supabase.from("custom_tags").select("*").eq("company_id", companyId),
       supabase.from("account_tags").select("*"),
-      supabase.from("counter_account_names").select("*").eq("user_id", uid),
-      supabase.from("alert_rules").select("*").eq("user_id", uid),
+      supabase.from("counter_account_names").select("*").eq("company_id", companyId),
+      supabase.from("alert_rules").select("*").eq("company_id", companyId),
       supabase
         .from("uploaded_files")
         .select("*")
-        .eq("user_id", uid)
+        .eq("company_id", companyId)
         .order("year", { ascending: false }),
     ]);
 
@@ -94,9 +99,9 @@ export async function GET(request: Request) {
 
     // Fetch transactions with pagination (can be 10k–50k rows)
     const [txCurrent, txPrev] = await Promise.all([
-      fetchAllTransactions(supabase, uid, `${year}-01-01`, `${year}-12-31`),
+      fetchAllTransactions(supabase, companyId, `${year}-01-01`, `${year}-12-31`),
       fetchAllTransactions(
-        supabase, uid, `${prevYear}-01-01`, `${prevYear}-12-31`,
+        supabase, companyId, `${prevYear}-01-01`, `${prevYear}-12-31`,
         "id, account_id, group_code, transaction_date, debit, credit",
       ),
     ]);

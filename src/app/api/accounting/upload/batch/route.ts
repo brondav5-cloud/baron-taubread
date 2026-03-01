@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import type { ParsedTransaction } from "@/types/accounting";
 
 // POST /api/accounting/upload/batch
@@ -18,6 +19,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
+    }
+
     const body: {
       fileId: string;
       transactions: ParsedTransaction[];
@@ -32,12 +38,12 @@ export async function POST(request: Request) {
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch account code→id map for this user (only codes present in this batch)
+    // Fetch account code→id map for this company (only codes present in this batch)
     const codes = Array.from(new Set(transactions.map((t) => t.account_code)));
     const { data: accountRows, error: accErr } = await supabase
       .from("accounts")
       .select("id, code")
-      .eq("user_id", user.id)
+      .eq("company_id", companyId)
       .in("code", codes);
 
     if (accErr) {
@@ -58,6 +64,7 @@ export async function POST(request: Request) {
         const accountId = codeToId.get(tx.account_code);
         if (!accountId) return null;
         return {
+          company_id: companyId,
           user_id: user.id,
           file_id: fileId,
           account_id: accountId,
@@ -118,10 +125,10 @@ export async function POST(request: Request) {
       const { count: groupCount } = await supabase
         .from("custom_groups")
         .select("id", { count: "exact", head: true })
-        .eq("user_id", user.id);
+        .eq("company_id", companyId);
 
       if (!groupCount || groupCount === 0) {
-        await supabase.rpc("seed_default_custom_groups", { p_user_id: user.id });
+        await supabase.rpc("seed_default_custom_groups", { p_company_id: companyId });
       }
     }
 

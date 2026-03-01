@@ -36,6 +36,7 @@ export const PARENT_SECTION_ORDER: ParentSection[] = [
 
 export interface DbUploadedFile {
   id: string;
+  company_id: string;
   user_id: string;
   filename: string;
   year: number;
@@ -49,6 +50,7 @@ export interface DbUploadedFile {
 
 export interface DbAccount {
   id: string;
+  company_id: string;
   user_id: string;
   code: string;
   name: string;
@@ -58,6 +60,7 @@ export interface DbAccount {
 
 export interface DbTransaction {
   id: string;
+  company_id: string;
   user_id: string;
   file_id: string;
   account_id: string;
@@ -76,6 +79,7 @@ export interface DbTransaction {
 
 export interface DbTransactionOverride {
   id: string;
+  company_id: string;
   transaction_id: string;
   user_id: string;
   override_type: OverrideType;
@@ -87,6 +91,7 @@ export interface DbTransactionOverride {
 
 export interface DbCustomGroup {
   id: string;
+  company_id: string;
   user_id: string;
   name: string;
   display_order: number;
@@ -98,6 +103,7 @@ export interface DbCustomGroup {
 
 export interface DbCustomTag {
   id: string;
+  company_id: string;
   user_id: string;
   name: string;
   color: string;
@@ -111,6 +117,7 @@ export interface DbAccountTag {
 
 export interface DbCounterAccountName {
   id: string;
+  company_id: string;
   user_id: string;
   counter_account_code: string;
   display_name: string;
@@ -118,6 +125,7 @@ export interface DbCounterAccountName {
 
 export interface DbAccountClassificationOverride {
   id: string;
+  company_id: string;
   user_id: string;
   account_id: string;
   custom_group_id: string;
@@ -127,6 +135,7 @@ export interface DbAccountClassificationOverride {
 
 export interface DbAlertRule {
   id: string;
+  company_id: string;
   user_id: string;
   account_id: string | null;
   rule_type: AlertRuleType;

@@ -1,21 +1,26 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 
-async function getUser() {
+async function getAuthContext() {
   const authClient = createServerSupabaseClient();
   const { data: { user }, error } = await authClient.auth.getUser();
-  return error || !user ? null : user;
+  if (error || !user) return { user: null, companyId: null };
+  
+  const { companyId } = await resolveSelectedCompanyId(authClient, user.id);
+  return { user, companyId };
 }
 
 // GET /api/accounting/tags
 export async function GET() {
-  const user = await getUser();
+  const { user, companyId } = await getAuthContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!companyId) return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
   const [tagsRes, accountTagsRes] = await Promise.all([
-    supabase.from("custom_tags").select("*").eq("user_id", user.id),
+    supabase.from("custom_tags").select("*").eq("company_id", companyId),
     supabase.from("account_tags").select("account_id, tag_id"),
   ]);
 
@@ -28,8 +33,9 @@ export async function GET() {
 // POST /api/accounting/tags — create tag or assign account→tag
 // Body: { mode: 'tag', name, color, icon? } OR { mode: 'assign', account_id, tag_id }
 export async function POST(request: Request) {
-  const user = await getUser();
+  const { user, companyId } = await getAuthContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!companyId) return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
 
   const body = await request.json();
   const supabase = getSupabaseAdmin();
@@ -46,7 +52,7 @@ export async function POST(request: Request) {
   // Create new tag
   const { data, error } = await supabase
     .from("custom_tags")
-    .insert({ name: body.name, color: body.color, icon: body.icon, user_id: user.id })
+    .insert({ name: body.name, color: body.color, icon: body.icon, company_id: companyId, user_id: user.id })
     .select()
     .single();
 
@@ -56,8 +62,9 @@ export async function POST(request: Request) {
 
 // PATCH /api/accounting/tags — update tag
 export async function PATCH(request: Request) {
-  const user = await getUser();
+  const { user, companyId } = await getAuthContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!companyId) return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
 
   const body = await request.json();
   const { id, ...update } = body;
@@ -67,7 +74,7 @@ export async function PATCH(request: Request) {
     .from("custom_tags")
     .update(update)
     .eq("id", id)
-    .eq("user_id", user.id)
+    .eq("company_id", companyId)
     .select()
     .single();
 
@@ -77,8 +84,9 @@ export async function PATCH(request: Request) {
 
 // DELETE /api/accounting/tags?id=xxx or ?account_id=xxx&tag_id=xxx
 export async function DELETE(request: Request) {
-  const user = await getUser();
+  const { user, companyId } = await getAuthContext();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!companyId) return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
@@ -102,7 +110,7 @@ export async function DELETE(request: Request) {
       .from("custom_tags")
       .delete()
       .eq("id", id)
-      .eq("user_id", user.id);
+      .eq("company_id", companyId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true });
   }
