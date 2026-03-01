@@ -197,9 +197,21 @@ export default function FilesTab({ files, onUploadComplete }: Props) {
         totalSkipped += (batchData.skipped as number) ?? 0;
       }
 
+      // Phase 3: Build suppliers from transactions
+      setProgress("מבנה ספקים...");
+      const buildRes = await fetch("/api/accounting/suppliers/build", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_id: fileId }),
+      });
+      const buildData = await safeJson(buildRes);
+      const supplierNote = buildRes.ok && (buildData.suppliersCreated || buildData.suppliersUpdated)
+        ? ` · ${(buildData.suppliersCreated ?? 0) + (buildData.suppliersUpdated ?? 0)} ספקים עודכנו`
+        : "";
+
       setLastResult({
         success: true,
-        message: `יובאו ${totalInserted.toLocaleString()} תנועות · ${accounts.length} חשבונות${totalSkipped > 0 ? ` · ${totalSkipped} כפילויות דולגו` : ""}`,
+        message: `יובאו ${totalInserted.toLocaleString()} תנועות · ${accounts.length} חשבונות${totalSkipped > 0 ? ` · ${totalSkipped} כפילויות דולגו` : ""}${supplierNote}`,
       });
       setPreview(null);
       onUploadComplete();
