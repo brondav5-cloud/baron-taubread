@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, Tag, FileText, DollarSign } from "lucide-react";
+import { Search, Tag, FileText, DollarSign, Users } from "lucide-react";
 import { clsx } from "clsx";
 import type {
   DbAccount, DbCustomTag, DbAccountTag, DbCounterAccountName,
@@ -12,6 +12,7 @@ import { TagsTab } from "./account-mapping/TagsTab";
 import { CounterNamesTab } from "./account-mapping/CounterNamesTab";
 import { SuppliersTab } from "./account-mapping/SuppliersTab";
 import { RevenueGroupsTab } from "./account-mapping/RevenueGroupsTab";
+import { CustomersTab } from "./account-mapping/CustomersTab";
 
 interface Props {
   accounts: DbAccount[];
@@ -20,6 +21,7 @@ interface Props {
   accountTags: DbAccountTag[];
   counterNames: DbCounterAccountName[];
   revenueGroups: { group_code: string }[];
+  revenueCounterAccounts: { counter_account: string; display_name: string | null }[];
   transactions?: AccountTransaction[];
   onSaveTag: (tag: Partial<DbCustomTag> & { name: string; color: string }) => Promise<boolean>;
   onDeleteTag: (id: string) => Promise<boolean>;
@@ -29,10 +31,10 @@ interface Props {
   onRefetch: () => Promise<void>;
 }
 
-type InnerTab = "suppliers" | "tags" | "counter" | "revenue";
+type InnerTab = "suppliers" | "customers" | "tags" | "counter" | "revenue";
 
 export default function AccountMappingTab({
-  accounts, customGroups: _customGroups, tags, accountTags, counterNames, revenueGroups,
+  accounts, customGroups: _customGroups, tags, accountTags, counterNames, revenueGroups, revenueCounterAccounts,
   transactions: txProp,
   onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName, onRefetch,
 }: Props) {
@@ -40,6 +42,7 @@ export default function AccountMappingTab({
 
   const innerTabs: Array<{ id: InnerTab; label: string; icon: React.ReactNode }> = [
     { id: "suppliers", label: "ספקים", icon: <Search className="w-3.5 h-3.5" /> },
+    { id: "customers", label: "לקוחות", icon: <Users className="w-3.5 h-3.5" /> },
     { id: "tags", label: "תגיות", icon: <Tag className="w-3.5 h-3.5" /> },
     { id: "counter", label: "שמות נגדיים", icon: <FileText className="w-3.5 h-3.5" /> },
     { id: "revenue", label: "קבוצות הכנסה", icon: <DollarSign className="w-3.5 h-3.5" /> },
@@ -67,6 +70,12 @@ export default function AccountMappingTab({
 
       <div className="pt-1">
         {activeTab === "suppliers" && <SuppliersTab accounts={accounts} />}
+        {activeTab === "customers" && (
+          <CustomersTab
+            revenueCounterAccounts={revenueCounterAccounts}
+            onRefetch={onRefetch}
+          />
+        )}
         {activeTab === "tags" && (
           <TagsTab
             tags={tags}

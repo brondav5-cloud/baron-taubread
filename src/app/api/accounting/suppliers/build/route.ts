@@ -114,10 +114,15 @@ export async function POST(request: Request) {
 
     const supabase = getSupabaseAdmin();
 
-    const [transactions, accountMap] = await Promise.all([
+    const [transactions, accountMap, revenueCAResult] = await Promise.all([
       fetchAllTransactionsForCompany(supabase, companyId),
       fetchAccountsForCompany(supabase, companyId),
+      supabase.from("revenue_counter_accounts").select("counter_account").eq("company_id", companyId),
     ]);
+
+    const customerHSet = new Set<string>(
+      (revenueCAResult.data ?? []).map((r) => (r as { counter_account: string }).counter_account),
+    );
 
     const codeToAccount = new Map<string, AccountRow>();
     for (const a of Array.from(accountMap.values())) {
@@ -167,7 +172,7 @@ export async function POST(request: Request) {
     }[] = [];
 
     for (const [h, nameCounts] of Array.from(hToNameCounts.entries())) {
-      if (!h || !hHasExpense.has(h)) continue;
+      if (!h || !hHasExpense.has(h) || customerHSet.has(h)) continue;
 
       let bestName = "";
       let bestCount = 0;
@@ -200,7 +205,9 @@ export async function POST(request: Request) {
     const existingByH = new Map<string, { id: string }>();
     const toRemove: string[] = [];
     for (const s of existingSuppliers ?? []) {
-      if (!hHasExpense.has(s.counter_account)) {
+      const isCustomer = customerHSet.has(s.counter_account);
+      const hasExpense = hHasExpense.has(s.counter_account);
+      if (!hasExpense || isCustomer) {
         toRemove.push(s.id);
       } else {
         existingByH.set(s.counter_account, { id: s.id });

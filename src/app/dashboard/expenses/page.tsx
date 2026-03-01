@@ -257,6 +257,7 @@ export default function ExpensesPage() {
                   accountTags={data.accountTags}
                   counterNames={data.counterNames}
                   revenueGroups={data.revenueGroups}
+                  revenueCounterAccounts={data.revenueCounterAccounts}
                   transactions={data.transactions}
                   onRefetch={data.refetch}
                   onSaveTag={(tag) =>

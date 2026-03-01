@@ -22,6 +22,7 @@ interface SuppliersTabProps {
 export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
   const { suppliers, isLoading, error, refetch } = useSuppliers();
   const [search, setSearch] = useState("");
+  const [filterSection, setFilterSection] = useState<ParentSection | "all" | "unclassified">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [building, setBuilding] = useState(false);
   const [editingClassify, setEditingClassify] = useState<string | null>(null);
@@ -30,6 +31,14 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
   type SortKey = "counter_account" | "display_name" | "code" | "account_name" | "names";
   const [sortBy, setSortBy] = useState<SortKey>("display_name");
   const [sortAsc, setSortAsc] = useState(true);
+
+  const codeToSection = useMemo(() => {
+    const m = new Map<string, ParentSection>();
+    for (const a of accounts) {
+      m.set(a.code, getParentSectionFromGroupCode(a.latest_group_code || ""));
+    }
+    return m;
+  }, [accounts]);
 
   const filtered = useMemo(() => {
     let list = suppliers;
@@ -40,6 +49,15 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
           s.counter_account.toLowerCase().includes(q) ||
           s.display_name.toLowerCase().includes(q),
       );
+    }
+    if (filterSection !== "all") {
+      list = list.filter((s) => {
+        const code = s.classification?.manual_account_code ?? s.auto_account_code ?? "";
+        if (filterSection === "unclassified") return !code;
+        if (!code) return false;
+        const sec = codeToSection.get(code) ?? "other";
+        return sec === filterSection;
+      });
     }
     const code = (s: SupplierWithDetails) =>
       s.classification?.manual_account_code ?? s.auto_account_code ?? "";
@@ -55,7 +73,7 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
       return sortAsc ? cmp : -cmp;
     });
     return list;
-  }, [suppliers, search, sortBy, sortAsc]);
+  }, [suppliers, search, filterSection, sortBy, sortAsc, codeToSection]);
 
   const handleBuild = async () => {
     setBuilding(true);
@@ -123,24 +141,25 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
     s.classification?.manual_account_name ?? s.auto_account_name ?? null;
 
   const sectionCounts = useMemo(() => {
-    const codeToSection = new Map<string, ParentSection>();
-    for (const a of accounts) {
-      codeToSection.set(a.code, getParentSectionFromGroupCode(a.latest_group_code || ""));
-    }
-    const counts: Record<ParentSection, number> = {
+    const counts: Record<ParentSection | "unclassified", number> = {
       cost_of_goods: 0,
       operating: 0,
       admin: 0,
       finance: 0,
       other: 0,
+      unclassified: 0,
     };
     for (const s of suppliers) {
       const code = getDisplayCode(s);
-      const section = code && code !== "—" ? (codeToSection.get(code) ?? "other") : "other";
-      counts[section]++;
+      if (!code || code === "—") {
+        counts.unclassified++;
+      } else {
+        const section = codeToSection.get(code) ?? "other";
+        counts[section]++;
+      }
     }
     return counts;
-  }, [suppliers, accounts]);
+  }, [suppliers, codeToSection]);
 
   const toggleSort = (key: SortKey) => {
     setSortBy(key);
@@ -177,14 +196,32 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
         {accounts.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {PARENT_SECTION_ORDER.map((sec) => (
-              <div
+              <button
                 key={sec}
-                className="px-3 py-2 rounded-xl border border-gray-200 bg-white text-sm font-medium"
+                onClick={() => setFilterSection(filterSection === sec ? "all" : sec)}
+                className={clsx(
+                  "px-3 py-2 rounded-xl border text-sm font-medium transition-colors",
+                  filterSection === sec
+                    ? "border-primary-500 bg-primary-50 text-primary-700"
+                    : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700",
+                )}
               >
                 <span className="text-gray-500">{PARENT_SECTION_LABELS[sec]}:</span>{" "}
-                <span className="text-gray-800 font-bold">{sectionCounts[sec]}</span>
-              </div>
+                <span className="font-bold">{sectionCounts[sec]}</span>
+              </button>
             ))}
+            <button
+              onClick={() => setFilterSection(filterSection === "unclassified" ? "all" : "unclassified")}
+              className={clsx(
+                "px-3 py-2 rounded-xl border text-sm font-medium transition-colors",
+                filterSection === "unclassified"
+                  ? "border-amber-500 bg-amber-50 text-amber-700"
+                  : "border-gray-200 bg-white hover:bg-gray-50 text-gray-700",
+              )}
+            >
+              <span className="text-gray-500">ללא סיווג:</span>{" "}
+              <span className="font-bold">{sectionCounts.unclassified}</span>
+            </button>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3 justify-between">
@@ -198,6 +235,17 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
               className="pr-9 pl-4 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300 w-52"
             />
           </div>
+          <select
+            value={filterSection}
+            onChange={(e) => setFilterSection(e.target.value as typeof filterSection)}
+            className="px-3 py-2 text-xs border border-gray-200 rounded-xl bg-white focus:ring-2 focus:ring-primary-300"
+          >
+            <option value="all">כל הסעיפים</option>
+            <option value="unclassified">ללא סיווג</option>
+            {PARENT_SECTION_ORDER.map((sec) => (
+              <option key={sec} value={sec}>{PARENT_SECTION_LABELS[sec]}</option>
+            ))}
+          </select>
           <button
             onClick={() => void refetch()}
             disabled={isLoading}
@@ -385,7 +433,10 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
           </div>
         )}
         <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
-          {suppliers.length} ספקים · סיווג אוטומטי מתנועות הוצאה
+          {filtered.length === suppliers.length
+            ? `${suppliers.length} ספקים`
+            : `${filtered.length} מתוך ${suppliers.length} ספקים`}
+          {" · סיווג אוטומטי מתנועות הוצאה"}
         </div>
       </div>
     </div>

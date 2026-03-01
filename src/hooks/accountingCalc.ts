@@ -180,19 +180,29 @@ export function calcYearlyPnl(
 }
 
 /** Build virtual groups from yearly PnL (group_code as id) */
-export function getVirtualGroupsFromPnl(pnl: YearlyPnl): VirtualGroup[] {
+export function getVirtualGroupsFromPnl(
+  pnl: YearlyPnl,
+  accounts: DbAccount[] = [],
+): VirtualGroup[] {
+  const codeToName = new Map<string, string>();
+  for (const a of accounts) {
+    const gc = a.latest_group_code;
+    if (gc && !codeToName.has(gc)) codeToName.set(gc, a.name);
+  }
+
   const seen = new Set<string>();
   const result: VirtualGroup[] = [];
   for (const [groupCode, amount] of Array.from(pnl.total.byGroup.entries())) {
     if (seen.has(groupCode) || amount === 0) continue;
     seen.add(groupCode);
+    const accountName = codeToName.get(groupCode);
     result.push({
       id: groupCode,
-      name: groupCode,
+      name: accountName ? `${groupCode} - ${accountName}` : groupCode,
       parent_section: getParentSectionFromGroupCode(groupCode),
     });
   }
-  result.sort((a, b) => a.parent_section.localeCompare(b.parent_section) || a.name.localeCompare(b.name));
+  result.sort((a, b) => a.parent_section.localeCompare(b.parent_section) || a.id.localeCompare(b.id, undefined, { numeric: true }));
   return result;
 }
 
