@@ -21,7 +21,7 @@ interface Props {
   accountTags: DbAccountTag[];
   counterNames: DbCounterAccountName[];
   revenueGroups: { group_code: string }[];
-  revenueCounterAccounts: { counter_account: string; display_name: string | null }[];
+  revenueAccountCodes: { account_code: string; display_name: string | null }[];
   transactions?: AccountTransaction[];
   onSaveTag: (tag: Partial<DbCustomTag> & { name: string; color: string }) => Promise<boolean>;
   onDeleteTag: (id: string) => Promise<boolean>;
@@ -34,7 +34,7 @@ interface Props {
 type InnerTab = "suppliers" | "customers" | "tags" | "counter" | "revenue";
 
 export default function AccountMappingTab({
-  accounts, customGroups: _customGroups, tags, accountTags, counterNames, revenueGroups, revenueCounterAccounts,
+  accounts, customGroups: _customGroups, tags, accountTags, counterNames, revenueGroups, revenueAccountCodes,
   transactions: txProp,
   onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName, onRefetch,
 }: Props) {
@@ -72,7 +72,7 @@ export default function AccountMappingTab({
         {activeTab === "suppliers" && <SuppliersTab accounts={accounts} />}
         {activeTab === "customers" && (
           <CustomersTab
-            revenueCounterAccounts={revenueCounterAccounts}
+            revenueAccountCodes={revenueAccountCodes}
             onRefetch={onRefetch}
           />
         )}

@@ -4,43 +4,43 @@ import React, { useState, useMemo } from "react";
 import { Search, Plus, Trash2, Loader2, RefreshCw, Users } from "lucide-react";
 import { clsx } from "clsx";
 
-interface RevenueCounterAccount {
-  counter_account: string;
+interface RevenueAccountCode {
+  account_code: string;
   display_name: string | null;
 }
 
 interface CustomersTabProps {
-  revenueCounterAccounts: RevenueCounterAccount[];
+  revenueAccountCodes: RevenueAccountCode[];
   onRefetch: () => Promise<void>;
 }
 
-export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTabProps) {
+export function CustomersTab({ revenueAccountCodes, onRefetch }: CustomersTabProps) {
   const [search, setSearch] = useState("");
-  const [newAccount, setNewAccount] = useState("");
+  const [newCode, setNewCode] = useState("");
   const [newName, setNewName] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [deletingAccount, setDeletingAccount] = useState<string | null>(null);
+  const [deletingCode, setDeletingCode] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return revenueCounterAccounts;
+    if (!search.trim()) return revenueAccountCodes;
     const q = search.trim().toLowerCase();
-    return revenueCounterAccounts.filter(
+    return revenueAccountCodes.filter(
       (r) =>
-        r.counter_account.toLowerCase().includes(q) ||
+        r.account_code.toLowerCase().includes(q) ||
         (r.display_name ?? "").toLowerCase().includes(q),
     );
-  }, [revenueCounterAccounts, search]);
+  }, [revenueAccountCodes, search]);
 
   const handleAdd = async () => {
-    if (!newAccount.trim()) return;
+    if (!newCode.trim()) return;
     setIsAdding(true);
     try {
       const res = await fetch("/api/accounting/revenue-counter-accounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          counter_account: newAccount.trim(),
+          account_code: newCode.trim(),
           display_name: newName.trim() || null,
         }),
       });
@@ -48,7 +48,7 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
         const data = await res.json();
         throw new Error(data.error ?? "שגיאה");
       }
-      setNewAccount("");
+      setNewCode("");
       setNewName("");
       await onRefetch();
     } catch (err) {
@@ -58,11 +58,11 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
     }
   };
 
-  const handleDelete = async (counterAccount: string) => {
-    setDeletingAccount(counterAccount);
+  const handleDelete = async (accountCode: string) => {
+    setDeletingCode(accountCode);
     try {
       const res = await fetch(
-        `/api/accounting/revenue-counter-accounts?counter_account=${encodeURIComponent(counterAccount)}`,
+        `/api/accounting/revenue-counter-accounts?account_code=${encodeURIComponent(accountCode)}`,
         { method: "DELETE" },
       );
       if (!res.ok) {
@@ -73,7 +73,7 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
     } catch (err) {
       alert(err instanceof Error ? err.message : "שגיאה");
     } finally {
-      setDeletingAccount(null);
+      setDeletingCode(null);
     }
   };
 
@@ -92,11 +92,13 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
         <div className="flex items-start gap-3">
           <Users className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
           <div>
-            <h3 className="font-bold text-blue-900 mb-1">ח״ן נגדי — לקוחות (הכנסות)</h3>
+            <h3 className="font-bold text-blue-900 mb-1">מפתחות סיווג — לקוחות (הכנסות)</h3>
             <p className="text-blue-800">
-              הגדר כאן ח״ן נגדיים שהם לקוחות (מקור הכנסה), לא ספקים.
+              הגדר כאן מפתחות סיווג (קודי חשבון) שמייצגים לקוחות, לא ספקים.
               <br />
-              ח״ן שמופיעים כאן <strong>לא יופיעו ברשימת הספקים</strong>, גם אם יש להם תנועות זיכוי/הוצאה.
+              ספקים שמסווגים תחת מפתחות אלה <strong>לא יופיעו ברשימת הספקים</strong>.
+              <br />
+              <span className="text-blue-600">לדוגמה: 4100 (לקוחות), 4200 (לקוחות מיוחדים)</span>
             </p>
           </div>
         </div>
@@ -104,11 +106,11 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
 
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[150px]">
-          <label className="block text-xs font-medium text-gray-700 mb-1">ח״ן נגדי</label>
+          <label className="block text-xs font-medium text-gray-700 mb-1">מפתח סיווג</label>
           <input
             type="text"
-            value={newAccount}
-            onChange={(e) => setNewAccount(e.target.value)}
+            value={newCode}
+            onChange={(e) => setNewCode(e.target.value)}
             placeholder="לדוגמה: 4100"
             className="w-full px-3 py-2 text-xs border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-300"
           />
@@ -125,7 +127,7 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
         </div>
         <button
           onClick={() => void handleAdd()}
-          disabled={isAdding || !newAccount.trim()}
+          disabled={isAdding || !newCode.trim()}
           className="flex items-center gap-1.5 px-4 py-2 text-xs font-medium bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50"
         >
           {isAdding ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -156,8 +158,8 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
 
         {filtered.length === 0 ? (
           <div className="py-12 text-center text-gray-400 text-sm">
-            {revenueCounterAccounts.length === 0
-              ? "עדיין לא הוגדרו ח״ן נגדיים כלקוחות."
+            {revenueAccountCodes.length === 0
+              ? "עדיין לא הוגדרו מפתחות סיווג כלקוחות."
               : "לא נמצאו תוצאות."}
           </div>
         ) : (
@@ -165,33 +167,33 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
             <table className="text-[11px] border-collapse w-full">
               <thead>
                 <tr className="bg-gradient-to-l from-slate-700 to-slate-800 text-white">
-                  <th className="text-right py-3 px-4 font-semibold">ח״ן נגדי</th>
+                  <th className="text-right py-3 px-4 font-semibold">מפתח סיווג</th>
                   <th className="text-right py-3 px-4 font-semibold">שם תצוגה</th>
                   <th className="text-right py-3 px-2 font-semibold w-16">פעולות</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r.counter_account} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
+                  <tr key={r.account_code} className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors">
                     <td className="py-2 px-4">
                       <code className="bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-mono text-[10px]">
-                        {r.counter_account}
+                        {r.account_code}
                       </code>
                     </td>
                     <td className="py-2 px-4 text-gray-700">{r.display_name ?? "—"}</td>
                     <td className="py-2 px-2">
                       <button
-                        onClick={() => void handleDelete(r.counter_account)}
-                        disabled={deletingAccount === r.counter_account}
+                        onClick={() => void handleDelete(r.account_code)}
+                        disabled={deletingCode === r.account_code}
                         className={clsx(
                           "p-1.5 rounded-lg transition-colors",
-                          deletingAccount === r.counter_account
+                          deletingCode === r.account_code
                             ? "opacity-50"
                             : "text-red-600 hover:bg-red-50",
                         )}
                         title="הסר"
                       >
-                        {deletingAccount === r.counter_account ? (
+                        {deletingCode === r.account_code ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
                           <Trash2 className="w-3.5 h-3.5" />
@@ -205,7 +207,7 @@ export function CustomersTab({ revenueCounterAccounts, onRefetch }: CustomersTab
           </div>
         )}
         <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400">
-          {revenueCounterAccounts.length} ח״ן נגדיים מוגדרים כלקוחות
+          {revenueAccountCodes.length} מפתחות סיווג מוגדרים כלקוחות
         </div>
       </div>
     </div>

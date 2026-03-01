@@ -84,15 +84,15 @@ export async function GET(request: Request) {
 
     let suppliers: { id: string; counter_account: string; display_name: string; auto_account_code: string | null; auto_account_name: string | null }[] = [];
     let revenueGroups: { group_code: string }[] = [];
-    let revenueCounterAccounts: { counter_account: string; display_name: string | null }[] = [];
-    const [sRes, rRes, rcaRes] = await Promise.all([
+    let revenueAccountCodes: { account_code: string; display_name: string | null }[] = [];
+    const [sRes, rRes, racRes] = await Promise.all([
       supabase.from("suppliers").select("id, counter_account, display_name, auto_account_code, auto_account_name").eq("company_id", companyId),
       supabase.from("revenue_groups").select("group_code").eq("company_id", companyId),
-      supabase.from("revenue_counter_accounts").select("counter_account, display_name").eq("company_id", companyId),
+      supabase.from("revenue_account_codes").select("account_code, display_name").eq("company_id", companyId),
     ]);
     if (!sRes.error) suppliers = (sRes.data ?? []) as typeof suppliers;
     if (!rRes.error) revenueGroups = (rRes.data ?? []) as typeof revenueGroups;
-    if (!rcaRes.error) revenueCounterAccounts = (rcaRes.data ?? []) as typeof revenueCounterAccounts;
+    if (!racRes.error) revenueAccountCodes = (racRes.data ?? []) as typeof revenueAccountCodes;
 
     const metaErrors = [
       accountsRes, overridesRes, tagsRes, accountTagsRes, counterNamesRes, alertRulesRes, filesRes,
@@ -129,7 +129,7 @@ export async function GET(request: Request) {
       files:                filesRes.data ?? [],
       suppliers,
       revenueGroups,
-      revenueCounterAccounts,
+      revenueAccountCodes,
     });
   } catch (err) {
     console.error("Data API error:", err);

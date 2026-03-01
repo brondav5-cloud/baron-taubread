@@ -19,15 +19,15 @@ export async function GET() {
     }
 
     const { data, error } = await supabase
-      .from("revenue_counter_accounts")
+      .from("revenue_account_codes")
       .select("*")
       .eq("company_id", companyId)
-      .order("counter_account");
+      .order("account_code");
 
     if (error) throw error;
     return NextResponse.json({ data: data ?? [] });
   } catch (err) {
-    console.error("[GET revenue-counter-accounts]", err);
+    console.error("[GET revenue-account-codes]", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Server error" },
       { status: 500 },
@@ -52,27 +52,27 @@ export async function POST(req: Request) {
     }
 
     const body = await req.json();
-    const { counter_account, display_name } = body as {
-      counter_account?: string;
+    const { account_code, display_name } = body as {
+      account_code?: string;
       display_name?: string;
     };
 
-    if (!counter_account?.trim()) {
+    if (!account_code?.trim()) {
       return NextResponse.json(
-        { error: "counter_account is required" },
+        { error: "account_code is required" },
         { status: 400 },
       );
     }
 
     const { data, error } = await supabase
-      .from("revenue_counter_accounts")
+      .from("revenue_account_codes")
       .upsert(
         {
           company_id: companyId,
-          counter_account: counter_account.trim(),
+          account_code: account_code.trim(),
           display_name: display_name?.trim() || null,
         },
-        { onConflict: "company_id,counter_account" },
+        { onConflict: "company_id,account_code" },
       )
       .select()
       .single();
@@ -80,7 +80,7 @@ export async function POST(req: Request) {
     if (error) throw error;
     return NextResponse.json({ data });
   } catch (err) {
-    console.error("[POST revenue-counter-accounts]", err);
+    console.error("[POST revenue-account-codes]", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Server error" },
       { status: 500 },
@@ -105,25 +105,25 @@ export async function DELETE(req: Request) {
     }
 
     const { searchParams } = new URL(req.url);
-    const counterAccount = searchParams.get("counter_account");
+    const accountCode = searchParams.get("account_code");
 
-    if (!counterAccount) {
+    if (!accountCode) {
       return NextResponse.json(
-        { error: "counter_account query param required" },
+        { error: "account_code query param required" },
         { status: 400 },
       );
     }
 
     const { error } = await supabase
-      .from("revenue_counter_accounts")
+      .from("revenue_account_codes")
       .delete()
       .eq("company_id", companyId)
-      .eq("counter_account", counterAccount);
+      .eq("account_code", accountCode);
 
     if (error) throw error;
     return NextResponse.json({ success: true });
   } catch (err) {
-    console.error("[DELETE revenue-counter-accounts]", err);
+    console.error("[DELETE revenue-account-codes]", err);
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Server error" },
       { status: 500 },

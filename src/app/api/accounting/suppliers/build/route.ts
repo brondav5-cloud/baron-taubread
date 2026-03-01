@@ -114,14 +114,14 @@ export async function POST(request: Request) {
 
     const supabase = getSupabaseAdmin();
 
-    const [transactions, accountMap, revenueCAResult] = await Promise.all([
+    const [transactions, accountMap, revenueACResult] = await Promise.all([
       fetchAllTransactionsForCompany(supabase, companyId),
       fetchAccountsForCompany(supabase, companyId),
-      supabase.from("revenue_counter_accounts").select("counter_account").eq("company_id", companyId),
+      supabase.from("revenue_account_codes").select("account_code").eq("company_id", companyId),
     ]);
 
-    const customerHSet = new Set<string>(
-      (revenueCAResult.data ?? []).map((r) => (r as { counter_account: string }).counter_account),
+    const customerAccountCodes = new Set<string>(
+      (revenueACResult.data ?? []).map((r) => (r as { account_code: string }).account_code),
     );
 
     const codeToAccount = new Map<string, AccountRow>();
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     }[] = [];
 
     for (const [h, nameCounts] of Array.from(hToNameCounts.entries())) {
-      if (!h || !hHasExpense.has(h) || customerHSet.has(h)) continue;
+      if (!h || !hHasExpense.has(h)) continue;
 
       let bestName = "";
       let bestCount = 0;
@@ -186,6 +186,9 @@ export async function POST(request: Request) {
 
       const codes = hToAccountCodes.get(h) ?? [];
       const autoCode = mode(codes);
+
+      if (autoCode && customerAccountCodes.has(autoCode)) continue;
+
       const accName = autoCode ? codeToAccount.get(autoCode)?.name ?? null : null;
 
       supplierRows.push({
@@ -200,14 +203,16 @@ export async function POST(request: Request) {
     // Fetch existing suppliers in one query
     const { data: existingSuppliers } = await supabase
       .from("suppliers")
-      .select("id, counter_account")
+      .select("id, counter_account, auto_account_code")
       .eq("company_id", companyId);
     const existingByH = new Map<string, { id: string }>();
     const toRemove: string[] = [];
+    const newSupplierHSet = new Set(supplierRows.map((r) => r.counter_account));
     for (const s of existingSuppliers ?? []) {
-      const isCustomer = customerHSet.has(s.counter_account);
       const hasExpense = hHasExpense.has(s.counter_account);
-      if (!hasExpense || isCustomer) {
+      const isCustomerCode = s.auto_account_code && customerAccountCodes.has(s.auto_account_code);
+      const stillValid = newSupplierHSet.has(s.counter_account);
+      if (!hasExpense || isCustomerCode || !stillValid) {
         toRemove.push(s.id);
       } else {
         existingByH.set(s.counter_account, { id: s.id });
