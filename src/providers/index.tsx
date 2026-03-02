@@ -13,6 +13,7 @@ import { TasksProvider } from "@/context/TasksContext";
 import { WorkflowProvider } from "@/context/WorkflowContext";
 import { FaultsProvider } from "@/context/FaultsContext";
 import { PushNotificationProvider } from "@/context/PushNotificationContext";
+import { MeetingsProvider } from "@/context/MeetingsContext";
 
 class ProviderErrorBoundary extends Component<
   { children: ReactNode; fallback: ReactNode },
@@ -57,7 +58,9 @@ function InnerProviders({ children }: ProvidersProps) {
                   <FaultsProvider>
                     <StoresAndProductsProvider>
                       <VisitsProvider>
-                        <TreatmentProvider>{children}</TreatmentProvider>
+                        <TreatmentProvider>
+                            <MeetingsProvider>{children}</MeetingsProvider>
+                          </TreatmentProvider>
                       </VisitsProvider>
                     </StoresAndProductsProvider>
                   </FaultsProvider>

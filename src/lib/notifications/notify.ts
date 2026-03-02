@@ -9,6 +9,7 @@ export type NotificationType =
   | "fault_assigned"
   | "fault_status"
   | "reminder"
+  | "meeting_task_assigned"
   | "general";
 
 export interface SendNotificationInput {

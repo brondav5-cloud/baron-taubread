@@ -24,6 +24,7 @@ import {
   Upload,
   BarChart3,
   Wallet,
+  FileText,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -50,7 +51,8 @@ interface NavItem {
     | "profitability"
     | "upload"
     | "settings"
-    | "expenses";
+    | "expenses"
+    | "meetings";
   badge?: string;
   badgeColor?: string;
 }
@@ -88,12 +90,18 @@ const navigation: NavSection[] = [
     title: "ניהול שטח",
     items: [
       {
+        label: "סיכומי ישיבות",
+        href: "/dashboard/meetings",
+        icon: FileText,
+        module: "meetings",
+        badge: "חדש",
+        badgeColor: "bg-indigo-100 text-indigo-700",
+      },
+      {
         label: "מסכם פעולות",
         href: "/dashboard/field-summary",
         icon: BarChart3,
         module: "treatment",
-        badge: "חדש",
-        badgeColor: "bg-emerald-100 text-emerald-700",
       },
       {
         label: "משימות",

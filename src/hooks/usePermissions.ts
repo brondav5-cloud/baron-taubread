@@ -19,6 +19,7 @@ export const MODULE_TO_PATH: Record<string, string[]> = {
   upload: ["/dashboard/upload"],
   settings: ["/dashboard/settings"],
   expenses: ["/dashboard/expenses"],
+  meetings: ["/dashboard/meetings"],
 };
 
 export function usePermissions() {

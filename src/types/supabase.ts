@@ -28,7 +28,8 @@ export type UserPermissionModule =
   | "profitability"
   | "upload"
   | "settings"
-  | "expenses";
+  | "expenses"
+  | "meetings";
 
 export type UserPermissions = Partial<Record<UserPermissionModule, boolean>>;
 
@@ -564,4 +565,69 @@ export interface ProcessingResult {
     processingTimeMs: number;
   };
   error?: string;
+}
+
+// ============================================
+// MEETINGS DB TYPES
+// ============================================
+
+export interface DbMeeting {
+  id: string;
+  company_id: string;
+  title: string;
+  meeting_type: string;
+  meeting_date: string;
+  location: string | null;
+  participants: unknown;
+  agenda_items: unknown;
+  decisions: string | null;
+  next_meeting_date: string | null;
+  status: string;
+  created_by: string;
+  created_by_name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DbMeetingTask {
+  id: string;
+  meeting_id: string;
+  agenda_item_index: number | null;
+  task_id: string;
+  assignee_user_id: string;
+  assignee_name: string;
+  task_title: string;
+  due_date: string | null;
+  priority: string;
+  company_id: string;
+  created_at: string;
+}
+
+export interface MeetingInsert {
+  company_id: string;
+  title: string;
+  meeting_type: string;
+  meeting_date: string;
+  location?: string | null;
+  participants?: unknown;
+  agenda_items?: unknown;
+  decisions?: string | null;
+  next_meeting_date?: string | null;
+  status?: string;
+  created_by: string;
+  created_by_name: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface MeetingTaskInsert {
+  meeting_id: string;
+  agenda_item_index?: number | null;
+  task_id: string;
+  assignee_user_id: string;
+  assignee_name: string;
+  task_title: string;
+  due_date?: string | null;
+  priority?: string;
+  company_id: string;
 }
