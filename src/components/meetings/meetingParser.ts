@@ -40,6 +40,57 @@ function parseHebrewDate(raw: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+function extractTaskFromMention(
+  line: string,
+  users: User[],
+  lineIndex: number,
+  fallbackTitle?: string,
+): ParsedTask | null {
+  const atMatch = line.match(/@([^\s@]+(?:\s[^\s@]+)?)/);
+  if (!atMatch) return null;
+
+  const namePart = (atMatch[1] ?? "").trim();
+  const user = users.find(
+    (u) =>
+      u.name.toLowerCase() === namePart.toLowerCase() ||
+      u.name.toLowerCase().startsWith(namePart.toLowerCase()),
+  );
+  if (!user) return null;
+
+  const afterMention = line
+    .slice((line.indexOf(atMatch[0]) ?? 0) + atMatch[0].length)
+    .trim();
+
+  const dateMatch = afterMention.match(
+    /(?:עד|by|until)\s+(\d{1,2}[./\-]\d{1,2}(?:[./\-]\d{2,4})?)/i,
+  );
+  const dueDate = dateMatch?.[1]
+    ? parseHebrewDate(dateMatch[1])
+    : new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
+
+  let priority: ParsedTask["priority"] = "normal";
+  if (/דחוף|urgent|asap/i.test(afterMention)) priority = "urgent";
+  else if (/נמוך|low/i.test(afterMention)) priority = "low";
+
+  const title =
+    afterMention
+      .replace(/(?:עד|by|until)\s+\S+/i, "")
+      .replace(/דחוף|urgent|asap|נמוך|low/gi, "")
+      .trim() ||
+    fallbackTitle ||
+    `משימה עבור ${user.name}`;
+
+  return {
+    id: `task_${lineIndex}_${user.id}`,
+    userId: user.id,
+    userName: user.name,
+    title,
+    dueDate,
+    priority,
+    lineIndex,
+  };
+}
+
 export function parseContent(
   text: string,
   users: User[],
@@ -52,60 +103,49 @@ export function parseContent(
     const trimmed = line.trim();
     if (!trimmed) return;
 
-    // Decision: starts with "החלטה", "✅", or "⚡"
+    // ── Decision pattern ──────────────────────────────────
     const decisionMatch = trimmed.match(
       /^(?:החלטה[:.\s\-]*|✅\s*|⚡\s*)(.+)/,
     );
+
     if (decisionMatch?.[1]) {
-      decisions.push({
-        id: `dec_${lineIndex}`,
-        text: decisionMatch[1].trim(),
-        lineIndex,
-      });
-      return;
-    }
+      const fullDecisionText = decisionMatch[1].trim();
 
-    // Task: line starts with @Name
-    const atMatch = trimmed.match(/^@(.+?)(?:\s|$)/);
-    if (atMatch) {
-      const namePart = (atMatch[1] ?? "").trim();
-      const user = users.find(
-        (u) =>
-          u.name.toLowerCase() === namePart.toLowerCase() ||
-          u.name.toLowerCase().startsWith(namePart.toLowerCase()),
-      );
-      if (user) {
-        const afterMention = trimmed
-          .slice(trimmed.indexOf(namePart) + namePart.length)
-          .trim();
+      // Strip @mention and date from decision text for the decisions panel
+      const decisionText = fullDecisionText
+        .replace(/@[^\s]+(?:\s[^\s]+)?/g, "")
+        .replace(/(?:עד|by|until)\s+\S+/gi, "")
+        .replace(/\s{2,}/g, " ")
+        .trim();
 
-        const dateMatch = afterMention.match(
-          /(?:עד|by|until)\s+(\d{1,2}[./\-]\d{1,2}(?:[./\-]\d{2,4})?)/i,
-        );
-        const dueDate = dateMatch?.[1]
-          ? parseHebrewDate(dateMatch[1])
-          : new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
-
-        let priority: ParsedTask["priority"] = "normal";
-        if (/דחוף|urgent|asap/i.test(afterMention)) priority = "urgent";
-        else if (/נמוך|low/i.test(afterMention)) priority = "low";
-
-        const title =
-          afterMention
-            .replace(/(?:עד|by|until)\s+\S+/i, "")
-            .replace(/דחוף|urgent|asap|נמוך|low/gi, "")
-            .trim() || `משימה עבור ${user.name}`;
-
-        tasks.push({
-          id: `task_${lineIndex}`,
-          userId: user.id,
-          userName: user.name,
-          title,
-          dueDate,
-          priority,
+      if (decisionText) {
+        decisions.push({
+          id: `dec_${lineIndex}`,
+          text: decisionText,
           lineIndex,
         });
       }
+
+      // ── Combined: decision line also contains @mention ──
+      // e.g. "החלטה: להגדיל תקציב @דוד עד 15/3"
+      if (/@/.test(fullDecisionText)) {
+        const task = extractTaskFromMention(
+          fullDecisionText,
+          users,
+          lineIndex,
+          decisionText, // use decision text as task title fallback
+        );
+        if (task) tasks.push(task);
+      }
+
+      return; // done with this line
+    }
+
+    // ── Pure @mention line ────────────────────────────────
+    // e.g. "@דוד לבצע משימה עד 15/3"
+    if (/^@/.test(trimmed)) {
+      const task = extractTaskFromMention(trimmed, users, lineIndex);
+      if (task) tasks.push(task);
     }
   });
 

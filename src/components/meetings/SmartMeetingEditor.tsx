@@ -192,17 +192,30 @@ export default function SmartMeetingEditor({
 
       {/* Hint line */}
       {!readonly && (
-        <div className="flex gap-3 mt-1.5 text-xs text-gray-400 flex-wrap">
-          <span>
-            <span className="font-semibold text-blue-500">החלטה:</span> [טקסט] — לתיבת החלטות
-          </span>
-          <span>
-            <span className="font-semibold text-orange-500">@שם</span> [משימה]{" "}
-            <span className="font-semibold text-orange-400">עד DD/MM</span> — לתיבת משימות
-          </span>
-          <span>
-            <span className="font-semibold text-green-500">✅</span> [טקסט] — גם החלטה
-          </span>
+        <div className="mt-2 space-y-1">
+          <div className="flex gap-3 text-xs text-gray-400 flex-wrap">
+            <span>
+              <span className="font-semibold text-emerald-600">החלטה:</span>{" "}
+              [טקסט] — תיבת החלטות
+            </span>
+            <span>
+              <span className="font-semibold text-orange-500">@שם</span>{" "}
+              [משימה]{" "}
+              <span className="font-semibold text-orange-400">עד DD/MM</span>{" "}
+              — תיבת משימות
+            </span>
+            <span>
+              <span className="font-semibold text-emerald-600">✅</span>{" "}
+              [טקסט] — גם החלטה
+            </span>
+          </div>
+          <div className="text-xs text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1 inline-block">
+            💡 <span className="font-semibold">החלטה + הקצאה:</span>{" "}
+            <code className="bg-white px-1 rounded">
+              החלטה: [טקסט] @שם עד DD/MM
+            </code>{" "}
+            — נכנס גם לשתי התיבות
+          </div>
         </div>
       )}
     </div>

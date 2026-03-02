@@ -218,19 +218,26 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
             dir="rtl"
           >
             {rawContent.split("\n").map((line, i) => {
-              const isDecision = /^(החלטה[:.\-\s]|✅|⚡)/.test(line.trim());
-              const isTask = /^@\S/.test(line.trim());
+              const trimmed = line.trim();
+              const isDecision = /^(החלטה[:.\-\s]|✅|⚡)/.test(trimmed);
+              const isTask = /^@\S/.test(trimmed);
+              const isBoth = isDecision && /@/.test(trimmed);
               return (
                 <div
                   key={i}
                   className={`py-0.5 px-2 rounded-lg my-0.5 ${
-                    isDecision
+                    isBoth
+                      ? "bg-gradient-to-l from-orange-50 to-emerald-50 border border-emerald-200 font-medium"
+                      : isDecision
                       ? "bg-emerald-50 text-emerald-900 font-medium"
                       : isTask
                       ? "bg-orange-50 text-orange-900 font-medium"
                       : ""
                   }`}
                 >
+                  {isBoth && (
+                    <span className="text-xs ml-1 opacity-60">✅📌</span>
+                  )}
                   {line || "\u00A0"}
                 </div>
               );
