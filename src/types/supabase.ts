@@ -339,6 +339,7 @@ export interface DbTask {
   rejected_at: string | null;
   rejection_reason: string | null;
   due_date: string;
+  is_private: boolean;
 }
 
 // Workflow (from Supabase) - משימות מורכבות
@@ -583,6 +584,8 @@ export interface DbMeeting {
   decisions: string | null;
   next_meeting_date: string | null;
   status: string;
+  visibility: string;
+  allowed_viewers: unknown;
   created_by: string;
   created_by_name: string;
   created_at: string;
@@ -614,6 +617,8 @@ export interface MeetingInsert {
   decisions?: string | null;
   next_meeting_date?: string | null;
   status?: string;
+  visibility?: string;
+  allowed_viewers?: unknown;
   created_by: string;
   created_by_name: string;
   created_at?: string;

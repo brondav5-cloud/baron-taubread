@@ -10,19 +10,48 @@ import type {
 // MEETINGS
 // ============================================
 
+/**
+ * Fetches all meetings the current user can see:
+ * 1. Own-company meetings (visibility filtered by RLS)
+ * 2. Cross-company meetings where the user is a participant or allowed_viewer (via RLS)
+ */
 export async function getMeetings(companyId: string): Promise<DbMeeting[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  // Query 1: own company (RLS applies visibility rules)
+  const q1 = supabase
     .from("meetings")
     .select("*")
     .eq("company_id", companyId)
     .order("meeting_date", { ascending: false });
 
-  if (error) {
-    console.error("[getMeetings]", error);
-    return [];
-  }
-  return data || [];
+  // Query 2: cross-company meetings (RLS returns only what user is allowed to see)
+  const q2 = supabase
+    .from("meetings")
+    .select("*")
+    .neq("company_id", companyId)
+    .order("meeting_date", { ascending: false });
+
+  const [r1, r2] = await Promise.all([q1, q2]);
+
+  if (r1.error) console.error("[getMeetings] company query:", r1.error);
+  if (r2.error) console.error("[getMeetings] cross-company query:", r2.error);
+
+  const all = [...(r1.data || []), ...(r2.data || [])];
+
+  // Deduplicate and sort by meeting_date descending
+  const seen = new Set<string>();
+  const unique = all.filter((m) => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
+  unique.sort(
+    (a, b) =>
+      new Date(b.meeting_date).getTime() - new Date(a.meeting_date).getTime(),
+  );
+
+  return unique;
 }
 
 export async function getMeetingById(id: string): Promise<DbMeeting | null> {

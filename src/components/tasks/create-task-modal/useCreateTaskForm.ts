@@ -116,6 +116,7 @@ export function useCreateTaskForm({
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [notifySms, setNotifySms] = useState(false);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   // Reset form when modal opens
   useEffect(() => {
@@ -134,6 +135,7 @@ export function useCreateTaskForm({
       setNewChecklistItem("");
       setNotifyEmail(false);
       setNotifySms(false);
+      setIsPrivate(false);
     }
   }, [isOpen, initialStoreId, initialStoreName]);
 
@@ -216,6 +218,7 @@ export function useCreateTaskForm({
           dueDate: calculateDueDate(dueOption, customDueDate),
           notifyEmail,
           notifySms,
+          isPrivate,
         },
         currentUser.id,
         currentUser.name,
@@ -239,6 +242,7 @@ export function useCreateTaskForm({
       customDueDate,
       notifyEmail,
       notifySms,
+      isPrivate,
       currentUser,
       createTask,
       onClose,
@@ -288,6 +292,8 @@ export function useCreateTaskForm({
     setShowAddCategoryModal,
     setNotifyEmail,
     setNotifySms,
+    isPrivate,
+    setIsPrivate,
 
     // Handlers
     handleAddAssignee,

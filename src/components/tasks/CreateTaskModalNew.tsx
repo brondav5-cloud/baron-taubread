@@ -1,6 +1,6 @@
 "use client";
 
-import { X } from "lucide-react";
+import { X, Lock } from "lucide-react";
 import { CategoryEditModal } from "@/components/settings/task-categories";
 import {
   TaskTypeSelector,
@@ -177,6 +177,23 @@ export function CreateTaskModal({
                 </div>
               </div>
             )}
+
+            {/* Private task toggle */}
+            <div className="bg-orange-50 rounded-xl p-3 border border-orange-100">
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isPrivate}
+                  onChange={(e) => form.setIsPrivate(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+                />
+                <Lock className="w-4 h-4 text-orange-500 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium text-gray-800">משימה פרטית</p>
+                  <p className="text-xs text-gray-500">רק אתה, המוקצים ו-admin יוכלו לראות</p>
+                </div>
+              </label>
+            </div>
           </div>
 
           {/* Footer */}

@@ -33,6 +33,7 @@ export interface CreateTaskInput {
   dueDate?: string;
   notifyEmail?: boolean;
   notifySms?: boolean;
+  isPrivate?: boolean;
 }
 
 export function useTaskMutations(
@@ -86,6 +87,7 @@ export function useTaskMutations(
         ],
         handlerPhotos: [],
         dueDate: input.dueDate || calculateDueDate(input.priority),
+        isPrivate: input.isPrivate ?? false,
       };
       if (companyId) {
         const insertRow = taskToDbTask(newTask, companyId);

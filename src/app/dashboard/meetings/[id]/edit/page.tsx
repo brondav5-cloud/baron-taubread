@@ -62,6 +62,8 @@ export default function EditMeetingPage({ params }: Props) {
             } catch { return ""; }
           })(),
           nextMeetingDate: meeting.nextMeetingDate,
+          visibility: meeting.visibility,
+          allowedViewers: meeting.allowedViewers,
         }}
       />
     </div>

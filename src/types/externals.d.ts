@@ -55,6 +55,7 @@ declare module "lucide-react" {
   export const Globe: Icon;
   export const GripVertical: Icon;
   export const Home: Icon;
+  export const Lock: Icon;
   export const Info: Icon;
   export const LayoutDashboard: Icon;
   export const LayoutGrid: Icon;

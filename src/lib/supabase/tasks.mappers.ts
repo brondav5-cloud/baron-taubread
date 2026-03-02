@@ -40,6 +40,7 @@ export function dbTaskToTask(db: DbTask): Task {
     rejectedAt: db.rejected_at ?? undefined,
     rejectionReason: db.rejection_reason ?? undefined,
     dueDate: db.due_date,
+    isPrivate: db.is_private ?? false,
   };
 }
 
@@ -74,6 +75,7 @@ export function taskToDbTask(
     rejected_at: task.rejectedAt ?? null,
     rejection_reason: task.rejectionReason ?? null,
     due_date: task.dueDate,
+    is_private: task.isPrivate ?? false,
   };
 }
 

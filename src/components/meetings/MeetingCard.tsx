@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { Calendar, MapPin, Users, CheckCircle, FileText } from "lucide-react";
+import { Calendar, MapPin, Users, CheckCircle, FileText, Lock, Globe } from "lucide-react";
 import type { Meeting } from "@/types/meeting";
-import { MEETING_TYPE_CONFIG } from "@/types/meeting";
+import { MEETING_TYPE_CONFIG, MEETING_VISIBILITY_CONFIG } from "@/types/meeting";
 
 interface MeetingCardProps {
   meeting: Meeting;
@@ -11,6 +11,7 @@ interface MeetingCardProps {
 
 export default function MeetingCard({ meeting }: MeetingCardProps) {
   const cfg = MEETING_TYPE_CONFIG[meeting.meetingType];
+  const visCfg = MEETING_VISIBILITY_CONFIG[meeting.visibility ?? "public"];
   const dateStr = new Date(meeting.meetingDate).toLocaleDateString("he-IL", {
     weekday: "short",
     day: "numeric",
@@ -21,6 +22,8 @@ export default function MeetingCard({ meeting }: MeetingCardProps) {
   });
 
   const isDraft = meeting.status === "draft";
+  const isRestricted = meeting.visibility === "restricted";
+  const isParticipantsOnly = meeting.visibility === "participants_only";
 
   return (
     <Link href={`/dashboard/meetings/${meeting.id}`}>
@@ -39,6 +42,17 @@ export default function MeetingCard({ meeting }: MeetingCardProps) {
               {!isDraft && (
                 <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium flex items-center gap-1">
                   <CheckCircle size={10} /> סוכם
+                </span>
+              )}
+              {/* Visibility badge — only show if not public */}
+              {isRestricted && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${visCfg.color}`}>
+                  <Lock size={10} /> {visCfg.label}
+                </span>
+              )}
+              {isParticipantsOnly && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex items-center gap-1 ${visCfg.color}`}>
+                  <Globe size={10} /> {visCfg.label}
                 </span>
               )}
             </div>

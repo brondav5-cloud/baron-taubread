@@ -5,6 +5,7 @@
 export type MeetingType = "team" | "management" | "one_on_one";
 export type MeetingStatus = "draft" | "final";
 export type MeetingTaskPriority = "urgent" | "normal" | "low";
+export type MeetingVisibility = "public" | "participants_only" | "restricted";
 
 export interface MeetingParticipant {
   userId?: string;
@@ -47,6 +48,8 @@ export interface Meeting {
   decisions?: string;
   nextMeetingDate?: string;
   status: MeetingStatus;
+  visibility: MeetingVisibility;
+  allowedViewers: string[];
   createdBy: string;
   createdByName: string;
   createdAt: string;
@@ -80,7 +83,30 @@ export interface MeetingFormInput {
   decisions: string;
   nextMeetingDate: string;
   pendingTasks: MeetingTaskMention[];
+  visibility: MeetingVisibility;
+  allowedViewers: string[];
 }
+
+export const MEETING_VISIBILITY_CONFIG: Record<MeetingVisibility, { label: string; icon: string; description: string; color: string }> = {
+  public: {
+    label: "לכולם",
+    icon: "🌐",
+    description: "כל חברי הצוות רואים את הסיכום",
+    color: "bg-green-100 text-green-700",
+  },
+  participants_only: {
+    label: "משתתפים בלבד",
+    icon: "👥",
+    description: "רק מי שנכח בישיבה רואה את הסיכום",
+    color: "bg-blue-100 text-blue-700",
+  },
+  restricted: {
+    label: "מוגבל",
+    icon: "🔒",
+    description: "רק אנשים שבחרתי יכולים לראות",
+    color: "bg-orange-100 text-orange-700",
+  },
+};
 
 export const MEETING_TYPE_CONFIG: Record<MeetingType, { label: string; icon: string; color: string }> = {
   team: { label: "ישיבת צוות", icon: "👥", color: "bg-blue-100 text-blue-700" },

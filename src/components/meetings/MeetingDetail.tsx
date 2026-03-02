@@ -13,9 +13,11 @@ import {
   CheckCircle,
   Clock,
   ArrowRight,
+  Lock,
+  Globe,
 } from "lucide-react";
 import type { Meeting, MeetingTaskRecord } from "@/types/meeting";
-import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG } from "@/types/meeting";
+import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG, MEETING_VISIBILITY_CONFIG } from "@/types/meeting";
 
 import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -168,6 +170,17 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
               ) : (
                 <span className="text-sm px-3 py-1 rounded-full bg-yellow-100 text-yellow-700 font-medium flex items-center gap-1">
                   <Clock size={13} /> טיוטה
+                </span>
+              )}
+              {/* Visibility badge */}
+              {meeting.visibility === "restricted" && (
+                <span className={`text-sm px-3 py-1 rounded-full font-medium flex items-center gap-1 ${MEETING_VISIBILITY_CONFIG.restricted.color}`}>
+                  <Lock size={13} /> {MEETING_VISIBILITY_CONFIG.restricted.label}
+                </span>
+              )}
+              {meeting.visibility === "participants_only" && (
+                <span className={`text-sm px-3 py-1 rounded-full font-medium flex items-center gap-1 ${MEETING_VISIBILITY_CONFIG.participants_only.color}`}>
+                  <Globe size={13} /> {MEETING_VISIBILITY_CONFIG.participants_only.label}
                 </span>
               )}
             </div>

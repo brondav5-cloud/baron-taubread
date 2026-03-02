@@ -98,11 +98,18 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
       const meeting = dbMeetingToMeeting(data);
       setMeetings((prev) => [meeting, ...prev]);
 
-      // Fire task creation in background — don't block navigation
+      // Fire task creation in background
       if (pendingTasks.length) {
-        _createPendingTasks(pendingTasks, meetingId, companyId, createdBy, createdByName, input.title).catch(
-          console.error,
-        );
+        const isRestrictedMeeting = (input.visibility ?? "public") === "restricted";
+        _createPendingTasks(
+          pendingTasks,
+          meetingId,
+          companyId,
+          createdBy,
+          createdByName,
+          typeof input.title === "string" ? input.title : "",
+          isRestrictedMeeting,
+        ).catch(console.error);
       }
 
       return { meetingId, error: null };
@@ -130,6 +137,8 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
 
       if (pendingTasks?.length) {
         const meeting = meetings.find((m) => m.id === meetingId);
+        const isRestrictedMeeting =
+          (updates.visibility ?? meeting?.visibility ?? "public") === "restricted";
         _createPendingTasks(
           pendingTasks,
           meetingId,
@@ -137,6 +146,7 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
           meeting?.createdBy ?? "",
           meeting?.createdByName ?? "",
           meeting?.title ?? "",
+          isRestrictedMeeting,
         ).catch(console.error);
       }
 
@@ -195,6 +205,7 @@ async function _createPendingTasks(
   createdBy: string,
   createdByName: string,
   meetingTitle: string,
+  isPrivate: boolean,
 ) {
   if (!pendingTasks.length) return;
 
@@ -241,6 +252,7 @@ async function _createPendingTasks(
       ],
       handlerPhotos: [],
       dueDate,
+      isPrivate,
     };
 
     const dbTask = taskToDbTask(taskInput, companyId);
@@ -263,7 +275,6 @@ async function _createPendingTasks(
     }
   }
 
-  // Notify all assignees at once
   if (recipientUserIds.length) {
     sendNotification({
       recipientUserIds: Array.from(new Set(recipientUserIds)),

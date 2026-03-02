@@ -104,6 +104,9 @@ export interface Task {
 
   // דדליין (מחושב לפי דחיפות)
   dueDate: string;
+
+  // נראות פרטית — רק היוצר, המוקצה ו-admin רואים
+  isPrivate?: boolean;
 }
 
 // מוקצה למשימה

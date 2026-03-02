@@ -9,6 +9,7 @@ import {
   Clock,
   Users,
   FileText,
+  Lock,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { Task } from "@/types/task";
@@ -68,6 +69,12 @@ export function TaskCard({
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs">
               <FileText className="w-3 h-3" />
               כללי
+            </span>
+          )}
+          {task.isPrivate && (
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 text-xs">
+              <Lock className="w-3 h-3" />
+              פרטי
             </span>
           )}
           <OverdueBadge dueDate={task.dueDate} status={task.status} />

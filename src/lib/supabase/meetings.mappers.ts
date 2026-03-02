@@ -1,5 +1,5 @@
 import type { DbMeeting, DbMeetingTask } from "@/types/supabase";
-import type { Meeting, MeetingTaskRecord, AgendaItem, MeetingParticipant } from "@/types/meeting";
+import type { Meeting, MeetingTaskRecord, AgendaItem, MeetingParticipant, MeetingVisibility } from "@/types/meeting";
 
 export function dbMeetingToMeeting(db: DbMeeting): Meeting {
   return {
@@ -14,6 +14,8 @@ export function dbMeetingToMeeting(db: DbMeeting): Meeting {
     decisions: db.decisions ?? undefined,
     nextMeetingDate: db.next_meeting_date ?? undefined,
     status: db.status as Meeting["status"],
+    visibility: (db.visibility as MeetingVisibility) || "public",
+    allowedViewers: (db.allowed_viewers as string[]) || [],
     createdBy: db.created_by,
     createdByName: db.created_by_name,
     createdAt: db.created_at,
