@@ -330,6 +330,22 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
         </div>
       )}
 
+      {/* Previous meeting link */}
+      {meeting.prevMeetingId && (
+        <div className="bg-gray-50 rounded-2xl border border-gray-200 p-4 mb-4 flex items-center gap-3 print:hidden">
+          <ArrowRight size={18} className="text-gray-400 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-xs text-gray-500 mb-0.5">המשך ישיבה:</p>
+            <Link
+              href={`/dashboard/meetings/${meeting.prevMeetingId}`}
+              className="text-sm font-medium text-blue-600 hover:underline"
+            >
+              פתח ישיבה קודמת ←
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Next meeting */}
       {meeting.nextMeetingDate && (
         <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 mb-4 flex items-center gap-3">

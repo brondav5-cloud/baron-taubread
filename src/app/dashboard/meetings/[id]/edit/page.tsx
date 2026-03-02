@@ -64,6 +64,7 @@ export default function EditMeetingPage({ params }: Props) {
           nextMeetingDate: meeting.nextMeetingDate,
           visibility: meeting.visibility,
           allowedViewers: meeting.allowedViewers,
+          prevMeetingId: meeting.prevMeetingId,
         }}
       />
     </div>

@@ -586,6 +586,7 @@ export interface DbMeeting {
   status: string;
   visibility: string;
   allowed_viewers: unknown;
+  prev_meeting_id: string | null;
   created_by: string;
   created_by_name: string;
   created_at: string;
@@ -619,6 +620,7 @@ export interface MeetingInsert {
   status?: string;
   visibility?: string;
   allowed_viewers?: unknown;
+  prev_meeting_id?: string | null;
   created_by: string;
   created_by_name: string;
   created_at?: string;

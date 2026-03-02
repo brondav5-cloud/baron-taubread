@@ -359,10 +359,77 @@
   @media print {
     .print\:hidden { display: none !important; }
     .print\:block { display: block !important; }
-    body { font-size: 12pt; }
+
+    @page {
+      size: A4;
+      margin: 20mm 15mm;
+    }
+
+    html, body {
+      direction: rtl;
+      font-family: "Heebo", Arial, sans-serif;
+      font-size: 11pt;
+      color: #111 !important;
+      background: white !important;
+    }
+
+    /* Hide all nav / sidebar chrome */
+    nav, aside, header, footer,
+    [data-print-hide="true"] {
+      display: none !important;
+    }
+
+    /* Keep cards visible but flatten them */
     .bg-white { background: white !important; }
-    .shadow-sm, .shadow-md { box-shadow: none !important; }
-    .rounded-2xl { border-radius: 0 !important; }
-    .border { border: 1px solid #e5e7eb !important; }
+    .shadow-sm, .shadow-md, .shadow-lg { box-shadow: none !important; }
+    .rounded-2xl, .rounded-xl, .rounded-lg { border-radius: 4px !important; }
+    .border { border: 1px solid #ccc !important; }
+
+    /* Avoid page breaks inside cards */
+    .bg-white.rounded-2xl,
+    .bg-white.rounded-xl {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    /* Meeting title stands out */
+    h1, h2, h3 {
+      color: #111 !important;
+    }
+
+    /* Meeting content body */
+    .meeting-content {
+      font-size: 10pt;
+      line-height: 1.6;
+    }
+
+    /* Decision + task items */
+    .meeting-content ul,
+    .meeting-content ol {
+      padding-right: 16pt;
+    }
+
+    /* Color badges → high contrast */
+    [class*="bg-blue-"], [class*="bg-green-"],
+    [class*="bg-yellow-"], [class*="bg-red-"],
+    [class*="bg-purple-"], [class*="bg-orange-"] {
+      background: #f3f4f6 !important;
+      color: #111 !important;
+      border: 1px solid #d1d5db !important;
+    }
+
+    /* Buttons / interactive elements */
+    button { display: none !important; }
+    a { text-decoration: none !important; color: inherit !important; }
+
+    /* Page footer with date */
+    body::after {
+      content: "הודפס: " attr(data-print-date);
+      display: block;
+      text-align: center;
+      font-size: 8pt;
+      color: #999;
+      margin-top: 20mm;
+    }
   }
 }

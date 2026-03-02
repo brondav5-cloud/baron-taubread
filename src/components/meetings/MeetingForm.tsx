@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Calendar, MapPin } from "lucide-react";
+import { Calendar, MapPin, ArrowRight } from "lucide-react";
 import type { MeetingType, MeetingTaskMention, MeetingVisibility } from "@/types/meeting";
 import { MEETING_TYPE_CONFIG } from "@/types/meeting";
 import { useMeetings } from "@/context/MeetingsContext";
@@ -28,6 +28,7 @@ interface MeetingFormProps {
     nextMeetingDate?: string;
     visibility?: MeetingVisibility;
     allowedViewers?: string[];
+    prevMeetingId?: string;
   };
   meetingId?: string;
   mode: "create" | "edit";
@@ -41,7 +42,7 @@ export default function MeetingForm({
   companyLogo,
 }: MeetingFormProps) {
   const router = useRouter();
-  const { createMeeting, saveMeeting } = useMeetings();
+  const { createMeeting, saveMeeting, meetings } = useMeetings();
   const auth = useAuth();
   const { allUsers } = useUsers();
 
@@ -71,6 +72,9 @@ export default function MeetingForm({
   );
   const [allowedViewers, setAllowedViewers] = useState<string[]>(
     initialData?.allowedViewers ?? [],
+  );
+  const [prevMeetingId, setPrevMeetingId] = useState<string>(
+    initialData?.prevMeetingId ?? "",
   );
 
   // Live parsed state
@@ -155,6 +159,7 @@ export default function MeetingForm({
         status,
         visibility,
         allowed_viewers: allowedViewers,
+        prev_meeting_id: prevMeetingId || null,
       };
 
       if (mode === "create") {
@@ -272,6 +277,31 @@ export default function MeetingForm({
         onVisibilityChange={setVisibility}
         onAllowedViewersChange={setAllowedViewers}
       />
+
+      {/* Continuation of previous meeting */}
+      {meetings.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <ArrowRight size={15} className="text-gray-400" />
+            המשך ישיבה קודמת (אופציונלי)
+          </label>
+          <select
+            value={prevMeetingId}
+            onChange={(e) => setPrevMeetingId(e.target.value)}
+            className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          >
+            <option value="">— ללא קישור —</option>
+            {meetings
+              .filter((m) => m.id !== meetingId)
+              .slice(0, 20)
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {new Date(m.meetingDate).toLocaleDateString("he-IL")} — {m.title}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
 
       {/* Smart editor */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">

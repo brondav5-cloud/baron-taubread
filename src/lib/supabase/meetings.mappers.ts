@@ -16,6 +16,7 @@ export function dbMeetingToMeeting(db: DbMeeting): Meeting {
     status: db.status as Meeting["status"],
     visibility: (db.visibility as MeetingVisibility) || "public",
     allowedViewers: (db.allowed_viewers as string[]) || [],
+    prevMeetingId: db.prev_meeting_id ?? undefined,
     createdBy: db.created_by,
     createdByName: db.created_by_name,
     createdAt: db.created_at,

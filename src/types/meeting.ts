@@ -50,6 +50,7 @@ export interface Meeting {
   status: MeetingStatus;
   visibility: MeetingVisibility;
   allowedViewers: string[];
+  prevMeetingId?: string;
   createdBy: string;
   createdByName: string;
   createdAt: string;
