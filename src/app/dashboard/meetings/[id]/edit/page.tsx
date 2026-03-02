@@ -54,10 +54,11 @@ export default function EditMeetingPage({ params }: Props) {
           participants: meeting.participants,
           rawContent: (() => {
             try {
-              const s = (meeting as unknown as { settings?: { rawContent?: string } }).settings;
-              if (s?.rawContent) return s.rawContent;
               const first = meeting.agendaItems[0];
-              const c = first?.content as { content?: { content?: { text?: string }[] }[] };
+              if (!first) return "";
+              const item = first as unknown as { rawContent?: string };
+              if (item.rawContent) return item.rawContent;
+              const c = first.content as { content?: { content?: { text?: string }[] }[] };
               return c?.content?.[0]?.content?.[0]?.text ?? "";
             } catch { return ""; }
           })(),

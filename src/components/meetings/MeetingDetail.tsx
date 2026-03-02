@@ -61,14 +61,15 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
     else setDeleting(false);
   };
 
-  // Extract raw content from agenda_items
+  // Extract raw content from agenda_items[0].rawContent
   const rawContent = (() => {
     try {
-      const settings = (meeting as unknown as { settings?: { rawContent?: string } }).settings;
-      if (settings?.rawContent) return settings.rawContent;
-      // Fallback: extract text from agenda items
       const first = meeting.agendaItems[0];
       if (!first) return "";
+      // New format: rawContent stored directly
+      const item = first as unknown as { rawContent?: string };
+      if (item.rawContent) return item.rawContent;
+      // Legacy fallback: text in content.content[0].content[0].text
       const content = first.content as { content?: { content?: { text?: string }[] }[] };
       return content?.content?.[0]?.content?.[0]?.text ?? "";
     } catch {

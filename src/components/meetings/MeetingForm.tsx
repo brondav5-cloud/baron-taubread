@@ -152,11 +152,13 @@ export default function MeetingForm({
       meeting_date: new Date(meetingDate).toISOString(),
       location: location || null,
       participants,
+      // Store rawContent inside agenda_items JSONB (no extra column needed)
       agenda_items: [
         {
           id: "main",
           title: "סיכום",
-          content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: rawContent }] }] },
+          rawContent,
+          content: {},
         },
       ],
       decisions: parsedDecisions.map((d) => d.text).join("\n"),
@@ -164,8 +166,6 @@ export default function MeetingForm({
         ? new Date(nextMeetingDate).toISOString()
         : null,
       status,
-      // Store raw content for editing
-      settings: { rawContent },
     };
 
     if (mode === "create") {
