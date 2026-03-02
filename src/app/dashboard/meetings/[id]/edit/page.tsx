@@ -52,10 +52,16 @@ export default function EditMeetingPage({ params }: Props) {
           meetingDate: meeting.meetingDate,
           location: meeting.location,
           participants: meeting.participants,
-          agendaItems: meeting.agendaItems,
-          decisions: meeting.decisions,
+          rawContent: (() => {
+            try {
+              const s = (meeting as unknown as { settings?: { rawContent?: string } }).settings;
+              if (s?.rawContent) return s.rawContent;
+              const first = meeting.agendaItems[0];
+              const c = first?.content as { content?: { content?: { text?: string }[] }[] };
+              return c?.content?.[0]?.content?.[0]?.text ?? "";
+            } catch { return ""; }
+          })(),
           nextMeetingDate: meeting.nextMeetingDate,
-          pendingTasks: [],
         }}
       />
     </div>

@@ -2,33 +2,33 @@
 
 import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
-import { Plus, Trash2, ChevronDown, ChevronUp, Calendar, MapPin, Users } from "lucide-react";
-import type {
-  MeetingFormInput,
-  MeetingType,
-  MeetingTaskMention,
-  AgendaItem,
-} from "@/types/meeting";
-import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG } from "@/types/meeting";
+import { Plus, Trash2, Calendar, MapPin, Users } from "lucide-react";
+import type { MeetingType, MeetingTaskMention } from "@/types/meeting";
+import { MEETING_TYPE_CONFIG } from "@/types/meeting";
 import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsers } from "@/context/UsersContext";
-
-const MeetingEditor = dynamic(() => import("./MeetingEditor"), { ssr: false });
+import SmartMeetingEditor, {
+  DecisionsPanel,
+  TasksPanel,
+  parsedTaskToMention,
+} from "./SmartMeetingEditor";
+import type { ParsedDecision, ParsedTask } from "./meetingParser";
 
 interface MeetingFormProps {
-  initialData?: Partial<MeetingFormInput>;
+  initialData?: {
+    title?: string;
+    meetingType?: MeetingType;
+    meetingDate?: string;
+    location?: string;
+    participants?: { userId?: string; name: string; isExternal?: boolean }[];
+    rawContent?: string;
+    nextMeetingDate?: string;
+  };
   meetingId?: string;
   mode: "create" | "edit";
   companyLogo?: string | null;
 }
-
-const newAgendaItem = (index: number): AgendaItem => ({
-  id: `agenda_${Date.now()}_${index}`,
-  title: "",
-  content: {},
-});
 
 export default function MeetingForm({
   initialData,
@@ -46,23 +46,32 @@ export default function MeetingForm({
   const now = new Date();
   const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-  const [form, setForm] = useState<MeetingFormInput>({
-    title: initialData?.title ?? "",
-    meetingType: initialData?.meetingType ?? "team",
-    meetingDate: initialData?.meetingDate?.slice(0, 16) ?? defaultDate,
-    location: initialData?.location ?? "",
-    participants: initialData?.participants ?? [],
-    agendaItems: initialData?.agendaItems?.length
-      ? initialData.agendaItems
-      : [newAgendaItem(0)],
-    decisions: initialData?.decisions ?? "",
-    nextMeetingDate: initialData?.nextMeetingDate?.slice(0, 10) ?? "",
-    pendingTasks: initialData?.pendingTasks ?? [],
-  });
-
-  const [expandedItems, setExpandedItems] = useState<Set<string>>(
-    new Set(form.agendaItems.map((i) => i.id)),
+  // ── State ────────────────────────────────────────────────
+  const [title, setTitle] = useState(initialData?.title ?? "");
+  const [meetingType, setMeetingType] = useState<MeetingType>(
+    initialData?.meetingType ?? "team",
   );
+  const [meetingDate, setMeetingDate] = useState(
+    initialData?.meetingDate?.slice(0, 16) ?? defaultDate,
+  );
+  const [location, setLocation] = useState(initialData?.location ?? "");
+  const [participants, setParticipants] = useState(
+    initialData?.participants ?? [],
+  );
+  const [rawContent, setRawContent] = useState(initialData?.rawContent ?? "");
+  const [nextMeetingDate, setNextMeetingDate] = useState(
+    initialData?.nextMeetingDate?.slice(0, 10) ?? "",
+  );
+
+  // Live parsed state
+  const [parsedDecisions, setParsedDecisions] = useState<ParsedDecision[]>([]);
+  const [parsedTasks, setParsedTasks] = useState<ParsedTask[]>([]);
+
+  // Allow editing task details inline (due date / priority override)
+  const [taskOverrides, setTaskOverrides] = useState<
+    Record<string, { dueDate?: string; priority?: MeetingTaskMention["priority"] }>
+  >({});
+
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -71,128 +80,128 @@ export default function MeetingForm({
       ? { id: auth.user.userId ?? "", name: auth.user.userName ?? "" }
       : { id: "", name: "" };
 
-  // ── Participants ──────────────────────────────────────────
+  // ── Participants ─────────────────────────────────────────
 
   const toggleParticipant = (userId: string, name: string) => {
-    setForm((f) => {
-      const exists = f.participants.some((p) => p.userId === userId);
-      return {
-        ...f,
-        participants: exists
-          ? f.participants.filter((p) => p.userId !== userId)
-          : [...f.participants, { userId, name }],
-      };
+    setParticipants((prev) => {
+      const exists = prev.some((p) => p.userId === userId);
+      return exists
+        ? prev.filter((p) => p.userId !== userId)
+        : [...prev, { userId, name }];
     });
   };
 
   const addExternalParticipant = () => {
     const name = window.prompt("שם המשתתף החיצוני:");
-    if (!name?.trim()) return;
-    setForm((f) => ({
-      ...f,
-      participants: [
-        ...f.participants,
+    if (name?.trim()) {
+      setParticipants((prev) => [
+        ...prev,
         { name: name.trim(), isExternal: true },
-      ],
+      ]);
+    }
+  };
+
+  const removeParticipant = (idx: number) => {
+    setParticipants((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  // ── Task overrides ───────────────────────────────────────
+
+  const handleDueDateChange = useCallback((taskId: string, date: string) => {
+    setTaskOverrides((prev) => ({
+      ...prev,
+      [taskId]: { ...prev[taskId], dueDate: date },
     }));
-  };
-
-  // ── Agenda items ──────────────────────────────────────────
-
-  const addAgendaItem = () => {
-    const item = newAgendaItem(form.agendaItems.length);
-    setForm((f) => ({ ...f, agendaItems: [...f.agendaItems, item] }));
-    setExpandedItems((s) => { const n = new Set(s); n.add(item.id); return n; });
-  };
-
-  const removeAgendaItem = (id: string) => {
-    setForm((f) => ({
-      ...f,
-      agendaItems: f.agendaItems.filter((i) => i.id !== id),
-    }));
-  };
-
-  const updateAgendaTitle = (id: string, title: string) => {
-    setForm((f) => ({
-      ...f,
-      agendaItems: f.agendaItems.map((i) =>
-        i.id === id ? { ...i, title } : i,
-      ),
-    }));
-  };
-
-  const updateAgendaContent = (id: string, content: Record<string, unknown>) => {
-    setForm((f) => ({
-      ...f,
-      agendaItems: f.agendaItems.map((i) =>
-        i.id === id ? { ...i, content } : i,
-      ),
-    }));
-  };
-
-  const handleTaskCreated = useCallback((task: MeetingTaskMention) => {
-    setForm((f) => ({ ...f, pendingTasks: [...f.pendingTasks, task] }));
   }, []);
 
-  const removePendingTask = (taskId: string) => {
-    setForm((f) => ({
-      ...f,
-      pendingTasks: f.pendingTasks.filter((t) => t.id !== taskId),
-    }));
-  };
+  const handlePriorityChange = useCallback(
+    (taskId: string, priority: MeetingTaskMention["priority"]) => {
+      setTaskOverrides((prev) => ({
+        ...prev,
+        [taskId]: { ...prev[taskId], priority },
+      }));
+    },
+    [],
+  );
+
+  // Merge parsed tasks with overrides
+  const finalTasks: ParsedTask[] = parsedTasks.map((t) => ({
+    ...t,
+    dueDate: taskOverrides[t.id]?.dueDate ?? t.dueDate,
+    priority: taskOverrides[t.id]?.priority ?? t.priority,
+  }));
 
   // ── Submit ────────────────────────────────────────────────
 
-  const handleSubmit = async (finalStatus: "draft" | "final") => {
-    if (!form.title.trim()) { setError("נא להזין כותרת לישיבה"); return; }
-    if (!form.meetingDate) { setError("נא לבחור תאריך"); return; }
+  const handleSubmit = async (status: "draft" | "final") => {
+    if (!title.trim()) {
+      setError("נא להזין כותרת לישיבה");
+      return;
+    }
 
     setSaving(true);
     setError("");
 
+    const pendingTasks: MeetingTaskMention[] = finalTasks.map((t) =>
+      parsedTaskToMention(t),
+    );
+
     const payload = {
-      title: form.title.trim(),
-      meeting_type: form.meetingType,
-      meeting_date: new Date(form.meetingDate).toISOString(),
-      location: form.location || null,
-      participants: form.participants,
-      agenda_items: form.agendaItems,
-      decisions: form.decisions || null,
-      next_meeting_date: form.nextMeetingDate
-        ? new Date(form.nextMeetingDate).toISOString()
+      title: title.trim(),
+      meeting_type: meetingType,
+      meeting_date: new Date(meetingDate).toISOString(),
+      location: location || null,
+      participants,
+      agenda_items: [
+        {
+          id: "main",
+          title: "סיכום",
+          content: { type: "doc", content: [{ type: "paragraph", content: [{ type: "text", text: rawContent }] }] },
+        },
+      ],
+      decisions: parsedDecisions.map((d) => d.text).join("\n"),
+      next_meeting_date: nextMeetingDate
+        ? new Date(nextMeetingDate).toISOString()
         : null,
-      status: finalStatus,
+      status,
+      // Store raw content for editing
+      settings: { rawContent },
     };
 
     if (mode === "create") {
       const { meetingId: newId, error: err } = await createMeeting(
         payload,
-        form.pendingTasks,
+        pendingTasks,
         currentUser.id,
         currentUser.name,
       );
-      if (err || !newId) { setError(err ?? "שגיאה בשמירה"); setSaving(false); return; }
+      if (err || !newId) {
+        setError(err ?? "שגיאה בשמירה");
+        setSaving(false);
+        return;
+      }
       router.push(`/dashboard/meetings/${newId}`);
     } else if (meetingId) {
-      const ok = await saveMeeting(meetingId, payload, form.pendingTasks);
-      if (!ok) { setError("שגיאה בשמירה"); setSaving(false); return; }
+      const ok = await saveMeeting(meetingId, payload, pendingTasks);
+      if (!ok) {
+        setError("שגיאה בשמירה");
+        setSaving(false);
+        return;
+      }
       router.push(`/dashboard/meetings/${meetingId}`);
     }
   };
 
-  const priorityTasks = form.pendingTasks.filter(t => t.priority === "urgent");
-  const otherTasks = form.pendingTasks.filter(t => t.priority !== "urgent");
-  const allTasks = [...priorityTasks, ...otherTasks];
-
   return (
-    <div className="max-w-3xl mx-auto pb-20">
-      {/* Header */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4">
+    <div className="max-w-3xl mx-auto pb-20 space-y-4">
+      {/* Header card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-start gap-4">
           {companyLogo && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={companyLogo}
-              alt="לוגו חברה"
+              alt="לוגו"
               className="w-12 h-12 object-contain rounded-lg flex-shrink-0"
             />
           )}
@@ -200,8 +209,8 @@ export default function MeetingForm({
             <input
               type="text"
               placeholder="כותרת הישיבה..."
-              value={form.title}
-              onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               className="w-full text-xl font-bold text-gray-900 border-0 border-b-2 border-gray-200 pb-1 focus:outline-none focus:border-blue-500 bg-transparent"
             />
           </div>
@@ -209,33 +218,34 @@ export default function MeetingForm({
 
         {/* Meeting type */}
         <div className="mt-4 flex flex-wrap gap-2">
-          {(Object.entries(MEETING_TYPE_CONFIG) as [MeetingType, typeof MEETING_TYPE_CONFIG[MeetingType]][]).map(
-            ([type, cfg]) => (
-              <button
-                key={type}
-                onClick={() => setForm((f) => ({ ...f, meetingType: type }))}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  form.meetingType === type
-                    ? cfg.color + " ring-2 ring-offset-1 ring-current"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-                }`}
-              >
-                {cfg.icon} {cfg.label}
-              </button>
-            ),
-          )}
+          {(
+            Object.entries(MEETING_TYPE_CONFIG) as [
+              MeetingType,
+              (typeof MEETING_TYPE_CONFIG)[MeetingType],
+            ][]
+          ).map(([type, cfg]) => (
+            <button
+              key={type}
+              onClick={() => setMeetingType(type)}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                meetingType === type
+                  ? cfg.color + " ring-2 ring-offset-1 ring-current"
+                  : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {cfg.icon} {cfg.label}
+            </button>
+          ))}
         </div>
 
-        {/* Date + location */}
+        {/* Date + Location */}
         <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="flex items-center gap-2 text-sm text-gray-600">
             <Calendar size={16} className="text-gray-400 flex-shrink-0" />
             <input
               type="datetime-local"
-              value={form.meetingDate}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, meetingDate: e.target.value }))
-              }
+              value={meetingDate}
+              onChange={(e) => setMeetingDate(e.target.value)}
               className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
           </label>
@@ -244,10 +254,8 @@ export default function MeetingForm({
             <input
               type="text"
               placeholder="מיקום / פלטפורמה"
-              value={form.location}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, location: e.target.value }))
-              }
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
               className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
           </label>
@@ -255,13 +263,13 @@ export default function MeetingForm({
       </div>
 
       {/* Participants */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
-        <h2 className="font-semibold text-gray-800 flex items-center gap-2 mb-3">
-          <Users size={18} className="text-gray-400" /> משתתפים
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+        <h2 className="font-semibold text-gray-800 flex items-center gap-2 mb-3 text-sm">
+          <Users size={16} className="text-gray-400" /> משתתפים
         </h2>
         <div className="flex flex-wrap gap-2">
           {userOptions.map((u) => {
-            const selected = form.participants.some((p) => p.userId === u.id);
+            const selected = participants.some((p) => p.userId === u.id);
             return (
               <button
                 key={u.id}
@@ -281,198 +289,75 @@ export default function MeetingForm({
           })}
           <button
             onClick={addExternalParticipant}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm bg-dashed border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-400 hover:text-blue-600"
           >
             <Plus size={14} /> חיצוני
           </button>
         </div>
-        {form.participants.filter(p => p.isExternal).map((p, i) => (
-          <span key={i} className="inline-flex items-center gap-1 mt-2 mr-2 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full">
-            🌐 {p.name}
-          </span>
-        ))}
-      </div>
 
-      {/* Agenda Items */}
-      <div className="mb-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">📋 סדר יום</h2>
-          <span className="text-xs text-gray-400">הקלד @ להקצאת משימה</span>
-        </div>
-
-        {form.agendaItems.map((item, idx) => {
-          const isOpen = expandedItems.has(item.id);
-          const itemTasks = form.pendingTasks.filter(
-            (t) => t.agendaItemIndex === idx,
-          );
-
-          return (
-            <div
-              key={item.id}
-              className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-            >
-              <div className="flex items-center gap-2 p-4">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                  {idx + 1}
-                </span>
-                <input
-                  type="text"
-                  placeholder={`סעיף ${idx + 1}...`}
-                  value={item.title}
-                  onChange={(e) => updateAgendaTitle(item.id, e.target.value)}
-                  className="flex-1 text-sm font-medium text-gray-800 border-0 focus:outline-none bg-transparent"
-                />
-                <div className="flex items-center gap-1">
-                  {itemTasks.length > 0 && (
-                    <span className="text-xs bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full font-medium">
-                      {itemTasks.length} משימות
-                    </span>
-                  )}
+        {/* External participants */}
+        {participants.filter((p) => p.isExternal).length > 0 && (
+          <div className="flex flex-wrap gap-2 mt-2">
+            {participants
+              .filter((p) => p.isExternal)
+              .map((p, i) => (
+                <span
+                  key={i}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded-full"
+                >
+                  🌐 {p.name}
                   <button
                     onClick={() =>
-                      setExpandedItems((s) => {
-                        const n = new Set(s);
-                        isOpen ? n.delete(item.id) : n.add(item.id);
-                        return n;
-                      })
+                      removeParticipant(
+                        participants.findIndex(
+                          (pp) => pp.isExternal && pp.name === p.name,
+                        ),
+                      )
                     }
-                    className="p-1 text-gray-400 hover:text-gray-600"
+                    className="text-yellow-400 hover:text-yellow-700"
                   >
-                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                    <Trash2 size={10} />
                   </button>
-                  {form.agendaItems.length > 1 && (
-                    <button
-                      onClick={() => removeAgendaItem(item.id)}
-                      className="p-1 text-gray-300 hover:text-red-500"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {isOpen && (
-                <div className="px-4 pb-4 border-t border-gray-50">
-                  <div className="pt-3">
-                    <MeetingEditor
-                      content={item.content}
-                      placeholder={`תוכן הסעיף... (הקלד @ להקצאת משימה)`}
-                      agendaItemIndex={idx}
-                      users={userOptions}
-                      onUpdate={(json) => updateAgendaContent(item.id, json)}
-                      onTaskCreated={handleTaskCreated}
-                    />
-                  </div>
-
-                  {/* Tasks for this agenda item */}
-                  {itemTasks.length > 0 && (
-                    <div className="mt-3 space-y-1.5">
-                      {itemTasks.map((t) => (
-                        <div
-                          key={t.id}
-                          className="flex items-center gap-2 bg-orange-50 border border-orange-100 rounded-lg px-3 py-2 text-sm"
-                        >
-                          <span className="text-orange-400 text-xs">📌</span>
-                          <span className="font-medium text-orange-800 text-xs">
-                            @{t.assigneeName}
-                          </span>
-                          <span className="text-gray-700 flex-1 text-xs">{t.taskTitle}</span>
-                          <span className="text-gray-400 text-xs">
-                            {t.dueDate
-                              ? new Date(t.dueDate).toLocaleDateString("he-IL")
-                              : ""}
-                          </span>
-                          <span className="text-xs">
-                            {MEETING_PRIORITY_CONFIG[t.priority].icon}
-                          </span>
-                          <button
-                            onClick={() => removePendingTask(t.id)}
-                            className="text-gray-300 hover:text-red-500"
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
-
-        <button
-          onClick={addAgendaItem}
-          className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 text-sm hover:border-blue-300 hover:text-blue-500 transition-colors flex items-center justify-center gap-1"
-        >
-          <Plus size={16} /> הוסף סעיף
-        </button>
+                </span>
+              ))}
+          </div>
+        )}
       </div>
 
-      {/* Decisions */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
-        <h2 className="font-semibold text-gray-800 mb-2">✅ החלטות</h2>
-        <textarea
-          rows={3}
-          placeholder="סכם את ההחלטות שהתקבלו..."
-          value={form.decisions}
-          onChange={(e) =>
-            setForm((f) => ({ ...f, decisions: e.target.value }))
-          }
-          className="w-full text-sm border border-gray-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+      {/* ── Smart editor ─────────────────────────────────── */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <h2 className="font-semibold text-gray-800 mb-3">📝 סיכום הישיבה</h2>
+        <SmartMeetingEditor
+          value={rawContent}
+          onChange={setRawContent}
+          users={userOptions}
+          onDecisionsChange={setParsedDecisions}
+          onTasksChange={setParsedTasks}
         />
       </div>
 
-      {/* All pending tasks summary */}
-      {allTasks.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
-          <h2 className="font-semibold text-gray-800 mb-3">
-            📌 משימות שהוקצו ({allTasks.length})
-          </h2>
-          <div className="space-y-2">
-            {allTasks.map((t) => (
-              <div
-                key={t.id}
-                className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl text-sm"
-              >
-                <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                  {t.assigneeName.charAt(0)}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800 text-xs">{t.taskTitle}</p>
-                  <p className="text-gray-400 text-xs">@{t.assigneeName}</p>
-                </div>
-                <div className="flex items-center gap-2 text-xs">
-                  {t.dueDate && (
-                    <span className="text-gray-400">
-                      {new Date(t.dueDate).toLocaleDateString("he-IL")}
-                    </span>
-                  )}
-                  <span>{MEETING_PRIORITY_CONFIG[t.priority].icon}</span>
-                  <button
-                    onClick={() => removePendingTask(t.id)}
-                    className="text-gray-300 hover:text-red-500"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ── Live panels ──────────────────────────────────── */}
+      {parsedDecisions.length > 0 && (
+        <DecisionsPanel decisions={parsedDecisions} />
+      )}
+
+      {finalTasks.length > 0 && (
+        <TasksPanel
+          tasks={finalTasks}
+          onDueDateChange={handleDueDateChange}
+          onPriorityChange={handlePriorityChange}
+        />
       )}
 
       {/* Next meeting */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
         <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
           <Calendar size={16} className="text-gray-400" />
           ישיבה הבאה (אופציונלי)
           <input
             type="date"
-            value={form.nextMeetingDate}
-            onChange={(e) =>
-              setForm((f) => ({ ...f, nextMeetingDate: e.target.value }))
-            }
+            value={nextMeetingDate}
+            onChange={(e) => setNextMeetingDate(e.target.value)}
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </label>
@@ -480,7 +365,7 @@ export default function MeetingForm({
 
       {/* Error */}
       {error && (
-        <p className="text-red-600 text-sm text-center mb-3">{error}</p>
+        <p className="text-red-600 text-sm text-center">{error}</p>
       )}
 
       {/* Actions */}

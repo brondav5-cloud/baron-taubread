@@ -3,9 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { generateHTML } from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
-import Mention from "@tiptap/extension-mention";
 import {
   Calendar,
   MapPin,
@@ -15,31 +12,20 @@ import {
   Download,
   CheckCircle,
   Clock,
-  ChevronDown,
-  ChevronUp,
   ArrowRight,
 } from "lucide-react";
 import type { Meeting, MeetingTaskRecord } from "@/types/meeting";
 import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG } from "@/types/meeting";
+
 import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useTasks } from "@/context/TasksContext";
+import { DecisionsPanel } from "./SmartMeetingEditor";
+import type { ParsedDecision, ParsedTask } from "./meetingParser";
 
 interface MeetingDetailProps {
   meeting: Meeting;
   companyLogo?: string | null;
-}
-
-function renderContent(content: Record<string, unknown>): string {
-  if (!content || !Object.keys(content).length) return "";
-  try {
-    return generateHTML(content as Parameters<typeof generateHTML>[0], [
-      StarterKit,
-      Mention.configure({ HTMLAttributes: { class: "mention-chip" } }),
-    ]);
-  } catch {
-    return "";
-  }
 }
 
 export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailProps) {
@@ -48,9 +34,6 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
   const { tasks } = useTasks();
   const auth = useAuth();
   const [taskRecords, setTaskRecords] = useState<MeetingTaskRecord[]>([]);
-  const [expandedItems, setExpandedItems] = useState<Set<number>>(
-    new Set(meeting.agendaItems.map((_, i) => i)),
-  );
   const [deleting, setDeleting] = useState(false);
 
   const isOwner =
@@ -66,7 +49,9 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
     setTaskRecords(records);
   }, [meeting.id, getMeetingTaskRecords]);
 
-  useEffect(() => { loadTasks(); }, [loadTasks]);
+  useEffect(() => {
+    loadTasks();
+  }, [loadTasks]);
 
   const handleDelete = async () => {
     if (!window.confirm("האם למחוק את הסיכום?")) return;
@@ -76,7 +61,29 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
     else setDeleting(false);
   };
 
-  const handlePrint = () => window.print();
+  // Extract raw content from agenda_items
+  const rawContent = (() => {
+    try {
+      const settings = (meeting as unknown as { settings?: { rawContent?: string } }).settings;
+      if (settings?.rawContent) return settings.rawContent;
+      // Fallback: extract text from agenda items
+      const first = meeting.agendaItems[0];
+      if (!first) return "";
+      const content = first.content as { content?: { content?: { text?: string }[] }[] };
+      return content?.content?.[0]?.content?.[0]?.text ?? "";
+    } catch {
+      return "";
+    }
+  })();
+
+  // Re-parse for display (no users needed for display, just show extracted)
+  const decisionsFromText: ParsedDecision[] = meeting.decisions
+    ? meeting.decisions.split("\n").filter(Boolean).map((text, i) => ({
+        id: `d_${i}`,
+        text,
+        lineIndex: i,
+      }))
+    : [];
 
   const cfg = MEETING_TYPE_CONFIG[meeting.meetingType];
 
@@ -89,9 +96,20 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
     minute: "2-digit",
   });
 
+  // Convert meeting task records to ParsedTask for display
+  const displayTasks: ParsedTask[] = taskRecords.map((t) => ({
+    id: t.id,
+    userId: t.assigneeUserId,
+    userName: t.assigneeName,
+    title: t.taskTitle,
+    dueDate: t.dueDate ?? "",
+    priority: t.priority,
+    lineIndex: t.agendaItemIndex ?? 0,
+  }));
+
   return (
     <div className="max-w-3xl mx-auto pb-20">
-      {/* Top bar - hidden on print */}
+      {/* Top bar — hidden on print */}
       <div className="flex items-center justify-between mb-4 print:hidden">
         <Link
           href="/dashboard/meetings"
@@ -101,7 +119,7 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
         </Link>
         <div className="flex gap-2">
           <button
-            onClick={handlePrint}
+            onClick={() => window.print()}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border border-gray-200 text-gray-600 hover:bg-gray-50"
           >
             <Download size={15} /> הדפס / PDF
@@ -127,9 +145,10 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
       </div>
 
       {/* Meeting header */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4 print:shadow-none print:border-0 print:rounded-none">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-4 print:shadow-none">
         <div className="flex items-start gap-4">
           {companyLogo && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={companyLogo}
               alt="לוגו"
@@ -180,7 +199,8 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
                       : "bg-blue-100 text-blue-700"
                   }`}
                 >
-                  {p.isExternal ? "🌐 " : ""}{p.name}
+                  {p.isExternal ? "🌐 " : ""}
+                  {p.name}
                 </span>
               ))}
             </div>
@@ -188,182 +208,103 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
         )}
       </div>
 
-      {/* Agenda items */}
-      {meeting.agendaItems.length > 0 && (
-        <div className="mb-4 space-y-3">
-          <h2 className="font-semibold text-gray-800">📋 סדר יום</h2>
-          {meeting.agendaItems.map((item, idx) => {
-            if (!item.title && !Object.keys(item.content || {}).length) return null;
-            const isOpen = expandedItems.has(idx);
-            const itemTasks = taskRecords.filter((t) => t.agendaItemIndex === idx);
-            const html = renderContent(item.content);
-
-            return (
-              <div
-                key={item.id}
-                className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-              >
-                <button
-                  onClick={() =>
-                    setExpandedItems((s) => {
-                      const n = new Set(s);
-                      isOpen ? n.delete(idx) : n.add(idx);
-                      return n;
-                    })
-                  }
-                  className="w-full flex items-center gap-3 p-4 text-right hover:bg-gray-50 transition-colors print:pointer-events-none"
-                >
-                  <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-sm font-bold flex items-center justify-center flex-shrink-0">
-                    {idx + 1}
-                  </span>
-                  <span className="flex-1 font-semibold text-gray-800">{item.title}</span>
-                  {itemTasks.length > 0 && (
-                    <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">
-                      {itemTasks.length} משימות
-                    </span>
-                  )}
-                  <span className="text-gray-400 print:hidden">
-                    {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </span>
-                </button>
-
-                {(isOpen || true) && html && (
-                  <div
-                    className="px-5 pb-4 prose prose-sm max-w-none text-gray-700 meeting-content"
-                    dangerouslySetInnerHTML={{ __html: html }}
-                  />
-                )}
-
-                {isOpen && itemTasks.length > 0 && (
-                  <div className="px-5 pb-4 space-y-2">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">משימות</p>
-                    {itemTasks.map((t) => {
-                      const liveTask = tasks.find((tk) => tk.id === t.taskId);
-                      const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
-                      return (
-                        <div
-                          key={t.id}
-                          className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl px-3 py-2"
-                        >
-                          <span className="w-7 h-7 rounded-full bg-orange-200 text-orange-800 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                            {t.assigneeName.charAt(0)}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-gray-800">{t.taskTitle}</p>
-                            <p className="text-xs text-gray-500">@{t.assigneeName}</p>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs flex-shrink-0">
-                            {t.dueDate && (
-                              <span
-                                className={`font-medium ${
-                                  isOverdue ? "text-red-600" : "text-gray-500"
-                                }`}
-                              >
-                                {isOverdue ? "⚠️ " : ""}
-                                {new Date(t.dueDate).toLocaleDateString("he-IL")}
-                              </span>
-                            )}
-                            <span>{MEETING_PRIORITY_CONFIG[t.priority].icon}</span>
-                            {liveTask && (
-                              <span
-                                className={`px-2 py-0.5 rounded-full font-medium ${
-                                  liveTask.status === "approved"
-                                    ? "bg-green-100 text-green-700"
-                                    : liveTask.status === "done"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : liveTask.status === "in_progress"
-                                    ? "bg-orange-100 text-orange-700"
-                                    : "bg-blue-100 text-blue-700"
-                                }`}
-                              >
-                                {liveTask.status === "approved"
-                                  ? "אושר"
-                                  : liveTask.status === "done"
-                                  ? "טופל"
-                                  : liveTask.status === "in_progress"
-                                  ? "בטיפול"
-                                  : "חדש"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Decisions */}
-      {meeting.decisions && (
+      {/* Full meeting notes */}
+      {rawContent && (
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
-          <h2 className="font-semibold text-gray-800 mb-2">✅ החלטות</h2>
-          <p className="text-sm text-gray-700 whitespace-pre-line">{meeting.decisions}</p>
-        </div>
-      )}
-
-      {/* All meeting tasks summary */}
-      {taskRecords.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 mb-4">
-          <h2 className="font-semibold text-gray-800 mb-3">
-            📌 כל המשימות שהוקצו ({taskRecords.length})
-          </h2>
-          <div className="space-y-2">
-            {taskRecords.map((t) => {
-              const liveTask = tasks.find((tk) => tk.id === t.taskId);
-              const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+          <h2 className="font-semibold text-gray-800 mb-3">📝 סיכום הישיבה</h2>
+          <div
+            className="text-sm text-gray-700 leading-7 whitespace-pre-wrap font-inherit"
+            dir="rtl"
+          >
+            {rawContent.split("\n").map((line, i) => {
+              const isDecision = /^(החלטה[:.\-\s]|✅|⚡)/.test(line.trim());
+              const isTask = /^@\S/.test(line.trim());
               return (
                 <div
-                  key={t.id}
-                  className="flex items-center gap-3 p-2.5 bg-gray-50 rounded-xl text-sm"
+                  key={i}
+                  className={`py-0.5 px-2 rounded-lg my-0.5 ${
+                    isDecision
+                      ? "bg-emerald-50 text-emerald-900 font-medium"
+                      : isTask
+                      ? "bg-orange-50 text-orange-900 font-medium"
+                      : ""
+                  }`}
                 >
-                  <span className="w-8 h-8 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                    {t.assigneeName.charAt(0)}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-800 text-sm">{t.taskTitle}</p>
-                    <p className="text-xs text-gray-400">@{t.assigneeName}</p>
-                  </div>
-                  <div className="flex items-center gap-2 text-xs flex-shrink-0">
-                    {t.dueDate && (
-                      <span
-                        className={`font-medium ${
-                          isOverdue ? "text-red-600" : "text-gray-500"
-                        }`}
-                      >
-                        {isOverdue ? "⚠️ " : ""}
-                        {new Date(t.dueDate).toLocaleDateString("he-IL")}
-                      </span>
-                    )}
-                    <span>{MEETING_PRIORITY_CONFIG[t.priority].icon}</span>
-                    {liveTask && (
-                      <span
-                        className={`px-2 py-0.5 rounded-full font-medium ${
-                          liveTask.status === "approved"
-                            ? "bg-green-100 text-green-700"
-                            : liveTask.status === "done"
-                            ? "bg-emerald-100 text-emerald-700"
-                            : liveTask.status === "in_progress"
-                            ? "bg-orange-100 text-orange-700"
-                            : "bg-blue-100 text-blue-700"
-                        }`}
-                      >
-                        {liveTask.status === "approved"
-                          ? "אושר"
-                          : liveTask.status === "done"
-                          ? "טופל"
-                          : liveTask.status === "in_progress"
-                          ? "בטיפול"
-                          : "חדש"}
-                      </span>
-                    )}
-                  </div>
+                  {line || "\u00A0"}
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Decisions panel */}
+      {decisionsFromText.length > 0 && (
+        <div className="mb-4">
+          <DecisionsPanel decisions={decisionsFromText} />
+        </div>
+      )}
+
+      {/* Tasks panel with live status */}
+      {displayTasks.length > 0 && (
+        <div className="mb-4">
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+            <h3 className="font-semibold text-orange-800 mb-2 flex items-center gap-2 text-sm">
+              📌 משימות שהוקצו
+              <span className="bg-orange-200 text-orange-800 text-xs px-1.5 py-0.5 rounded-full font-bold">
+                {displayTasks.length}
+              </span>
+            </h3>
+            <div className="space-y-2">
+              {displayTasks.map((t) => {
+                const liveTask = tasks.find((tk) => tk.id === taskRecords.find((r) => r.id === t.id)?.taskId);
+                const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 bg-white rounded-xl px-3 py-2 border border-orange-100"
+                  >
+                    <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                      {t.userName.charAt(0)}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{t.title}</p>
+                      <p className="text-xs text-gray-500">@{t.userName}</p>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                      {t.dueDate && (
+                        <span className={`font-medium ${isOverdue ? "text-red-600" : "text-gray-500"}`}>
+                          {isOverdue ? "⚠️ " : ""}
+                          {new Date(t.dueDate).toLocaleDateString("he-IL")}
+                        </span>
+                      )}
+                      <span>{MEETING_PRIORITY_CONFIG[t.priority].icon}</span>
+                      {liveTask && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-medium text-xs ${
+                            liveTask.status === "approved"
+                              ? "bg-green-100 text-green-700"
+                              : liveTask.status === "done"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : liveTask.status === "in_progress"
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          {liveTask.status === "approved"
+                            ? "✔ אושר"
+                            : liveTask.status === "done"
+                            ? "✅ טופל"
+                            : liveTask.status === "in_progress"
+                            ? "🔧 בטיפול"
+                            : "🆕 חדש"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -386,8 +327,8 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
         </div>
       )}
 
-      {/* Footer */}
-      <p className="text-center text-xs text-gray-400 print:block hidden">
+      {/* Print footer */}
+      <p className="hidden print:block text-center text-xs text-gray-400 mt-8">
         סיכום ישיבה — נוצר ע&quot;י {meeting.createdByName} |{" "}
         {new Date(meeting.createdAt).toLocaleDateString("he-IL")}
       </p>
