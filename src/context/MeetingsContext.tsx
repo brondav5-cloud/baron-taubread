@@ -262,7 +262,7 @@ async function _createPendingTasks(
   // Notify all assignees at once
   if (recipientUserIds.length) {
     sendNotification({
-      recipientUserIds: [...new Set(recipientUserIds)],
+      recipientUserIds: Array.from(new Set(recipientUserIds)),
       type: "task_assigned",
       title: "משימה חדשה מישיבה",
       body: `הוקצתה לך משימה מישיבת: ${meetingTitle}`,

@@ -14,12 +14,14 @@ import {
   Users,
   ChevronLeft,
   Loader2,
+  Image,
 } from "lucide-react";
 import { clsx } from "clsx";
 import Link from "next/link";
 
 import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/hooks/useAuth";
+import { useCompanyLogo } from "@/hooks/useCompanyLogo";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
 import {
   Card,
@@ -137,6 +139,7 @@ export default function SettingsPage() {
     setReturnsThreshold,
   } = useSettings();
 
+  const { logoUrl, uploading: logoUploading, uploadLogo } = useCompanyLogo();
   const displayName = auth.status === "authed" ? auth.user.userName : "משתמש";
   const displayEmail = auth.status === "authed" ? auth.user.userEmail : "";
   const roleLabel =
@@ -398,6 +401,42 @@ export default function SettingsPage() {
               </div>
               <ChevronLeft className="w-5 h-5 text-gray-400" />
             </Link>
+          </div>
+        </SettingsSection>
+
+        {/* Company Logo */}
+        <SettingsSection
+          title="לוגו חברה"
+          description="לוגו המופיע בסיכומי ישיבות ובכותרת"
+          icon={<Image className="w-5 h-5 text-gray-600" />}
+        >
+          <div className="flex items-center gap-5">
+            <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 overflow-hidden flex-shrink-0">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="לוגו" className="w-full h-full object-contain p-1" />
+              ) : (
+                <Image className="w-8 h-8 text-gray-300" />
+              )}
+            </div>
+            <div>
+              <label className="cursor-pointer">
+                <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors ${logoUploading ? "opacity-50 pointer-events-none" : ""}`}>
+                  {logoUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
+                  {logoUploading ? "מעלה..." : "העלה לוגו"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (file) await uploadLogo(file);
+                  }}
+                />
+              </label>
+              <p className="text-xs text-gray-400 mt-1.5">PNG, JPG, SVG עד 2MB</p>
+            </div>
           </div>
         </SettingsSection>
 

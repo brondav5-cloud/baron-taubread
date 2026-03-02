@@ -9,7 +9,6 @@ import type {
   MeetingType,
   MeetingTaskMention,
   AgendaItem,
-  MeetingParticipant,
 } from "@/types/meeting";
 import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG } from "@/types/meeting";
 import { useMeetings } from "@/context/MeetingsContext";
@@ -40,11 +39,9 @@ export default function MeetingForm({
   const router = useRouter();
   const { createMeeting, saveMeeting } = useMeetings();
   const auth = useAuth();
-  const { users } = useUsers();
+  const { allUsers } = useUsers();
 
-  const userOptions = users
-    .filter((u) => u.isActive)
-    .map((u) => ({ id: u.id, name: u.name }));
+  const userOptions = allUsers.map((u) => ({ id: u.id, name: u.name }));
 
   const now = new Date();
   const defaultDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}T${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
@@ -71,7 +68,7 @@ export default function MeetingForm({
 
   const currentUser =
     auth.status === "authed"
-      ? { id: auth.user.userId, name: auth.user.userName }
+      ? { id: auth.user.userId ?? "", name: auth.user.userName ?? "" }
       : { id: "", name: "" };
 
   // ── Participants ──────────────────────────────────────────
@@ -105,7 +102,7 @@ export default function MeetingForm({
   const addAgendaItem = () => {
     const item = newAgendaItem(form.agendaItems.length);
     setForm((f) => ({ ...f, agendaItems: [...f.agendaItems, item] }));
-    setExpandedItems((s) => new Set([...s, item.id]));
+    setExpandedItems((s) => { const n = new Set(s); n.add(item.id); return n; });
   };
 
   const removeAgendaItem = (id: string) => {

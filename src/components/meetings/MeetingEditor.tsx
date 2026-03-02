@@ -167,7 +167,8 @@ export default function MeetingEditor({
               popup.querySelectorAll(".mention-item").forEach((el, i) => {
                 el.addEventListener("mousedown", (e) => {
                   e.preventDefault();
-                  onSelect(items[i]);
+                  const item = items[i];
+                  if (item) onSelect(item);
                 });
               });
             }

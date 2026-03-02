@@ -12,7 +12,7 @@ import {
   Users,
   Edit,
   Trash2,
-  Printer,
+  Download,
   CheckCircle,
   Clock,
   ChevronDown,
@@ -104,7 +104,7 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border border-gray-200 text-gray-600 hover:bg-gray-50"
           >
-            <Printer size={15} /> הדפס / PDF
+            <Download size={15} /> הדפס / PDF
           </button>
           {canEdit && (
             <>
