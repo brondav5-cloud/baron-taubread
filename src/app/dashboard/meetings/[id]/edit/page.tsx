@@ -1,17 +1,16 @@
 "use client";
 
-import { use } from "react";
 import { useMeetings } from "@/context/MeetingsContext";
 import MeetingForm from "@/components/meetings/MeetingForm";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
 interface Props {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }
 
 export default function EditMeetingPage({ params }: Props) {
-  const { id } = use(params);
+  const { id } = params;
   const { meetings, loading } = useMeetings();
   const meeting = meetings.find((m) => m.id === id);
 
