@@ -142,53 +142,58 @@ export default function MeetingForm({
     setSaving(true);
     setError("");
 
-    const pendingTasks: MeetingTaskMention[] = finalTasks.map((t) =>
-      parsedTaskToMention(t),
-    );
-
-    const payload = {
-      title: title.trim(),
-      meeting_type: meetingType,
-      meeting_date: new Date(meetingDate).toISOString(),
-      location: location || null,
-      participants,
-      // Store rawContent inside agenda_items JSONB (no extra column needed)
-      agenda_items: [
-        {
-          id: "main",
-          title: "סיכום",
-          rawContent,
-          content: {},
-        },
-      ],
-      decisions: parsedDecisions.map((d) => d.text).join("\n"),
-      next_meeting_date: nextMeetingDate
-        ? new Date(nextMeetingDate).toISOString()
-        : null,
-      status,
-    };
-
-    if (mode === "create") {
-      const { meetingId: newId, error: err } = await createMeeting(
-        payload,
-        pendingTasks,
-        currentUser.id,
-        currentUser.name,
+    try {
+      const pendingTasks: MeetingTaskMention[] = finalTasks.map((t) =>
+        parsedTaskToMention(t),
       );
-      if (err || !newId) {
-        setError(err ?? "שגיאה בשמירה");
-        setSaving(false);
-        return;
+
+      const payload = {
+        title: title.trim(),
+        meeting_type: meetingType,
+        meeting_date: new Date(meetingDate).toISOString(),
+        location: location || null,
+        participants,
+        agenda_items: [
+          {
+            id: "main",
+            title: "סיכום",
+            rawContent,
+            content: {},
+          },
+        ],
+        decisions: parsedDecisions.map((d) => d.text).join("\n"),
+        next_meeting_date: nextMeetingDate
+          ? new Date(nextMeetingDate).toISOString()
+          : null,
+        status,
+      };
+
+      if (mode === "create") {
+        const { meetingId: newId, error: err } = await createMeeting(
+          payload,
+          pendingTasks,
+          currentUser.id,
+          currentUser.name,
+        );
+        if (err || !newId) {
+          setError(err ?? "שגיאה בשמירה");
+          setSaving(false);
+          return;
+        }
+        router.push(`/dashboard/meetings/${newId}`);
+      } else if (meetingId) {
+        const ok = await saveMeeting(meetingId, payload, pendingTasks);
+        if (!ok) {
+          setError("שגיאה בשמירה");
+          setSaving(false);
+          return;
+        }
+        router.push(`/dashboard/meetings/${meetingId}`);
       }
-      router.push(`/dashboard/meetings/${newId}`);
-    } else if (meetingId) {
-      const ok = await saveMeeting(meetingId, payload, pendingTasks);
-      if (!ok) {
-        setError("שגיאה בשמירה");
-        setSaving(false);
-        return;
-      }
-      router.push(`/dashboard/meetings/${meetingId}`);
+    } catch (e) {
+      console.error("handleSubmit error:", e);
+      setError("שגיאה בשמירה — נסה שוב");
+      setSaving(false);
     }
   };
 

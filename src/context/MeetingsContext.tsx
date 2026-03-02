@@ -98,8 +98,12 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
       const meeting = dbMeetingToMeeting(data);
       setMeetings((prev) => [meeting, ...prev]);
 
-      // Create tasks from pending mentions
-      await _createPendingTasks(pendingTasks, meetingId, companyId, createdBy, createdByName, input.title);
+      // Fire task creation in background — don't block navigation
+      if (pendingTasks.length) {
+        _createPendingTasks(pendingTasks, meetingId, companyId, createdBy, createdByName, input.title).catch(
+          console.error,
+        );
+      }
 
       return { meetingId, error: null };
     },
@@ -126,14 +130,14 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
 
       if (pendingTasks?.length) {
         const meeting = meetings.find((m) => m.id === meetingId);
-        await _createPendingTasks(
+        _createPendingTasks(
           pendingTasks,
           meetingId,
           companyId,
           meeting?.createdBy ?? "",
           meeting?.createdByName ?? "",
           meeting?.title ?? "",
-        );
+        ).catch(console.error);
       }
 
       return true;
