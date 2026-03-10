@@ -5,12 +5,6 @@ import { createClient } from "@/lib/supabase/client";
 import type { DbStore } from "@/types/supabase";
 
 // ============================================
-// CONSTANTS
-// ============================================
-
-const DEMO_COMPANY_ID = "00000000-0000-0000-0000-000000000001";
-
-// ============================================
 // TYPES
 // ============================================
 
@@ -94,7 +88,7 @@ export function useStoreCityComparison(store: DbStore | null) {
         const { data, error } = await supabase
           .from("stores")
           .select("*")
-          .eq("company_id", DEMO_COMPANY_ID)
+          .eq("company_id", store.company_id)
           .eq("city", city)
           .order("name");
 

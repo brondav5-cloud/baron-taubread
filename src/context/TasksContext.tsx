@@ -40,7 +40,6 @@ interface TasksContextType {
   rejectTask: (taskId: string, userId: string, userName: string, reason: string) => void;
   toggleChecklistItem: (taskId: string, itemId: string, userId: string, userName: string) => void;
   addComment: (taskId: string, userId: string, userName: string, text: string) => void;
-  resetToSampleData: () => void;
   reassignTask: (taskId: string, fromUserId: string, toUserId: string, toUserName: string, byUserId: string, byUserName: string) => void;
   addAssignee: (taskId: string, userId: string, userName: string, role: "primary" | "secondary", byUserId: string, byUserName: string) => void;
   removeAssignee: (taskId: string, userId: string, byUserId: string, byUserName: string) => void;

@@ -3,11 +3,9 @@
 import { useCallback, type Dispatch, type SetStateAction } from "react";
 import type { Task, TaskStatus, TaskPriority } from "@/types/task";
 import { generateHistoryId, calculateDueDate } from "@/types/task";
-import demoData from "@/lib/data/tasks-demo.json";
 import {
   insertTask,
   updateTask,
-  deleteAllTasks,
   deleteSingleTask,
 } from "@/lib/supabase/tasks.queries";
 import { dbTaskToTask, taskToDbTask } from "@/lib/supabase/tasks.mappers";
@@ -632,20 +630,6 @@ export function useTaskMutations(
     [setTasks],
   );
 
-  const resetToSampleData = useCallback(async () => {
-    if (!companyId) return;
-    await deleteAllTasks(companyId);
-    setTasks([]);
-    const samples = demoData.sampleTasks as Task[];
-    const inserted: Task[] = [];
-    for (const t of samples) {
-      const row = taskToDbTask({ ...t, id: "" }, companyId);
-      const { data } = await insertTask(row);
-      if (data) inserted.push(dbTaskToTask(data));
-    }
-    setTasks(inserted);
-  }, [companyId, setTasks]);
-
   return {
     createTask,
     deleteTask,
@@ -659,6 +643,5 @@ export function useTaskMutations(
     reassignTask,
     addAssignee,
     removeAssignee,
-    resetToSampleData,
   };
 }

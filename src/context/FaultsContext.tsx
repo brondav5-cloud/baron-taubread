@@ -152,8 +152,6 @@ const DEFAULT_STATUSES = [
 // CONTEXT
 // ============================================
 
-const DEMO_COMPANY_ID = "00000000-0000-0000-0000-000000000001";
-
 const FaultsContext = createContext<FaultsContextValue | null>(null);
 
 export function FaultsProvider({ children }: { children: ReactNode }) {
@@ -162,9 +160,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
   const companyId =
     auth.status === "authed"
       ? auth.user.company_id
-      : auth.status === "anon"
-        ? DEMO_COMPANY_ID
-        : null;
+      : null;
   const userId = currentUser.id;
 
   const [faultTypes, setFaultTypes] = useState<DbFaultType[]>([]);
