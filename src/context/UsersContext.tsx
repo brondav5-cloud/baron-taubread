@@ -10,7 +10,7 @@ import {
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import {
-  getCompanyUsers,
+  getCompanyUsersMulti,
   updateUser as updateUserInDb,
   deactivateUser as deactivateUserInDb,
 } from "@/lib/supabase/users.queries";
@@ -158,6 +158,11 @@ export function UsersProvider({ children }: UsersProviderProps) {
 
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
   const userId = auth.status === "authed" ? auth.user.userId : null;
+  // All company IDs the current user belongs to (for cross-company user lookup)
+  const allCompanyIds =
+    auth.status === "authed"
+      ? auth.user.companies.map((c) => c.id)
+      : [];
 
   const fetchAll = useCallback(async () => {
     if (!companyId || !userId) {
@@ -171,7 +176,7 @@ export function UsersProvider({ children }: UsersProviderProps) {
     try {
       setIsLoading(true);
       const [dbUsers, dbCategories] = await Promise.all([
-        getCompanyUsers(companyId),
+        getCompanyUsersMulti(allCompanyIds.length ? allCompanyIds : [companyId]),
         getTaskCategories(companyId),
       ]);
 
@@ -187,7 +192,8 @@ export function UsersProvider({ children }: UsersProviderProps) {
     } finally {
       setIsLoading(false);
     }
-  }, [companyId, userId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, userId, allCompanyIds.join(",")]);
 
   useEffect(() => {
     if (auth.status !== "loading") {

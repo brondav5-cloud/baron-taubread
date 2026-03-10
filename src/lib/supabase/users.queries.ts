@@ -2,22 +2,36 @@ import { createClient } from "./client";
 import type { DbUser, UserPermissions } from "@/types/supabase";
 
 export async function getCompanyUsers(companyId: string): Promise<DbUser[]> {
+  return getCompanyUsersMulti([companyId]);
+}
+
+/**
+ * Fetch users from multiple companies (deduped).
+ * Each user's role is taken from the first company that matches.
+ */
+export async function getCompanyUsersMulti(companyIds: string[]): Promise<DbUser[]> {
+  if (!companyIds.length) return [];
   const supabase = createClient();
-  // Get memberships: user_id + role per company
+
   const { data: memberships, error: ucError } = await supabase
     .from("user_companies")
     .select("user_id, role")
-    .eq("company_id", companyId);
+    .in("company_id", companyIds);
 
   if (ucError || !memberships?.length) {
     if (ucError) console.error("Error fetching user memberships:", ucError);
     return [];
   }
 
-  const userIds = memberships.map((m) => m.user_id);
-  const roleByUserId = new Map(
-    memberships.map((m) => [m.user_id, m.role ?? "viewer"]),
-  );
+  // Deduplicate user IDs — keep the first role found per user
+  const roleByUserId = new Map<string, string>();
+  for (const m of memberships) {
+    if (!roleByUserId.has(m.user_id)) {
+      roleByUserId.set(m.user_id, m.role ?? "viewer");
+    }
+  }
+
+  const userIds = Array.from(roleByUserId.keys());
   const { data, error } = await supabase
     .from("users")
     .select("*")
@@ -29,7 +43,7 @@ export async function getCompanyUsers(companyId: string): Promise<DbUser[]> {
     console.error("Error fetching company users:", error);
     return [];
   }
-  // Override role with per-company role from user_companies
+
   return (data || []).map((u) => ({
     ...u,
     role: (roleByUserId.get(u.id) as DbUser["role"]) ?? u.role,
