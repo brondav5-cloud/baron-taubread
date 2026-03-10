@@ -165,21 +165,6 @@ export default function TasksPage() {
         </div>
       </div>
 
-      {/* Demo Mode Banner */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <span className="text-2xl">🎭</span>
-          <div>
-            <h3 className="font-medium text-amber-800">מצב דמו פעיל</h3>
-            <p className="text-sm text-amber-700 mt-1">
-              אתה מחובר כ-<strong>{currentUser.name}</strong> (
-              {currentUser.department}). החלף משתמש בכפתור למעלה כדי לראות את
-              המערכת מנקודות מבט שונות.
-            </p>
-          </div>
-        </div>
-      </div>
-
       {/* Quick Stats - Clickable */}
       <TaskStatsCards
         activeFilter={activeFilter}
