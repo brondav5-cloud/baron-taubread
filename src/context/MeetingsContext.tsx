@@ -209,10 +209,30 @@ async function _createPendingTasks(
 ) {
   if (!pendingTasks.length) return;
 
+  // Load already-created tasks for this meeting to avoid duplicates on re-save
+  const { createClient } = await import("@/lib/supabase/client");
+  const supabase = createClient();
+  const { data: existingMeetingTasks } = await supabase
+    .from("meeting_tasks")
+    .select("assignee_user_id, task_title")
+    .eq("meeting_id", meetingId);
+
+  const alreadyCreated = new Set(
+    (existingMeetingTasks ?? []).map(
+      (mt) => `${mt.assignee_user_id}::${mt.task_title}`,
+    ),
+  );
+
+  const newTasks = pendingTasks.filter(
+    (pt) => !alreadyCreated.has(`${pt.assigneeUserId}::${pt.taskTitle}`),
+  );
+
+  if (!newTasks.length) return;
+
   const now = new Date().toISOString();
   const recipientUserIds: string[] = [];
 
-  for (const pt of pendingTasks) {
+  for (const pt of newTasks) {
     const dueDate = pt.dueDate || calculateDueDate("normal");
 
     const taskInput: Omit<Task, "id"> & { id: string } = {
