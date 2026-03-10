@@ -31,9 +31,14 @@ export function sendNotification(input: SendNotificationInput): void {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
+    // keepalive: request survives page navigation / unload
+    keepalive: true,
   })
     .then(async (res) => {
-      await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        console.error("[notify] API error", res.status, body);
+      }
     })
     .catch((err) => {
       console.error("[notify] failed to send notification:", err);

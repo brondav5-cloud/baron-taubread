@@ -174,8 +174,8 @@ export default function MeetingForm({
           setSaving(false);
           return;
         }
-        // Navigate — setSaving stays true until page unmounts (intentional)
-        router.push(`/dashboard/meetings/${newId}`);
+        // Use full navigation to guarantee page transition (router.push can silently fail)
+        window.location.href = `/dashboard/meetings/${newId}`;
       } else if (meetingId) {
         const ok = await saveMeeting(meetingId, payload, pendingTasks);
         if (!ok) {
@@ -183,7 +183,7 @@ export default function MeetingForm({
           setSaving(false);
           return;
         }
-        router.push(`/dashboard/meetings/${meetingId}`);
+        window.location.href = `/dashboard/meetings/${meetingId}`;
       } else {
         setSaving(false);
       }

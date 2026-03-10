@@ -98,10 +98,10 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
       const meeting = dbMeetingToMeeting(data);
       setMeetings((prev) => [meeting, ...prev]);
 
-      // Fire task creation in background
+      // Await task creation so tasks exist before navigation happens
       if (pendingTasks.length) {
         const isRestrictedMeeting = (input.visibility ?? "public") === "restricted";
-        _createPendingTasks(
+        await _createPendingTasks(
           pendingTasks,
           meetingId,
           companyId,
@@ -109,7 +109,7 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
           createdByName,
           typeof input.title === "string" ? input.title : "",
           isRestrictedMeeting,
-        ).catch(console.error);
+        ).catch((e) => console.error("[createMeeting] task creation error:", e));
       }
 
       return { meetingId, error: null };
@@ -139,7 +139,7 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
         const meeting = meetings.find((m) => m.id === meetingId);
         const isRestrictedMeeting =
           (updates.visibility ?? meeting?.visibility ?? "public") === "restricted";
-        _createPendingTasks(
+        await _createPendingTasks(
           pendingTasks,
           meetingId,
           companyId,
@@ -147,7 +147,7 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
           meeting?.createdByName ?? "",
           meeting?.title ?? "",
           isRestrictedMeeting,
-        ).catch(console.error);
+        ).catch((e) => console.error("[saveMeeting] task creation error:", e));
       }
 
       return true;
@@ -256,23 +256,32 @@ async function _createPendingTasks(
     };
 
     const dbTask = taskToDbTask(taskInput, companyId);
-    const { data: createdTask } = await insertTask(dbTask);
+    const { data: createdTask, error: taskError } = await insertTask(dbTask);
 
-    if (createdTask) {
-      await insertMeetingTask({
-        meeting_id: meetingId,
-        agenda_item_index: pt.agendaItemIndex ?? null,
-        task_id: createdTask.id,
-        assignee_user_id: pt.assigneeUserId,
-        assignee_name: pt.assigneeName,
-        task_title: pt.taskTitle,
-        due_date: dueDate,
-        priority: pt.priority,
-        company_id: companyId,
-      });
-
+    if (taskError || !createdTask) {
+      console.error("[_createPendingTasks] insertTask failed:", taskError?.message, "for:", pt.taskTitle);
+      // Still mark assignee for notification even if task insert failed
       if (pt.assigneeUserId) recipientUserIds.push(pt.assigneeUserId);
+      continue;
     }
+
+    const { error: mtError } = await insertMeetingTask({
+      meeting_id: meetingId,
+      agenda_item_index: pt.agendaItemIndex ?? null,
+      task_id: createdTask.id,
+      assignee_user_id: pt.assigneeUserId,
+      assignee_name: pt.assigneeName,
+      task_title: pt.taskTitle,
+      due_date: dueDate,
+      priority: pt.priority,
+      company_id: companyId,
+    });
+
+    if (mtError) {
+      console.error("[_createPendingTasks] insertMeetingTask failed:", mtError.message);
+    }
+
+    if (pt.assigneeUserId) recipientUserIds.push(pt.assigneeUserId);
   }
 
   if (recipientUserIds.length) {
