@@ -50,21 +50,56 @@ export async function POST(request: NextRequest) {
       ? (meeting.participants as { userId?: string; name?: string }[])
       : [];
 
+    const totalParticipants = participants.length;
     const internalIds = participants
       .map((p) => p.userId)
       .filter((id): id is string => !!id && id !== user.id);
 
-    // Fetch their emails from users table
-    const { data: userRows } = internalIds.length
-      ? await admin.from("users").select("id, name, email").in("id", internalIds)
-      : { data: [] };
+    console.log(`[send-invite] total=${totalParticipants} internalIds=${internalIds.length}`, internalIds);
 
-    const attendees = (userRows ?? [])
-      .filter((u) => !!u.email)
-      .map((u) => ({ name: u.name ?? "", email: u.email as string }));
+    if (internalIds.length === 0) {
+      return NextResponse.json({
+        error: totalParticipants === 0
+          ? "הישיבה אינה כוללת משתתפים"
+          : "המשתתפים אינם מזוהים במערכת — ודא שנבחרו מהרשימה בעת יצירת הישיבה",
+        debug: { totalParticipants, internalIds: 0 },
+      }, { status: 400 });
+    }
+
+    // Fetch their emails from users table
+    const { data: userRows } = await admin
+      .from("users")
+      .select("id, name, email")
+      .in("id", internalIds);
+
+    console.log(`[send-invite] userRows found=${userRows?.length ?? 0}`);
+
+    // Build attendees list; fallback to auth email if users.email is null
+    const attendees: { name: string; email: string }[] = [];
+    for (const uid of internalIds) {
+      const row = (userRows ?? []).find((r) => r.id === uid);
+      const participantName = participants.find((p) => p.userId === uid)?.name ?? row?.name ?? "";
+
+      if (row?.email) {
+        attendees.push({ name: row.name ?? participantName, email: row.email });
+      } else {
+        // Fallback: fetch email from Supabase Auth
+        const { data: authData } = await admin.auth.admin.getUserById(uid);
+        const authEmail = authData?.user?.email;
+        console.log(`[send-invite] uid=${uid} no email in users table, auth email=${authEmail ?? "none"}`);
+        if (authEmail) {
+          attendees.push({ name: participantName, email: authEmail });
+        }
+      }
+    }
+
+    console.log(`[send-invite] attendees with email=${attendees.length}`);
 
     if (attendees.length === 0) {
-      return NextResponse.json({ error: "אין משתתפים עם כתובת מייל רשומה" }, { status: 400 });
+      return NextResponse.json({
+        error: `נמצאו ${internalIds.length} משתתפים אך לאף אחד אין כתובת מייל — הוסף מיילים בהגדרות → משתמשים`,
+        debug: { totalParticipants, internalIds: internalIds.length, attendees: 0 },
+      }, { status: 400 });
     }
 
     // Generate ICS

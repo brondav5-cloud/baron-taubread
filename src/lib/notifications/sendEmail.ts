@@ -67,7 +67,8 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
         ? {
             attachments: payload.attachments.map((a) => ({
               filename: a.filename,
-              content: a.content,
+              // Resend expects Buffer for binary attachments, not raw base64 string
+              content: Buffer.from(a.content, "base64"),
             })),
           }
         : {}),
