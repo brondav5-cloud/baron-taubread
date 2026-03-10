@@ -29,6 +29,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     getTaskById,
     addAssignee,
     removeAssignee,
+    deleteTask,
   } = useTasks();
 
   // Get fresh task from context
@@ -40,8 +41,9 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
   const isAssignee = !!currentAssignee;
   const isCreator = currentTask?.createdBy === currentUser.id;
   const myStatus = currentAssignee?.status;
-  const isAdmin = currentUser.role === "admin";
+  const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
   const canEditAssignees = isCreator || isAdmin;
+  const canDelete = isCreator || isAdmin;
 
   // Mark as seen when assignee opens
   useEffect(() => {
@@ -147,6 +149,12 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     [currentTask, removeAssignee, currentUser.id, currentUser.name],
   );
 
+  const handleDeleteTask = useCallback(async () => {
+    if (!currentTask) return;
+    await deleteTask(currentTask.id);
+    onClose();
+  }, [currentTask, deleteTask, onClose]);
+
   return {
     // State
     activeTab,
@@ -169,6 +177,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     myStatus,
     canEditChecklist: isAssignee && currentTask?.status !== "approved",
     canEditAssignees,
+    canDelete,
 
     // Handlers
     handleStartTask,
@@ -179,5 +188,6 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     handleAddComment,
     handleAddAssignee,
     handleRemoveAssignee,
+    handleDeleteTask,
   };
 }

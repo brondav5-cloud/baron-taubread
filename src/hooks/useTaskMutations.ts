@@ -8,6 +8,7 @@ import {
   insertTask,
   updateTask,
   deleteAllTasks,
+  deleteSingleTask,
 } from "@/lib/supabase/tasks.queries";
 import { dbTaskToTask, taskToDbTask } from "@/lib/supabase/tasks.mappers";
 import { sendNotification } from "@/lib/notifications/notify";
@@ -622,6 +623,15 @@ export function useTaskMutations(
     [companyId, setTasks],
   );
 
+  const deleteTask = useCallback(
+    async (taskId: string): Promise<boolean> => {
+      const ok = await deleteSingleTask(taskId);
+      if (ok) setTasks((prev) => prev.filter((t) => t.id !== taskId));
+      return ok;
+    },
+    [setTasks],
+  );
+
   const resetToSampleData = useCallback(async () => {
     if (!companyId) return;
     await deleteAllTasks(companyId);
@@ -638,6 +648,7 @@ export function useTaskMutations(
 
   return {
     createTask,
+    deleteTask,
     markAsSeen,
     startTask,
     completeTask,

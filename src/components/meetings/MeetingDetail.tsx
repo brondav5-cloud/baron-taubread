@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import type { Meeting, MeetingTaskRecord } from "@/types/meeting";
 import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG, MEETING_VISIBILITY_CONFIG } from "@/types/meeting";
+import { AdminDeleteModal } from "@/components/shared/AdminDeleteModal";
 
 import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,6 +38,7 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
   const auth = useAuth();
   const [taskRecords, setTaskRecords] = useState<MeetingTaskRecord[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const isOwner =
     auth.status === "authed" && auth.user.userId === meeting.createdBy;
@@ -56,7 +58,6 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
   }, [loadTasks]);
 
   const handleDelete = async () => {
-    if (!window.confirm("האם למחוק את הסיכום?")) return;
     setDeleting(true);
     const ok = await removeMeeting(meeting.id);
     if (ok) router.push("/dashboard/meetings");
@@ -136,11 +137,11 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
                 <Edit size={15} /> ערוך
               </Link>
               <button
-                onClick={handleDelete}
+                onClick={() => setShowDeleteModal(true)}
                 disabled={deleting}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
-                <Trash2 size={15} /> מחק
+                <Trash2 size={15} /> {deleting ? "מוחק..." : "מחק"}
               </button>
             </>
           )}
@@ -369,6 +370,14 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
         סיכום ישיבה — נוצר ע&quot;י {meeting.createdByName} |{" "}
         {new Date(meeting.createdAt).toLocaleDateString("he-IL")}
       </p>
+
+      <AdminDeleteModal
+        isOpen={showDeleteModal}
+        title="מחיקת סיכום ישיבה"
+        description={`האם למחוק את "${meeting.title}"? הישיבה, המשימות הקשורות אליה והסיכום יימחקו לצמיתות.`}
+        onConfirm={handleDelete}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </div>
   );
 }

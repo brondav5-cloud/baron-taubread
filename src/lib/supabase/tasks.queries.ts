@@ -65,6 +65,16 @@ export async function updateTask(
   return true;
 }
 
+export async function deleteSingleTask(taskId: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase.from("tasks").delete().eq("id", taskId);
+  if (error) {
+    console.error("[deleteSingleTask]", error);
+    return false;
+  }
+  return true;
+}
+
 export async function deleteAllTasks(companyId: string): Promise<boolean> {
   const supabase = createClient();
   const { error } = await supabase

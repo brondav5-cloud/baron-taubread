@@ -128,9 +128,10 @@ export async function sendPushToUsers(payload: NotificationPayload): Promise<{
 
     // --- SMS (opt-in) ---
     if (payload.sendSms && userRow?.phone) {
+      const smsUrl = payload.url ? `${baseUrl}${payload.url}` : `${baseUrl}/dashboard`;
       const smsOk = await sendSms({
         to: userRow.phone,
-        body: `${payload.title}\n${payload.body}`,
+        body: `${payload.title}\n${payload.body}\n\nלצפייה: ${smsUrl}`,
       });
       if (smsOk) smsSent++;
     }

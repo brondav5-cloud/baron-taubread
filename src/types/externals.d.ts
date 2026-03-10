@@ -58,6 +58,7 @@ declare module "lucide-react" {
   export const Lock: Icon;
   export const LayoutList: Icon;
   export const SortAsc: Icon;
+  export const ShieldAlert: Icon;
   export const Info: Icon;
   export const LayoutDashboard: Icon;
   export const LayoutGrid: Icon;

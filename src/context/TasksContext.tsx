@@ -31,6 +31,7 @@ interface TasksContextType {
   getUnreadCount: (userId: string) => number;
   getPendingApprovalCount: (userId: string) => number;
   createTask: (input: CreateTaskInput, createdBy: string, createdByName: string) => Task;
+  deleteTask: (taskId: string) => Promise<boolean>;
   markAsSeen: (taskId: string, userId: string, userName: string) => void;
   startTask: (taskId: string, userId: string, userName: string) => void;
   completeTask: (taskId: string, userId: string, userName: string, response: string) => void;

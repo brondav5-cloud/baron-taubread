@@ -1,7 +1,9 @@
 "use client";
 
-import { X, Store, Check, ClipboardList, Calendar } from "lucide-react";
+import { useState } from "react";
+import { X, Store, Check, ClipboardList, Calendar, Trash2 } from "lucide-react";
 import { clsx } from "clsx";
+import { AdminDeleteModal } from "@/components/shared/AdminDeleteModal";
 import type { Task } from "@/types/task";
 import {
   TaskStatusBadge,
@@ -25,6 +27,7 @@ interface TaskDetailModalProps {
 }
 
 export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const {
     activeTab,
     setActiveTab,
@@ -42,6 +45,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
     myStatus,
     canEditChecklist,
     canEditAssignees,
+    canDelete,
     handleStartTask,
     handleCompleteTask,
     handleApproveTask,
@@ -50,6 +54,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
     handleAddComment,
     handleAddAssignee,
     handleRemoveAssignee,
+    handleDeleteTask,
   } = useTaskDetail({ task, onClose });
 
   if (!currentTask) return null;
@@ -106,12 +111,23 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
             </h2>
             <p className="text-sm text-gray-500">{currentTask.storeName}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-1">
+            {canDelete && (
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                className="p-2 hover:bg-red-50 rounded-lg text-red-400 hover:text-red-600 transition-colors"
+                title="מחק משימה"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
@@ -184,6 +200,14 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
           onRejectTask={handleRejectTask}
         />
       </div>
+
+      <AdminDeleteModal
+        isOpen={showDeleteModal}
+        title="מחיקת משימה"
+        description={`האם למחוק את "${currentTask.title}"? כל הנתונים, תגובות וההיסטוריה יימחקו לצמיתות.`}
+        onConfirm={handleDeleteTask}
+        onClose={() => setShowDeleteModal(false)}
+      />
     </div>
   );
 }
