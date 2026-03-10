@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Plus, RefreshCw, ListTodo, BarChart3, List, Bug } from "lucide-react";
+import { Plus, ListTodo, BarChart3, List, Bug } from "lucide-react";
 import { useUsers } from "@/context/UsersContext";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkflow } from "@/context/WorkflowContext";
@@ -36,7 +36,7 @@ export default function TasksPage() {
   const [activeFilter, setActiveFilter] = useState<FilterType>("my_new");
 
   const { currentUser } = useUsers();
-  const { tasks, resetToSampleData } = useTasks();
+  const { tasks } = useTasks();
   const { createWorkflow, workflows } = useWorkflow();
   const { stores: storesFromSupabase } = useVisits();
 
@@ -137,14 +137,6 @@ export default function TasksPage() {
               ניתוח
             </span>
           </Link>
-
-          <button
-            onClick={resetToSampleData}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            title="איפוס נתוני דמו"
-          >
-            <RefreshCw className="w-5 h-5 text-gray-500" />
-          </button>
 
           <button
             onClick={() => setShowWorkflowModal(true)}

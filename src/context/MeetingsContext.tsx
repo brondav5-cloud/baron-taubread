@@ -100,15 +100,6 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
 
       const meetingTitle = typeof input.title === "string" ? input.title : "";
 
-      // Notify all internal participants (except the creator) about the new meeting
-      _notifyMeetingParticipants(
-        input.participants as { userId?: string; isExternal?: boolean }[] | null,
-        meetingId,
-        meetingTitle,
-        createdBy,
-        createdByName,
-      );
-
       // Await task creation so tasks exist before navigation happens
       if (pendingTasks.length) {
         const isRestrictedMeeting = (input.visibility ?? "public") === "restricted";
@@ -150,18 +141,6 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
       const meetingTitle = meeting?.title ?? "";
       const meetingCreatedBy = meeting?.createdBy ?? "";
       const meetingCreatedByName = meeting?.createdByName ?? "";
-
-      // Notify all internal participants (except the creator) that summary was saved
-      const participantsForNotify =
-        (updates.participants as { userId?: string; isExternal?: boolean }[] | null)
-        ?? (meeting?.participants as { userId?: string; isExternal?: boolean }[] | null);
-      _notifyMeetingParticipants(
-        participantsForNotify,
-        meetingId,
-        meetingTitle,
-        meetingCreatedBy,
-        meetingCreatedByName,
-      );
 
       if (pendingTasks?.length) {
         const isRestrictedMeeting =
