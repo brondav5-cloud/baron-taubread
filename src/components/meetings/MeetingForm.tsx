@@ -174,6 +174,7 @@ export default function MeetingForm({
           setSaving(false);
           return;
         }
+        // Navigate — setSaving stays true until page unmounts (intentional)
         router.push(`/dashboard/meetings/${newId}`);
       } else if (meetingId) {
         const ok = await saveMeeting(meetingId, payload, pendingTasks);
@@ -183,6 +184,8 @@ export default function MeetingForm({
           return;
         }
         router.push(`/dashboard/meetings/${meetingId}`);
+      } else {
+        setSaving(false);
       }
     } catch (e) {
       console.error("handleSubmit error:", e);
@@ -342,9 +345,22 @@ export default function MeetingForm({
         </label>
       </div>
 
-      {/* Error */}
+      {/* Error Banner */}
       {error && (
-        <p className="text-red-600 text-sm text-center">{error}</p>
+        <div className="flex items-start gap-3 bg-red-50 border border-red-300 rounded-2xl px-4 py-3">
+          <span className="text-red-500 text-lg flex-shrink-0">⚠️</span>
+          <div className="flex-1">
+            <p className="text-red-700 text-sm font-medium">{error}</p>
+            <p className="text-red-500 text-xs mt-0.5">נסה שוב, או צור קשר עם התמיכה אם הבעיה חוזרת</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setError("")}
+            className="text-red-400 hover:text-red-600 text-lg leading-none"
+          >
+            ×
+          </button>
+        </div>
       )}
 
       {/* Actions */}
@@ -352,7 +368,8 @@ export default function MeetingForm({
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-5 py-2.5 rounded-xl text-sm text-gray-600 border border-gray-200 hover:bg-gray-50"
+          disabled={saving}
+          className="px-5 py-2.5 rounded-xl text-sm text-gray-600 border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
         >
           ביטול
         </button>
@@ -362,7 +379,7 @@ export default function MeetingForm({
           disabled={saving}
           className="px-5 py-2.5 rounded-xl text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
         >
-          שמור טיוטה
+          {saving ? "שומר..." : "שמור טיוטה"}
         </button>
         <button
           type="button"
