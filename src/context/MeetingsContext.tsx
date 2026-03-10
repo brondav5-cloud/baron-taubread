@@ -156,6 +156,14 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
         ).catch((e) => console.error("[saveMeeting] task creation error:", e));
       }
 
+      _notifyMeetingParticipants(
+        meeting?.participants as { userId?: string; isExternal?: boolean }[] | null,
+        meetingId,
+        meetingTitle,
+        meetingCreatedBy,
+        meetingCreatedByName,
+      );
+
       return true;
     },
     [companyId, meetings],

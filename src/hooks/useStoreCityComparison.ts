@@ -77,9 +77,10 @@ export function useStoreCityComparison(store: DbStore | null) {
 
   // Fetch stores in same city
   useEffect(() => {
-    if (!store?.city) return;
+    if (!store?.city || !store?.company_id) return;
 
     const city = store.city;
+    const companyId = store.company_id;
 
     async function fetchCityStores() {
       setIsLoading(true);
@@ -88,7 +89,7 @@ export function useStoreCityComparison(store: DbStore | null) {
         const { data, error } = await supabase
           .from("stores")
           .select("*")
-          .eq("company_id", store.company_id)
+          .eq("company_id", companyId)
           .eq("city", city)
           .order("name");
 
@@ -103,7 +104,7 @@ export function useStoreCityComparison(store: DbStore | null) {
     }
 
     fetchCityStores();
-  }, [store?.city]);
+  }, [store?.city, store?.company_id]);
 
   // Sort handler
   const handleSort = (key: CitySortKey) => {
