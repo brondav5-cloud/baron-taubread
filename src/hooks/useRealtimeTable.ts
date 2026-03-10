@@ -6,43 +6,45 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 /**
  * Subscribes to INSERT / UPDATE / DELETE on a Supabase table,
- * filtered by company_id. Calls `onSync` whenever a change arrives
- * so the consumer can refetch or patch state.
+ * filtered by company_id. Accepts one or more company IDs.
+ * Calls `onSync` whenever a change arrives so the consumer can refetch.
  */
 export function useRealtimeTable(
   table: string,
-  companyId: string | null,
+  companyIds: string[],
   onSync: () => void,
 ) {
-  const channelRef = useRef<RealtimeChannel | null>(null);
+  const channelsRef = useRef<RealtimeChannel[]>([]);
+  const idsKey = companyIds.join(",");
 
   useEffect(() => {
-    if (!companyId) return;
+    if (!idsKey) return;
 
     const supabase = createClient();
-    const channelName = `realtime:${table}:${companyId}`;
+    const channels: RealtimeChannel[] = [];
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table,
-          filter: `company_id=eq.${companyId}`,
-        },
-        () => {
-          onSync();
-        },
-      )
-      .subscribe();
+    for (const companyId of idsKey.split(",")) {
+      const channel = supabase
+        .channel(`realtime:${table}:${companyId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table,
+            filter: `company_id=eq.${companyId}`,
+          },
+          () => onSync(),
+        )
+        .subscribe();
+      channels.push(channel);
+    }
 
-    channelRef.current = channel;
+    channelsRef.current = channels;
 
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      channels.forEach((ch) => supabase.removeChannel(ch));
+      channelsRef.current = [];
     };
-  }, [table, companyId, onSync]);
+  }, [table, idsKey, onSync]);
 }

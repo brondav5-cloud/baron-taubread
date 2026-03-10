@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useState,
+  useMemo,
   useCallback,
   useEffect,
   type ReactNode,
@@ -29,18 +30,23 @@ const WorkflowContext = createContext<WorkflowContextType | null>(null);
 export function WorkflowProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const allCompanyIds = useMemo(
+    () => (auth.status === "authed" ? auth.user.companies.map((c) => c.id) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [auth.status, auth.status === "authed" ? auth.user.companies.map((c) => c.id).join(",") : ""],
+  );
   const [workflows, setWorkflows] = useState<WorkflowTask[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     if (auth.status === "loading") return;
-    if (!companyId) {
+    if (!allCompanyIds.length) {
       setWorkflows([]);
       setIsInitialized(true);
       return;
     }
     let cancelled = false;
-    fetchWorkflows(companyId)
+    fetchWorkflows(allCompanyIds)
       .then((db) => {
         if (!cancelled) setWorkflows(db.map(dbWorkflowToWorkflow));
       })
@@ -52,16 +58,18 @@ export function WorkflowProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setIsInitialized(true);
       });
     return () => { cancelled = true; };
-  }, [auth.status, companyId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.status, allCompanyIds.join(",")]);
 
   const refetchWorkflows = useCallback(() => {
-    if (!companyId) return;
-    fetchWorkflows(companyId)
+    if (!allCompanyIds.length) return;
+    fetchWorkflows(allCompanyIds)
       .then((db) => setWorkflows(db.map(dbWorkflowToWorkflow)))
       .catch((err) => console.error("[WorkflowContext] realtime refetch error:", err));
-  }, [companyId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allCompanyIds.join(",")]);
 
-  useRealtimeTable("workflows", companyId, refetchWorkflows);
+  useRealtimeTable("workflows", allCompanyIds, refetchWorkflows);
 
   const queries = useWorkflowQueries(workflows);
   const mutations = useWorkflowMutations(companyId, setWorkflows);

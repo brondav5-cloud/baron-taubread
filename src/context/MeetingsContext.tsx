@@ -142,7 +142,7 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
         await _createPendingTasks(
           pendingTasks,
           meetingId,
-          companyId,
+          meeting?.companyId ?? companyId,
           meeting?.createdBy ?? "",
           meeting?.createdByName ?? "",
           meeting?.title ?? "",

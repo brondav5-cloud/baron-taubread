@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useState,
+  useMemo,
   useCallback,
   useEffect,
   type ReactNode,
@@ -52,18 +53,23 @@ const TasksContext = createContext<TasksContextType | null>(null);
 export function TasksProvider({ children }: { children: ReactNode }) {
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const allCompanyIds = useMemo(
+    () => (auth.status === "authed" ? auth.user.companies.map((c) => c.id) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [auth.status, auth.status === "authed" ? auth.user.companies.map((c) => c.id).join(",") : ""],
+  );
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     if (auth.status === "loading") return;
-    if (!companyId) {
+    if (!allCompanyIds.length) {
       setTasks([]);
       setIsInitialized(true);
       return;
     }
     let cancelled = false;
-    fetchTasks(companyId)
+    fetchTasks(allCompanyIds)
       .then((dbTasks) => {
         if (!cancelled) setTasks(dbTasks.map(dbTaskToTask));
       })
@@ -75,16 +81,18 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setIsInitialized(true);
       });
     return () => { cancelled = true; };
-  }, [auth.status, companyId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auth.status, allCompanyIds.join(",")]);
 
   const refetchTasks = useCallback(() => {
-    if (!companyId) return;
-    fetchTasks(companyId)
+    if (!allCompanyIds.length) return;
+    fetchTasks(allCompanyIds)
       .then((dbTasks) => setTasks(dbTasks.map(dbTaskToTask)))
       .catch((err) => console.error("[TasksContext] realtime refetch error:", err));
-  }, [companyId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allCompanyIds.join(",")]);
 
-  useRealtimeTable("tasks", companyId, refetchTasks);
+  useRealtimeTable("tasks", allCompanyIds, refetchTasks);
 
   const queries = useTaskQueries(tasks);
   const mutations = useTaskMutations(companyId, setTasks);

@@ -267,7 +267,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     refetch().finally(() => setIsLoading(false));
   }, [auth.status, companyId, refetch]);
 
-  useRealtimeTable("faults", companyId, refetch);
+  useRealtimeTable("faults", companyId ? [companyId] : [], refetch);
 
   const createFault = useCallback(
     async (input: CreateFaultInput): Promise<Fault | null> => {

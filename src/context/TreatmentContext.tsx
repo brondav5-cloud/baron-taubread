@@ -222,7 +222,7 @@ export function TreatmentProvider({ children }: TreatmentProviderProps) {
       .catch((err) => console.error("[TreatmentContext] realtime refetch error:", err));
   }, [companyId]);
 
-  useRealtimeTable("store_treatments", companyId, refetchTreatments);
+  useRealtimeTable("store_treatments", companyId ? [companyId] : [], refetchTreatments);
 
   const addStore = useCallback(
     async (

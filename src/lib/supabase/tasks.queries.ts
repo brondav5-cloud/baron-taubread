@@ -10,12 +10,13 @@ import type {
 // TASKS
 // ============================================
 
-export async function getTasks(companyId: string): Promise<DbTask[]> {
+export async function getTasks(companyIds: string[]): Promise<DbTask[]> {
   const supabase = createClient();
+  if (!companyIds.length) return [];
   const { data, error } = await supabase
     .from("tasks")
     .select("*")
-    .eq("company_id", companyId)
+    .in("company_id", companyIds)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -93,12 +94,13 @@ export async function deleteAllTasks(companyId: string): Promise<boolean> {
 // WORKFLOWS
 // ============================================
 
-export async function getWorkflows(companyId: string): Promise<DbWorkflow[]> {
+export async function getWorkflows(companyIds: string[]): Promise<DbWorkflow[]> {
   const supabase = createClient();
+  if (!companyIds.length) return [];
   const { data, error } = await supabase
     .from("workflows")
     .select("*")
-    .eq("company_id", companyId)
+    .in("company_id", companyIds)
     .order("created_at", { ascending: false });
 
   if (error) {

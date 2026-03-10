@@ -172,7 +172,7 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
       .catch((err) => console.error("[VisitsContext] realtime refetch error:", err));
   }, [companyId]);
 
-  useRealtimeTable("visits", companyId, refetchVisits);
+  useRealtimeTable("visits", companyId ? [companyId] : [], refetchVisits);
 
   const stores = useMemo(
     () =>
