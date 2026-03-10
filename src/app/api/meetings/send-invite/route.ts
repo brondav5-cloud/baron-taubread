@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
-import { sendEmail } from "@/lib/notifications/sendEmail";
+import { sendEmailWithResult } from "@/lib/notifications/sendEmail";
 
 export async function POST(request: NextRequest) {
   try {
@@ -105,19 +105,32 @@ export async function POST(request: NextRequest) {
     // Send plain email to each attendee (no ICS attachment — more reliable)
     let sent = 0;
     let failed = 0;
+    const firstError: string[] = [];
+
     for (const attendee of attendees) {
-      const ok = await sendEmail({
+      const result = await sendEmailWithResult({
         to: attendee.email,
         recipientName: attendee.name,
         subject: `זימון לישיבה: ${meeting.title} — ${nextDateHe}`,
         body: `קיבלת זימון לישיבה הבאה:\n\n📋 ${meeting.title}\n📅 ${nextDateHe} בשעה ${timeHe}${meeting.location ? `\n📍 ${meeting.location}` : ""}\n\nלחץ על הכפתור למטה לפרטים נוספים.`,
         url: `/dashboard/meetings/${body.meetingId}`,
       });
-      if (ok) sent++;
-      else failed++;
+      if (result.ok) {
+        sent++;
+      } else {
+        failed++;
+        if (result.error && firstError.length === 0) firstError.push(result.error);
+      }
     }
 
-    return NextResponse.json({ ok: true, sent, failed, total: attendees.length });
+    const emailError = firstError[0];
+    return NextResponse.json({
+      ok: sent > 0,
+      sent,
+      failed,
+      total: attendees.length,
+      ...(emailError ? { emailError } : {}),
+    });
   } catch (err) {
     console.error("[send-invite] error:", err);
     return NextResponse.json({ error: "שגיאת שרת" }, { status: 500 });

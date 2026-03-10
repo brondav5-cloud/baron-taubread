@@ -51,10 +51,12 @@ function buildHtml(payload: EmailPayload): string {
 </html>`;
 }
 
-export async function sendEmail(payload: EmailPayload): Promise<boolean> {
+/** Returns { ok, error? } — callers can surface the error to the user. */
+export async function sendEmailWithResult(payload: EmailPayload): Promise<{ ok: boolean; error?: string }> {
   if (!resend) {
-    console.warn("[sendEmail] RESEND_API_KEY not configured, skipping email");
-    return false;
+    const msg = "RESEND_API_KEY לא מוגדר בסביבה";
+    console.warn("[sendEmail]", msg);
+    return { ok: false, error: msg };
   }
 
   try {
@@ -67,7 +69,6 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
         ? {
             attachments: payload.attachments.map((a) => ({
               filename: a.filename,
-              // Resend expects Buffer for binary attachments, not raw base64 string
               content: Buffer.from(a.content, "base64"),
             })),
           }
@@ -75,12 +76,19 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
     });
 
     if (error) {
-      console.error("[sendEmail] Resend error:", error);
-      return false;
+      const msg = (error as { message?: string }).message ?? JSON.stringify(error);
+      console.error("[sendEmail] Resend error:", msg, "→ from:", FROM_EMAIL, "to:", payload.to);
+      return { ok: false, error: msg };
     }
-    return true;
+    return { ok: true };
   } catch (err) {
-    console.error("[sendEmail] error:", err);
-    return false;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[sendEmail] exception:", msg);
+    return { ok: false, error: msg };
   }
+}
+
+export async function sendEmail(payload: EmailPayload): Promise<boolean> {
+  const { ok } = await sendEmailWithResult(payload);
+  return ok;
 }

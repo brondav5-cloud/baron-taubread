@@ -60,6 +60,10 @@ function SendInviteButton({
       if (!res.ok) {
         setMsg(data.error ?? "שגיאה");
         setStatus("error");
+      } else if (data.sent === 0 && data.emailError) {
+        // All failed — show the actual Resend error
+        setMsg(`שגיאת מייל: ${data.emailError}`);
+        setStatus("error");
       } else {
         const failedNote = data.failed > 0 ? ` (${data.failed} נכשלו)` : "";
         setMsg(`נשלח ל-${data.sent} מתוך ${data.total} משתתפים${failedNote}`);
