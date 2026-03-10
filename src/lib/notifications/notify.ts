@@ -26,21 +26,29 @@ export interface SendNotificationInput {
 
 export function sendNotification(input: SendNotificationInput): void {
   if (!input.recipientUserIds.length) return;
+  sendNotificationAsync(input).catch((err) =>
+    console.error("[notify] failed to send notification:", err),
+  );
+}
 
-  fetch("/api/notifications/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-    // keepalive: request survives page navigation / unload
-    keepalive: true,
-  })
-    .then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        console.error("[notify] API error", res.status, body);
-      }
-    })
-    .catch((err) => {
-      console.error("[notify] failed to send notification:", err);
+/**
+ * Awaitable version — use when you need to guarantee delivery before
+ * page navigation or other async operations.
+ */
+export async function sendNotificationAsync(input: SendNotificationInput): Promise<void> {
+  if (!input.recipientUserIds.length) return;
+
+  try {
+    const res = await fetch("/api/notifications/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
     });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      console.error("[notify] API error", res.status, body);
+    }
+  } catch (err) {
+    console.error("[notify] fetch failed:", err);
+  }
 }

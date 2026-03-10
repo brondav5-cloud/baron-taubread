@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createClient } from "@supabase/supabase-js";
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
-import { generateIcs } from "@/lib/ics/generateIcs";
 import { sendEmail } from "@/lib/notifications/sendEmail";
 
 export async function POST(request: NextRequest) {
@@ -13,8 +12,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "לא מחובר" }, { status: 401 });
     }
 
-    const { meetingId } = (await request.json()) as { meetingId: string };
-    if (!meetingId) {
+    const body = (await request.json()) as {
+      meetingId: string;
+      recipientUserIds?: string[]; // optional override from UI
+    };
+    if (!body.meetingId) {
       return NextResponse.json({ error: "חסר meetingId" }, { status: 400 });
     }
 
@@ -24,7 +26,7 @@ export async function POST(request: NextRequest) {
     const { data: meeting, error: meetingError } = await admin
       .from("meetings")
       .select("*")
-      .eq("id", meetingId)
+      .eq("id", body.meetingId)
       .single();
 
     if (meetingError || !meeting) {
@@ -35,88 +37,59 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "אין תאריך לישיבה הבאה" }, { status: 400 });
     }
 
-    // Fetch organizer email
-    const { data: organizer } = await admin
-      .from("users")
-      .select("name, email")
-      .eq("id", user.id)
-      .single();
+    // Determine which user IDs to invite
+    let internalIds: string[];
 
-    const organizerEmail = organizer?.email ?? "noreply@bakery-analytics.app";
-    const organizerName = organizer?.name ?? "מארגן";
-
-    // Collect participant user IDs (internal users only — have a userId)
-    const participants: { userId?: string; name?: string }[] = Array.isArray(meeting.participants)
-      ? (meeting.participants as { userId?: string; name?: string }[])
-      : [];
-
-    const totalParticipants = participants.length;
-    const internalIds = participants
-      .map((p) => p.userId)
-      .filter((id): id is string => !!id && id !== user.id);
-
-    console.log(`[send-invite] total=${totalParticipants} internalIds=${internalIds.length}`, internalIds);
-
-    if (internalIds.length === 0) {
-      return NextResponse.json({
-        error: totalParticipants === 0
-          ? "הישיבה אינה כוללת משתתפים"
-          : "המשתתפים אינם מזוהים במערכת — ודא שנבחרו מהרשימה בעת יצירת הישיבה",
-        debug: { totalParticipants, internalIds: 0 },
-      }, { status: 400 });
+    if (body.recipientUserIds?.length) {
+      // UI passed explicit recipients
+      internalIds = body.recipientUserIds.filter((id) => id !== user.id);
+    } else {
+      // Fallback: read from meeting.participants
+      const participants: { userId?: string; name?: string }[] =
+        Array.isArray(meeting.participants)
+          ? (meeting.participants as { userId?: string; name?: string }[])
+          : [];
+      internalIds = participants
+        .map((p) => p.userId)
+        .filter((id): id is string => !!id && id !== user.id);
     }
 
-    // Fetch their emails from users table
+    if (internalIds.length === 0) {
+      return NextResponse.json(
+        { error: "לא נבחרו משתתפים לשליחה" },
+        { status: 400 },
+      );
+    }
+
+    // Resolve emails: users table first, Auth fallback
     const { data: userRows } = await admin
       .from("users")
       .select("id, name, email")
       .in("id", internalIds);
 
-    console.log(`[send-invite] userRows found=${userRows?.length ?? 0}`);
-
-    // Build attendees list; fallback to auth email if users.email is null
     const attendees: { name: string; email: string }[] = [];
     for (const uid of internalIds) {
       const row = (userRows ?? []).find((r) => r.id === uid);
-      const participantName = participants.find((p) => p.userId === uid)?.name ?? row?.name ?? "";
-
       if (row?.email) {
-        attendees.push({ name: row.name ?? participantName, email: row.email });
+        attendees.push({ name: row.name ?? "", email: row.email });
       } else {
-        // Fallback: fetch email from Supabase Auth
         const { data: authData } = await admin.auth.admin.getUserById(uid);
         const authEmail = authData?.user?.email;
-        console.log(`[send-invite] uid=${uid} no email in users table, auth email=${authEmail ?? "none"}`);
         if (authEmail) {
-          attendees.push({ name: participantName, email: authEmail });
+          attendees.push({ name: row?.name ?? "", email: authEmail });
         }
       }
     }
 
-    console.log(`[send-invite] attendees with email=${attendees.length}`);
-
     if (attendees.length === 0) {
-      return NextResponse.json({
-        error: `נמצאו ${internalIds.length} משתתפים אך לאף אחד אין כתובת מייל — הוסף מיילים בהגדרות → משתמשים`,
-        debug: { totalParticipants, internalIds: internalIds.length, attendees: 0 },
-      }, { status: 400 });
+      return NextResponse.json(
+        { error: `נמצאו ${internalIds.length} משתתפים אך לאף אחד אין כתובת מייל — הוסף מיילים בהגדרות → משתמשים` },
+        { status: 400 },
+      );
     }
 
-    // Generate ICS
+    // Format next meeting date
     const nextDate = new Date(meeting.next_meeting_date);
-    const icsContent = generateIcs({
-      uid: `${meetingId}-next`,
-      title: `המשך: ${meeting.title}`,
-      description: `ישיבת המשך לישיבה "${meeting.title}" שנוצרה ב-${new Date(meeting.meeting_date).toLocaleDateString("he-IL")}`,
-      location: meeting.location ?? "",
-      startDate: nextDate,
-      durationMinutes: 60,
-      organizer: { name: organizerName, email: organizerEmail },
-      attendees,
-    });
-
-    const icsBase64 = Buffer.from(icsContent).toString("base64");
-
     const nextDateHe = nextDate.toLocaleDateString("he-IL", {
       weekday: "long",
       day: "numeric",
@@ -124,16 +97,21 @@ export async function POST(request: NextRequest) {
       year: "numeric",
     });
 
-    // Send to each attendee
+    const timeHe = nextDate.toLocaleTimeString("he-IL", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    // Send plain email to each attendee (no ICS attachment — more reliable)
     let sent = 0;
     let failed = 0;
     for (const attendee of attendees) {
       const ok = await sendEmail({
         to: attendee.email,
         recipientName: attendee.name,
-        subject: `זימון: ${meeting.title} — ${nextDateHe}`,
-        body: `קיבלת זימון לישיבה הבאה:\n\n📅 ${nextDateHe}${meeting.location ? `\n📍 ${meeting.location}` : ""}\n\nאנא פתח את הקובץ המצורף (invite.ics) כדי להוסיף ללוח השנה שלך.`,
-        attachments: [{ filename: "invite.ics", content: icsBase64 }],
+        subject: `זימון לישיבה: ${meeting.title} — ${nextDateHe}`,
+        body: `קיבלת זימון לישיבה הבאה:\n\n📋 ${meeting.title}\n📅 ${nextDateHe} בשעה ${timeHe}${meeting.location ? `\n📍 ${meeting.location}` : ""}\n\nלחץ על הכפתור למטה לפרטים נוספים.`,
+        url: `/dashboard/meetings/${body.meetingId}`,
       });
       if (ok) sent++;
       else failed++;

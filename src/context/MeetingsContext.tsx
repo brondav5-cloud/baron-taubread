@@ -24,7 +24,7 @@ import { insertTask } from "@/lib/supabase/tasks.queries";
 import { taskToDbTask } from "@/lib/supabase/tasks.mappers";
 import type { Task } from "@/types/task";
 import { generateHistoryId, calculateDueDate } from "@/types/task";
-import { sendNotification } from "@/lib/notifications/notify";
+import { sendNotification, sendNotificationAsync } from "@/lib/notifications/notify";
 
 // ── Context type ─────────────────────────────────────────────
 
@@ -98,6 +98,17 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
       const meeting = dbMeetingToMeeting(data);
       setMeetings((prev) => [meeting, ...prev]);
 
+      const meetingTitle = typeof input.title === "string" ? input.title : "";
+
+      // Notify all internal participants (except the creator) about the new meeting
+      _notifyMeetingParticipants(
+        input.participants as { userId?: string; isExternal?: boolean }[] | null,
+        meetingId,
+        meetingTitle,
+        createdBy,
+        createdByName,
+      );
+
       // Await task creation so tasks exist before navigation happens
       if (pendingTasks.length) {
         const isRestrictedMeeting = (input.visibility ?? "public") === "restricted";
@@ -107,7 +118,7 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
           companyId,
           createdBy,
           createdByName,
-          typeof input.title === "string" ? input.title : "",
+          meetingTitle,
           isRestrictedMeeting,
         ).catch((e) => console.error("[createMeeting] task creation error:", e));
       }
@@ -135,17 +146,33 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
         ),
       );
 
+      const meeting = meetings.find((m) => m.id === meetingId);
+      const meetingTitle = meeting?.title ?? "";
+      const meetingCreatedBy = meeting?.createdBy ?? "";
+      const meetingCreatedByName = meeting?.createdByName ?? "";
+
+      // Notify all internal participants (except the creator) that summary was saved
+      const participantsForNotify =
+        (updates.participants as { userId?: string; isExternal?: boolean }[] | null)
+        ?? (meeting?.participants as { userId?: string; isExternal?: boolean }[] | null);
+      _notifyMeetingParticipants(
+        participantsForNotify,
+        meetingId,
+        meetingTitle,
+        meetingCreatedBy,
+        meetingCreatedByName,
+      );
+
       if (pendingTasks?.length) {
-        const meeting = meetings.find((m) => m.id === meetingId);
         const isRestrictedMeeting =
           (updates.visibility ?? meeting?.visibility ?? "public") === "restricted";
         await _createPendingTasks(
           pendingTasks,
           meetingId,
           meeting?.companyId ?? companyId,
-          meeting?.createdBy ?? "",
-          meeting?.createdByName ?? "",
-          meeting?.title ?? "",
+          meetingCreatedBy,
+          meetingCreatedByName,
+          meetingTitle,
           isRestrictedMeeting,
         ).catch((e) => console.error("[saveMeeting] task creation error:", e));
       }
@@ -196,7 +223,33 @@ export function useMeetings() {
   return ctx;
 }
 
-// ── Internal helper ───────────────────────────────────────────
+// ── Internal helpers ──────────────────────────────────────────
+
+/** Notify all internal participants (with userId, non-external) when a meeting is saved. */
+function _notifyMeetingParticipants(
+  participants: { userId?: string; isExternal?: boolean }[] | null | undefined,
+  meetingId: string,
+  meetingTitle: string,
+  createdBy: string,
+  createdByName: string,
+): void {
+  if (!Array.isArray(participants)) return;
+  const recipientUserIds = participants
+    .filter((p) => !!p.userId && !p.isExternal && p.userId !== createdBy)
+    .map((p) => p.userId as string);
+  if (!recipientUserIds.length) return;
+
+  sendNotification({
+    recipientUserIds,
+    type: "general",
+    title: `סיכום ישיבה: ${meetingTitle}`,
+    body: `${createdByName} שמר סיכום ישיבה. לחץ לצפייה.`,
+    url: `/dashboard/meetings/${meetingId}`,
+    referenceId: meetingId,
+    sendEmail: true,
+    sendSms: true,
+  });
+}
 
 async function _createPendingTasks(
   pendingTasks: MeetingTaskMention[],
@@ -224,12 +277,12 @@ async function _createPendingTasks(
 
   if (!newTasks.length) return;
 
-  // Send notification immediately — before DB ops so it survives page navigation
+  // Await notification so it is guaranteed to send before page navigation
   const recipientUserIds = Array.from(
     new Set(newTasks.map((pt) => pt.assigneeUserId).filter(Boolean)),
   );
   if (recipientUserIds.length) {
-    sendNotification({
+    await sendNotificationAsync({
       recipientUserIds,
       type: "task_assigned",
       title: "משימה חדשה מישיבה",

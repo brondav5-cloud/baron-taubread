@@ -20,38 +20,103 @@ import type { Meeting, MeetingTaskRecord } from "@/types/meeting";
 import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG, MEETING_VISIBILITY_CONFIG } from "@/types/meeting";
 import { AdminDeleteModal } from "@/components/shared/AdminDeleteModal";
 
-// ── Send Invite Button ────────────────────────────────────────
-function SendInviteButton({ meetingId }: { meetingId: string }) {
-  const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+// ── Send Invite Button with participant selector ──────────────
+interface InviteParticipant {
+  userId: string;
+  name: string;
+}
+
+function SendInviteButton({
+  meetingId,
+  participants,
+}: {
+  meetingId: string;
+  participants: InviteParticipant[];
+}) {
+  const [status, setStatus] = useState<"idle" | "picking" | "sending" | "done" | "error">("idle");
   const [msg, setMsg] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const openPicker = () => {
+    setSelected(participants.map((p) => p.userId));
+    setStatus("picking");
+  };
+
+  const toggle = (uid: string) =>
+    setSelected((prev) =>
+      prev.includes(uid) ? prev.filter((id) => id !== uid) : [...prev, uid],
+    );
 
   const handleSend = async () => {
+    if (!selected.length) return;
     setStatus("sending");
     try {
       const res = await fetch("/api/meetings/send-invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ meetingId }),
+        body: JSON.stringify({ meetingId, recipientUserIds: selected }),
       });
       const data = await res.json();
       if (!res.ok) {
         setMsg(data.error ?? "שגיאה");
         setStatus("error");
       } else {
-        setMsg(`נשלח ל-${data.sent} משתתפים`);
+        const failedNote = data.failed > 0 ? ` (${data.failed} נכשלו)` : "";
+        setMsg(`נשלח ל-${data.sent} מתוך ${data.total} משתתפים${failedNote}`);
         setStatus("done");
       }
     } catch {
       setMsg("שגיאת רשת");
       setStatus("error");
     }
-    setTimeout(() => setStatus("idle"), 4000);
+    setTimeout(() => { setStatus("idle"); setMsg(""); }, 5000);
   };
+
+  if (status === "picking") {
+    return (
+      <div className="flex flex-col gap-2 items-end">
+        <div className="bg-white border border-blue-200 rounded-xl shadow-md p-3 min-w-[200px]">
+          <p className="text-xs font-semibold text-gray-700 mb-2">בחר נמענים לזימון:</p>
+          <div className="space-y-1.5 max-h-40 overflow-y-auto">
+            {participants.map((p) => (
+              <label key={p.userId} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(p.userId)}
+                  onChange={() => toggle(p.userId)}
+                  className="rounded border-gray-300 text-blue-600"
+                />
+                <span className="text-sm text-gray-800">{p.name}</span>
+              </label>
+            ))}
+            {participants.length === 0 && (
+              <p className="text-xs text-gray-400">אין משתתפים מוגדרים בישיבה זו</p>
+            )}
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={handleSend}
+              disabled={!selected.length}
+              className="flex-1 px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            >
+              שלח ({selected.length})
+            </button>
+            <button
+              onClick={() => setStatus("idle")}
+              className="px-3 py-1.5 text-gray-600 text-xs rounded-lg hover:bg-gray-100"
+            >
+              ביטול
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col items-end gap-1">
       <button
-        onClick={handleSend}
+        onClick={openPicker}
         disabled={status === "sending"}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
           status === "done"
@@ -63,7 +128,7 @@ function SendInviteButton({ meetingId }: { meetingId: string }) {
       >
         {status === "sending" ? "שולח..." : status === "done" ? "✅ נשלח" : status === "error" ? "❌ שגיאה" : "📨 שלח זימון"}
       </button>
-      {msg && <span className="text-xs text-gray-500">{msg}</span>}
+      {msg && <span className="text-xs text-gray-500 text-right max-w-[180px]">{msg}</span>}
     </div>
   );
 }
@@ -413,7 +478,12 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
             </div>
           </div>
           {canEdit && (
-            <SendInviteButton meetingId={meeting.id} />
+            <SendInviteButton
+              meetingId={meeting.id}
+              participants={meeting.participants
+                .filter((p) => !!p.userId && !p.isExternal)
+                .map((p) => ({ userId: p.userId!, name: p.name }))}
+            />
           )}
         </div>
       )}
