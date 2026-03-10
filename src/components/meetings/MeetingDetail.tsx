@@ -20,6 +20,54 @@ import type { Meeting, MeetingTaskRecord } from "@/types/meeting";
 import { MEETING_TYPE_CONFIG, MEETING_PRIORITY_CONFIG, MEETING_VISIBILITY_CONFIG } from "@/types/meeting";
 import { AdminDeleteModal } from "@/components/shared/AdminDeleteModal";
 
+// ── Send Invite Button ────────────────────────────────────────
+function SendInviteButton({ meetingId }: { meetingId: string }) {
+  const [status, setStatus] = useState<"idle" | "sending" | "done" | "error">("idle");
+  const [msg, setMsg] = useState("");
+
+  const handleSend = async () => {
+    setStatus("sending");
+    try {
+      const res = await fetch("/api/meetings/send-invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meetingId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMsg(data.error ?? "שגיאה");
+        setStatus("error");
+      } else {
+        setMsg(`נשלח ל-${data.sent} משתתפים`);
+        setStatus("done");
+      }
+    } catch {
+      setMsg("שגיאת רשת");
+      setStatus("error");
+    }
+    setTimeout(() => setStatus("idle"), 4000);
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        onClick={handleSend}
+        disabled={status === "sending"}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+          status === "done"
+            ? "bg-green-100 text-green-700"
+            : status === "error"
+            ? "bg-red-100 text-red-700"
+            : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+        }`}
+      >
+        {status === "sending" ? "שולח..." : status === "done" ? "✅ נשלח" : status === "error" ? "❌ שגיאה" : "📨 שלח זימון"}
+      </button>
+      {msg && <span className="text-xs text-gray-500">{msg}</span>}
+    </div>
+  );
+}
+
 import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useTasks } from "@/context/TasksContext";
@@ -349,19 +397,24 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
 
       {/* Next meeting */}
       {meeting.nextMeetingDate && (
-        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 mb-4 flex items-center gap-3">
-          <Calendar size={18} className="text-blue-500 flex-shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-blue-800">ישיבה הבאה</p>
-            <p className="text-sm text-blue-600">
-              {new Date(meeting.nextMeetingDate).toLocaleDateString("he-IL", {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              })}
-            </p>
+        <div className="bg-blue-50 rounded-2xl border border-blue-100 p-4 mb-4 flex items-center justify-between gap-3 print:hidden">
+          <div className="flex items-center gap-3">
+            <Calendar size={18} className="text-blue-500 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-blue-800">ישיבה הבאה</p>
+              <p className="text-sm text-blue-600">
+                {new Date(meeting.nextMeetingDate).toLocaleDateString("he-IL", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </p>
+            </div>
           </div>
+          {canEdit && (
+            <SendInviteButton meetingId={meeting.id} />
+          )}
         </div>
       )}
 

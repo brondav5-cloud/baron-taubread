@@ -5,6 +5,11 @@ const FROM_EMAIL = process.env.RESEND_FROM_EMAIL ?? "notifications@bakery-analyt
 
 const resend = RESEND_API_KEY ? new Resend(RESEND_API_KEY) : null;
 
+export interface EmailAttachment {
+  filename: string;
+  content: string; // base64
+}
+
 export interface EmailPayload {
   to: string;
   recipientName?: string;
@@ -12,6 +17,7 @@ export interface EmailPayload {
   body: string;
   url?: string;
   type?: string;
+  attachments?: EmailAttachment[];
 }
 
 function buildHtml(payload: EmailPayload): string {
@@ -57,6 +63,14 @@ export async function sendEmail(payload: EmailPayload): Promise<boolean> {
       to: payload.to,
       subject: payload.subject,
       html: buildHtml(payload),
+      ...(payload.attachments?.length
+        ? {
+            attachments: payload.attachments.map((a) => ({
+              filename: a.filename,
+              content: a.content,
+            })),
+          }
+        : {}),
     });
 
     if (error) {
