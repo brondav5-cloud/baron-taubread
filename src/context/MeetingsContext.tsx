@@ -210,15 +210,10 @@ async function _createPendingTasks(
   if (!pendingTasks.length) return;
 
   // Load already-created tasks for this meeting to avoid duplicates on re-save
-  const { createClient } = await import("@/lib/supabase/client");
-  const supabase = createClient();
-  const { data: existingMeetingTasks } = await supabase
-    .from("meeting_tasks")
-    .select("assignee_user_id, task_title")
-    .eq("meeting_id", meetingId);
+  const existingMeetingTasks = await getMeetingTasks(meetingId);
 
   const alreadyCreated = new Set(
-    (existingMeetingTasks ?? []).map(
+    existingMeetingTasks.map(
       (mt) => `${mt.assignee_user_id}::${mt.task_title}`,
     ),
   );
@@ -229,84 +224,13 @@ async function _createPendingTasks(
 
   if (!newTasks.length) return;
 
-  const now = new Date().toISOString();
-  const recipientUserIds: string[] = [];
-
-  for (const pt of newTasks) {
-    const dueDate = pt.dueDate || calculateDueDate("normal");
-
-    const taskInput: Omit<Task, "id"> & { id: string } = {
-      id: "",
-      taskType: "general",
-      createdBy,
-      createdByName,
-      createdAt: now,
-      updatedAt: now,
-      assignees: [
-        {
-          userId: pt.assigneeUserId,
-          userName: pt.assigneeName,
-          role: "primary",
-          status: "new",
-        },
-      ],
-      categoryId: "meeting",
-      categoryName: "ישיבה",
-      categoryIcon: "📋",
-      priority: pt.priority,
-      title: pt.taskTitle,
-      description: `נוצר בישיבה: ${meetingTitle}`,
-      photos: [],
-      status: "new",
-      checklist: [],
-      comments: [],
-      history: [
-        {
-          id: generateHistoryId(),
-          action: "created",
-          userId: createdBy,
-          userName: createdByName,
-          timestamp: now,
-          details: `נוצר מישיבת צוות: ${meetingTitle}`,
-        },
-      ],
-      handlerPhotos: [],
-      dueDate,
-      isPrivate,
-    };
-
-    const dbTask = taskToDbTask(taskInput, companyId);
-    const { data: createdTask, error: taskError } = await insertTask(dbTask);
-
-    if (taskError || !createdTask) {
-      console.error("[_createPendingTasks] insertTask failed:", taskError?.message, "for:", pt.taskTitle);
-      // Still mark assignee for notification even if task insert failed
-      if (pt.assigneeUserId) recipientUserIds.push(pt.assigneeUserId);
-      continue;
-    }
-
-    const { error: mtError } = await insertMeetingTask({
-      meeting_id: meetingId,
-      agenda_item_index: pt.agendaItemIndex ?? null,
-      task_id: createdTask.id,
-      assignee_user_id: pt.assigneeUserId,
-      assignee_name: pt.assigneeName,
-      task_title: pt.taskTitle,
-      due_date: dueDate,
-      priority: pt.priority,
-      company_id: companyId,
-    });
-
-    if (mtError) {
-      console.error("[_createPendingTasks] insertMeetingTask failed:", mtError.message);
-    }
-
-    if (pt.assigneeUserId) recipientUserIds.push(pt.assigneeUserId);
-  }
-
+  // Send notification immediately — before DB ops so it survives page navigation
+  const recipientUserIds = Array.from(
+    new Set(newTasks.map((pt) => pt.assigneeUserId).filter(Boolean)),
+  );
   if (recipientUserIds.length) {
     sendNotification({
-      recipientUserIds: Array.from(new Set(recipientUserIds)),
+      recipientUserIds,
       type: "task_assigned",
       title: "משימה חדשה מישיבה",
       body: `הוקצתה לך משימה מישיבת: ${meetingTitle}`,
@@ -317,4 +241,76 @@ async function _createPendingTasks(
       sendSms: true,
     });
   }
+
+  // Create tasks in parallel (faster than sequential)
+  const now = new Date().toISOString();
+  await Promise.all(
+    newTasks.map(async (pt) => {
+      const dueDate = pt.dueDate || calculateDueDate("normal");
+
+      const taskInput: Omit<Task, "id"> & { id: string } = {
+        id: "",
+        taskType: "general",
+        createdBy,
+        createdByName,
+        createdAt: now,
+        updatedAt: now,
+        assignees: [
+          {
+            userId: pt.assigneeUserId,
+            userName: pt.assigneeName,
+            role: "primary",
+            status: "new",
+          },
+        ],
+        categoryId: "meeting",
+        categoryName: "ישיבה",
+        categoryIcon: "📋",
+        priority: pt.priority,
+        title: pt.taskTitle,
+        description: `נוצר בישיבה: ${meetingTitle}`,
+        photos: [],
+        status: "new",
+        checklist: [],
+        comments: [],
+        history: [
+          {
+            id: generateHistoryId(),
+            action: "created",
+            userId: createdBy,
+            userName: createdByName,
+            timestamp: now,
+            details: `נוצר מישיבת צוות: ${meetingTitle}`,
+          },
+        ],
+        handlerPhotos: [],
+        dueDate,
+        isPrivate,
+      };
+
+      const dbTask = taskToDbTask(taskInput, companyId);
+      const { data: createdTask, error: taskError } = await insertTask(dbTask);
+
+      if (taskError || !createdTask) {
+        console.error("[_createPendingTasks] insertTask failed:", taskError?.message, "for:", pt.taskTitle);
+        return;
+      }
+
+      const { error: mtError } = await insertMeetingTask({
+        meeting_id: meetingId,
+        agenda_item_index: pt.agendaItemIndex ?? null,
+        task_id: createdTask.id,
+        assignee_user_id: pt.assigneeUserId,
+        assignee_name: pt.assigneeName,
+        task_title: pt.taskTitle,
+        due_date: dueDate,
+        priority: pt.priority,
+        company_id: companyId,
+      });
+
+      if (mtError) {
+        console.error("[_createPendingTasks] insertMeetingTask failed:", mtError.message);
+      }
+    }),
+  );
 }
