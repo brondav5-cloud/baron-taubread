@@ -151,28 +151,30 @@ export function CreateTaskModal({
 
             {/* Notification Toggles */}
             {form.selectedAssignees.length > 0 && (
-              <div className="bg-gray-50 rounded-xl p-3 space-y-2">
-                <p className="text-xs font-medium text-gray-500">שלח התראה למוקצים</p>
-                <div className="flex gap-3">
-                  <label className="flex items-center gap-2 cursor-pointer">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
+                <p className="text-xs font-semibold text-blue-700 mb-2.5">
+                  🔔 שלח התראה למוקצים עם יצירת המשימה
+                </p>
+                <div className="flex gap-4">
+                  <label className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border transition-colors ${form.notifyEmail ? "bg-white border-blue-400 shadow-sm" : "bg-white/60 border-blue-100"}`}>
                     <input
                       type="checkbox"
                       checked={form.notifyEmail}
                       onChange={(e) => form.setNotifyEmail(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
                     />
-                    <span className="text-sm">✉️</span>
-                    <span className="text-sm text-gray-700">מייל</span>
+                    <span className="text-base">✉️</span>
+                    <span className="text-sm font-medium text-gray-700">מייל</span>
                   </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
+                  <label className={`flex items-center gap-2 cursor-pointer px-3 py-2 rounded-lg border transition-colors ${form.notifySms ? "bg-white border-blue-400 shadow-sm" : "bg-white/60 border-blue-100"}`}>
                     <input
                       type="checkbox"
                       checked={form.notifySms}
                       onChange={(e) => form.setNotifySms(e.target.checked)}
-                      className="w-4 h-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-400"
                     />
-                    <span className="text-sm">📱</span>
-                    <span className="text-sm text-gray-700">SMS</span>
+                    <span className="text-base">📱</span>
+                    <span className="text-sm font-medium text-gray-700">SMS</span>
                   </label>
                 </div>
               </div>

@@ -72,12 +72,14 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
       completeResponse.trim(),
     );
     setCompleteResponse("");
+    onClose();
   }, [
     currentTask,
     completeTask,
     currentUser.id,
     currentUser.name,
     completeResponse,
+    onClose,
   ]);
 
   const handleApproveTask = useCallback(() => {
