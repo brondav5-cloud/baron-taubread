@@ -93,23 +93,42 @@ export async function POST(request: NextRequest) {
       // User exists – add to this company only (no new auth user)
       const existingUserId = existingAuthUser.id;
 
-      // Ensure user is in public.users (may have been added in another company)
+      // Ensure user is in public.users (may have been added in another company, or was deactivated)
       const { data: existingUserRow } = await admin
         .from("users")
-        .select("id")
+        .select("id, is_active")
         .eq("id", existingUserId)
         .single();
 
       if (!existingUserRow) {
-        // User in Auth but not in public.users – insert minimal row
+        // User in Auth but not in public.users – insert full row
         await admin.from("users").insert({
           id: existingUserId,
           company_id: selectedCompanyId,
           email: existingAuthUser.email ?? emailTrimmed,
           name: String(name).trim() || existingAuthUser.user_metadata?.name,
           role: newUserRole,
+          position: body.position || null,
+          department: body.department || null,
+          avatar: body.avatar || "👤",
+          permissions: (body.permissions as UserPermissions) ?? null,
           is_active: true,
         });
+      } else if (!existingUserRow.is_active) {
+        // User was deactivated – reactivate and update their details
+        await admin
+          .from("users")
+          .update({
+            is_active: true,
+            name: String(name).trim(),
+            role: newUserRole,
+            position: body.position || null,
+            department: body.department || null,
+            avatar: body.avatar || "👤",
+            permissions: (body.permissions as UserPermissions) ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", existingUserId);
       }
 
       // Add/update membership in user_companies
