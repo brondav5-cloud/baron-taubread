@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Calendar, MapPin, ArrowRight } from "lucide-react";
 import type { MeetingType, MeetingTaskMention, MeetingVisibility } from "@/types/meeting";
@@ -9,8 +9,6 @@ import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useUsers } from "@/context/UsersContext";
 import SmartMeetingEditor, {
-  DecisionsPanel,
-  TasksPanel,
   parsedTaskToMention,
 } from "./SmartMeetingEditor";
 import type { ParsedDecision, ParsedTask } from "./meetingParser";
@@ -81,10 +79,6 @@ export default function MeetingForm({
   const [parsedDecisions, setParsedDecisions] = useState<ParsedDecision[]>([]);
   const [parsedTasks, setParsedTasks] = useState<ParsedTask[]>([]);
 
-  const [taskOverrides, setTaskOverrides] = useState<
-    Record<string, { dueDate?: string; priority?: MeetingTaskMention["priority"] }>
-  >({});
-
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -92,31 +86,6 @@ export default function MeetingForm({
     auth.status === "authed"
       ? { id: auth.user.userId ?? "", name: auth.user.userName ?? "" }
       : { id: "", name: "" };
-
-  // ── Task overrides ───────────────────────────────────────
-
-  const handleDueDateChange = useCallback((taskId: string, date: string) => {
-    setTaskOverrides((prev) => ({
-      ...prev,
-      [taskId]: { ...prev[taskId], dueDate: date },
-    }));
-  }, []);
-
-  const handlePriorityChange = useCallback(
-    (taskId: string, priority: MeetingTaskMention["priority"]) => {
-      setTaskOverrides((prev) => ({
-        ...prev,
-        [taskId]: { ...prev[taskId], priority },
-      }));
-    },
-    [],
-  );
-
-  const finalTasks: ParsedTask[] = parsedTasks.map((t) => ({
-    ...t,
-    dueDate: taskOverrides[t.id]?.dueDate ?? t.dueDate,
-    priority: taskOverrides[t.id]?.priority ?? t.priority,
-  }));
 
   // ── Submit ────────────────────────────────────────────────
 
@@ -134,7 +103,7 @@ export default function MeetingForm({
     setError("");
 
     try {
-      const pendingTasks: MeetingTaskMention[] = finalTasks.map((t) =>
+      const pendingTasks: MeetingTaskMention[] = parsedTasks.map((t) =>
         parsedTaskToMention(t),
       );
 
@@ -317,19 +286,6 @@ export default function MeetingForm({
           onTasksChange={setParsedTasks}
         />
       </div>
-
-      {/* Live panels */}
-      {parsedDecisions.length > 0 && (
-        <DecisionsPanel decisions={parsedDecisions} />
-      )}
-
-      {finalTasks.length > 0 && (
-        <TasksPanel
-          tasks={finalTasks}
-          onDueDateChange={handleDueDateChange}
-          onPriorityChange={handlePriorityChange}
-        />
-      )}
 
       {/* Next meeting */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">

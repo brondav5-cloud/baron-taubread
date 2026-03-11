@@ -16,6 +16,7 @@ interface RowBlockProps {
   onAddAfter: (type: RowType) => void;
   onChangeType: (newType: RowType) => void;
   onRequestTaskEdit: () => void;
+  onRequestConvert?: () => void;
 }
 
 export default function RowBlock({
@@ -27,6 +28,7 @@ export default function RowBlock({
   onAddAfter,
   onChangeType,
   onRequestTaskEdit,
+  onRequestConvert,
 }: RowBlockProps) {
   const cfg = ROW_TYPE_CONFIG[row.type];
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -159,14 +161,26 @@ export default function RowBlock({
       />
 
       {!readonly && (
-        <button
-          type="button"
-          onClick={onDelete}
-          className="text-gray-300 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity flex-shrink-0 mt-0.5 self-start"
-          aria-label="מחק שורה"
-        >
-          ✕
-        </button>
+        <div className="flex flex-col gap-1 flex-shrink-0 self-start mt-0.5">
+          {row.type === "text" && onRequestConvert && (
+            <button
+              type="button"
+              onClick={onRequestConvert}
+              title="המר להחלטה / משימה"
+              className="text-blue-400 hover:text-blue-600 text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity leading-none"
+            >
+              ⇄
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onDelete}
+            className="text-gray-300 hover:text-red-400 text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity leading-none"
+            aria-label="מחק שורה"
+          >
+            ✕
+          </button>
+        </div>
       )}
     </div>
   );

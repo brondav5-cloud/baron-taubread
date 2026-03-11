@@ -17,6 +17,7 @@ interface TopicBlockProps {
   onDeleteRow: (rowId: string) => void;
   onChangeRowType: (rowId: string, newType: RowType) => void;
   onRequestTaskEdit: (rowId: string) => void;
+  onRequestConvert: (rowId: string) => void;
 }
 
 export default function TopicBlock({
@@ -31,6 +32,7 @@ export default function TopicBlock({
   onDeleteRow,
   onChangeRowType,
   onRequestTaskEdit,
+  onRequestConvert,
 }: TopicBlockProps) {
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -80,6 +82,7 @@ export default function TopicBlock({
             onAddAfter={(type) => onAddRow(type, row.id)}
             onChangeType={(newType) => onChangeRowType(row.id, newType)}
             onRequestTaskEdit={() => onRequestTaskEdit(row.id)}
+            onRequestConvert={() => onRequestConvert(row.id)}
           />
         ))}
       </div>

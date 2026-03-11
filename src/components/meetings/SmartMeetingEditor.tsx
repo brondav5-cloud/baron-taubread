@@ -7,6 +7,7 @@ import { useBlockEditor } from "./editor/useBlockEditor";
 import TopicBlockComponent from "./editor/TopicBlock";
 import TaskSheet, { type TaskSheetData } from "./editor/TaskSheet";
 import BlockToolbar from "./editor/BlockToolbar";
+import ConvertDialog, { type ConvertResult } from "./editor/ConvertDialog";
 import type { ParsedDecision, ParsedTask } from "./meetingParser";
 export type { ParsedDecision, ParsedTask } from "./meetingParser";
 import type { MeetingTaskMention, MeetingTaskPriority } from "@/types/meeting";
@@ -68,6 +69,13 @@ export default function SmartMeetingEditor({
 
   // Task sheet
   const [taskSheet, setTaskSheet] = useState<TaskSheetState | null>(null);
+
+  // Convert dialog (text row → decision / task)
+  const [convertDialog, setConvertDialog] = useState<{
+    topicId: string;
+    rowId: string;
+    originalText: string;
+  } | null>(null);
 
   // Sync blocks → text + decisions/tasks whenever blocks change
   useEffect(() => {
@@ -141,6 +149,29 @@ export default function SmartMeetingEditor({
     [taskSheet, editor],
   );
 
+  // ── ConvertDialog handler ─────────────────────────────────
+
+  const handleConvertConfirm = useCallback(
+    (result: ConvertResult) => {
+      if (!convertDialog) return;
+      const { topicId, rowId } = convertDialog;
+      if (result.type === "decision") {
+        editor.updateRow(topicId, rowId, { type: "decision", content: result.content } as Partial<ContentRow>);
+      } else if (result.type === "task" && result.taskData) {
+        editor.updateRow(topicId, rowId, {
+          type: "task",
+          content: result.content,
+          assigneeId: result.taskData.assigneeId,
+          assigneeName: result.taskData.assigneeName,
+          dueDate: result.taskData.dueDate,
+          priority: result.taskData.priority,
+        } as Partial<ContentRow>);
+      }
+      setConvertDialog(null);
+    },
+    [convertDialog, editor],
+  );
+
   // ── Mobile toolbar handler ────────────────────────────────
 
   const handleToolbarAdd = useCallback(
@@ -197,6 +228,14 @@ export default function SmartMeetingEditor({
               const row = topic.rows.find((r) => r.id === rowId);
               openTaskSheet(topic.id, rowId, row as Partial<TaskRow>);
             }}
+            onRequestConvert={(rowId) => {
+              const row = topic.rows.find((r) => r.id === rowId);
+              setConvertDialog({
+                topicId: topic.id,
+                rowId,
+                originalText: row?.content ?? "",
+              });
+            }}
           />
         ))}
 
@@ -223,6 +262,15 @@ export default function SmartMeetingEditor({
         users={users}
         onConfirm={handleTaskConfirm}
         onClose={() => setTaskSheet(null)}
+      />
+
+      {/* Convert dialog */}
+      <ConvertDialog
+        open={convertDialog !== null}
+        originalText={convertDialog?.originalText ?? ""}
+        users={users}
+        onConfirm={handleConvertConfirm}
+        onClose={() => setConvertDialog(null)}
       />
     </div>
   );
