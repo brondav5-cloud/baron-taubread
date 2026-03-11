@@ -8,6 +8,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
  * Subscribes to INSERT / UPDATE / DELETE on a Supabase table,
  * filtered by company_id. Accepts one or more company IDs.
  * Calls `onSync` whenever a change arrives so the consumer can refetch.
+ *
+ * Uses a ref for onSync so the subscription is never torn down due to
+ * callback reference changes — only table/company changes rebuild it.
  */
 export function useRealtimeTable(
   table: string,
@@ -15,7 +18,13 @@ export function useRealtimeTable(
   onSync: () => void,
 ) {
   const channelsRef = useRef<RealtimeChannel[]>([]);
+  const onSyncRef = useRef(onSync);
   const idsKey = companyIds.join(",");
+
+  // Keep the ref pointing at the latest callback without rebuilding channels
+  useEffect(() => {
+    onSyncRef.current = onSync;
+  });
 
   useEffect(() => {
     if (!idsKey) return;
@@ -34,7 +43,7 @@ export function useRealtimeTable(
             table,
             filter: `company_id=eq.${companyId}`,
           },
-          () => onSync(),
+          () => onSyncRef.current(),
         )
         .subscribe();
       channels.push(channel);
@@ -46,5 +55,5 @@ export function useRealtimeTable(
       channels.forEach((ch) => supabase.removeChannel(ch));
       channelsRef.current = [];
     };
-  }, [table, idsKey, onSync]);
+  }, [table, idsKey]);
 }

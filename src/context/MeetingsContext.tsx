@@ -25,6 +25,7 @@ import { taskToDbTask } from "@/lib/supabase/tasks.mappers";
 import type { Task } from "@/types/task";
 import { generateHistoryId, calculateDueDate } from "@/types/task";
 import { sendNotification, sendNotificationAsync } from "@/lib/notifications/notify";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 // ── Context type ─────────────────────────────────────────────
 
@@ -70,6 +71,8 @@ export function MeetingsProvider({ children }: { children: ReactNode }) {
     if (!companyId) { setLoading(false); return; }
     refetch();
   }, [auth.status, companyId, refetch]);
+
+  useRealtimeTable("meetings", companyId ? [companyId] : [], refetch);
 
   const getMeetingById = useCallback(
     (id: string) => meetings.find((m) => m.id === id),

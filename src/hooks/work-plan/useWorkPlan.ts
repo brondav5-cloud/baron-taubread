@@ -3,6 +3,7 @@
 import { useMemo, useState, useCallback, useEffect } from "react";
 import { useStoresAndProducts } from "@/context/StoresAndProductsContext";
 import { useAuth } from "@/hooks/useAuth";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import {
   getWorkPlanItems,
   insertWorkPlanItem,
@@ -132,6 +133,15 @@ export function useWorkPlan() {
       cancelled = true;
     };
   }, [auth.status, companyId, currentWeekKey]);
+
+  const refetchPlan = useCallback(() => {
+    if (!companyId) return;
+    getWorkPlanItems(companyId, currentWeekKey).then((rows) =>
+      setAllPlanItems(rows.map(dbToPlanItem)),
+    );
+  }, [companyId, currentWeekKey]);
+
+  useRealtimeTable("work_plan_items", companyId ? [companyId] : [], refetchPlan);
 
   const planItems = allPlanItems;
 

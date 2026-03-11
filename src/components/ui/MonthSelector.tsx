@@ -124,7 +124,7 @@ export interface MonthSelection {
   months: string[];
   compareMonths: string[];
   isCompareMode: boolean;
-  compareDisplayMode: "rows" | "tables" | "columns"; // New: display mode for comparison
+  compareDisplayMode: "rows" | "tables" | "columns" | "summary";
 }
 
 interface MonthSelectorProps {
@@ -424,45 +424,29 @@ export function MonthSelector({ value, onChange }: MonthSelectorProps) {
                 {/* Display Mode Selector */}
                 <div className="flex items-center justify-center gap-2 pt-2 border-t border-gray-200">
                   <span className="text-xs text-gray-500">תצוגה:</span>
-                  <button
-                    onClick={() =>
-                      onChange({ ...value, compareDisplayMode: "rows" })
-                    }
-                    className={clsx(
-                      "px-3 py-1 rounded text-xs font-medium transition-colors",
-                      value.compareDisplayMode === "rows"
-                        ? "bg-primary-500 text-white"
-                        : "bg-gray-100 hover:bg-gray-200",
-                    )}
-                  >
-                    שורות
-                  </button>
-                  <button
-                    onClick={() =>
-                      onChange({ ...value, compareDisplayMode: "tables" })
-                    }
-                    className={clsx(
-                      "px-3 py-1 rounded text-xs font-medium transition-colors",
-                      value.compareDisplayMode === "tables"
-                        ? "bg-primary-500 text-white"
-                        : "bg-gray-100 hover:bg-gray-200",
-                    )}
-                  >
-                    טבלאות
-                  </button>
-                  <button
-                    onClick={() =>
-                      onChange({ ...value, compareDisplayMode: "columns" })
-                    }
-                    className={clsx(
-                      "px-3 py-1 rounded text-xs font-medium transition-colors",
-                      value.compareDisplayMode === "columns"
-                        ? "bg-primary-500 text-white"
-                        : "bg-gray-100 hover:bg-gray-200",
-                    )}
-                  >
-                    עמודות
-                  </button>
+                  {(
+                    [
+                      { id: "rows", label: "שורות" },
+                      { id: "tables", label: "טבלאות" },
+                      { id: "columns", label: "עמודות" },
+                      { id: "summary", label: "📊 סיכום" },
+                    ] as const
+                  ).map((mode) => (
+                    <button
+                      key={mode.id}
+                      onClick={() =>
+                        onChange({ ...value, compareDisplayMode: mode.id })
+                      }
+                      className={clsx(
+                        "px-3 py-1 rounded text-xs font-medium transition-colors",
+                        value.compareDisplayMode === mode.id
+                          ? "bg-primary-500 text-white"
+                          : "bg-gray-100 hover:bg-gray-200",
+                      )}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             )}

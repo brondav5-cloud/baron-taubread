@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseData } from "./useSupabaseData";
+import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 import {
   getVisitsSummary,
   type VisitSummaryRow,
@@ -101,6 +102,10 @@ export function useFieldSummary() {
   useEffect(() => {
     fetchActions();
   }, [fetchActions]);
+
+  useRealtimeTable("visits", companyId ? [companyId] : [], fetchActions);
+  useRealtimeTable("store_treatments", companyId ? [companyId] : [], fetchActions);
+  useRealtimeTable("work_plan_items", companyId ? [companyId] : [], fetchActions);
 
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
