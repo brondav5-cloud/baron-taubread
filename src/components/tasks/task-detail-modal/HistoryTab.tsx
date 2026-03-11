@@ -17,6 +17,10 @@ const ACTION_LABELS: Record<string, string> = {
   approved: "אישר וסגר",
   rejected: "דחה",
   comment: "הוסיף הערה",
+  checklist: "עדכן צ'קליסט",
+  reassigned: "העביר את המשימה",
+  assigned: "הוסיף משתמש למשימה",
+  removed: "הסיר משתמש מהמשימה",
 };
 
 export function HistoryTab({ task }: HistoryTabProps) {

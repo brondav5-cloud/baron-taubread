@@ -177,6 +177,20 @@ export async function POST(request: NextRequest) {
       });
 
     if (authErr || !authUser.user) {
+      // Edge case: user exists in Auth but their public.users row was missing (data inconsistency).
+      // In this case createUser returns "already registered" — surface a clear error.
+      const alreadyExists =
+        authErr?.message?.toLowerCase().includes("already") ||
+        authErr?.status === 422;
+      if (alreadyExists) {
+        return NextResponse.json(
+          {
+            error:
+              "כתובת האימייל כבר רשומה במערכת האימות אך לא נמצאה ברשימת המשתמשים. פנה לתמיכה.",
+          },
+          { status: 409 },
+        );
+      }
       return NextResponse.json(
         { error: authErr?.message || "שגיאה ביצירת משתמש במערכת" },
         { status: 500 },
