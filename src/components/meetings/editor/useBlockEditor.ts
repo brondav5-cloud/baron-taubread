@@ -110,6 +110,23 @@ export function useBlockEditor(setTopics: SetTopics) {
     [setTopics],
   );
 
+  // Insert a fully-populated row immediately after an existing row
+  const insertRowAfter = useCallback(
+    (topicId: string, afterRowId: string, rowData: Omit<ContentRow, "id">) => {
+      const newRow = { ...rowData, id: uid() } as ContentRow;
+      setTopics((prev) =>
+        prev.map((t) => {
+          if (t.id !== topicId) return t;
+          const idx = t.rows.findIndex((r) => r.id === afterRowId);
+          const rows = [...t.rows];
+          rows.splice(idx + 1, 0, newRow);
+          return { ...t, rows };
+        }),
+      );
+    },
+    [setTopics],
+  );
+
   const changeRowType = useCallback(
     (topicId: string, rowId: string, newType: RowType) => {
       setTopics((prev) =>
@@ -148,5 +165,6 @@ export function useBlockEditor(setTopics: SetTopics) {
     updateRow,
     deleteRow,
     changeRowType,
+    insertRowAfter,
   };
 }

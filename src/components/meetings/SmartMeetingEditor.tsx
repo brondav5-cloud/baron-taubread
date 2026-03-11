@@ -156,17 +156,22 @@ export default function SmartMeetingEditor({
     (result: ConvertResult) => {
       if (!convertDialog) return;
       const { topicId, rowId } = convertDialog;
+
+      // Keep the original text row — insert the new row below it
       if (result.type === "decision") {
-        editor.updateRow(topicId, rowId, { type: "decision", content: result.content } as Partial<ContentRow>);
+        editor.insertRowAfter(topicId, rowId, {
+          type: "decision",
+          content: result.content,
+        });
       } else if (result.type === "task" && result.taskData) {
-        editor.updateRow(topicId, rowId, {
+        editor.insertRowAfter(topicId, rowId, {
           type: "task",
           content: result.content,
           assigneeId: result.taskData.assigneeId,
           assigneeName: result.taskData.assigneeName,
           dueDate: result.taskData.dueDate,
           priority: result.taskData.priority,
-        } as Partial<ContentRow>);
+        } as Omit<ContentRow, "id">);
       }
       setConvertDialog(null);
     },

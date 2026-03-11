@@ -37,7 +37,7 @@ export default function TopicBlock({
   const titleRef = useRef<HTMLInputElement>(null);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm">
       {/* Topic header */}
       <div className="flex items-center gap-2 px-4 py-3 bg-indigo-50 border-b border-indigo-100">
         <span className="text-base flex-shrink-0">📋</span>
@@ -69,7 +69,7 @@ export default function TopicBlock({
       </div>
 
       {/* Rows */}
-      <div className="px-3 py-3 space-y-2">
+      <div className="px-3 py-3 space-y-2 overflow-visible">
         {topic.rows.map((row) => (
           <RowBlock
             key={row.id}
