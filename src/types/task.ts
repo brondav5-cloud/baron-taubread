@@ -43,7 +43,10 @@ export interface TaskHistoryItem {
     | "approved"
     | "rejected"
     | "comment"
-    | "checklist";
+    | "checklist"
+    | "reassigned"
+    | "assigned"
+    | "removed";
   userId: string;
   userName: string;
   timestamp: string;

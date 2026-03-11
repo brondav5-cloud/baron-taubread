@@ -140,6 +140,7 @@ export function useTaskMutations(
             seenAt: now,
           };
 
+          const originalTask = task;
           const updated = {
             ...task,
             assignees: newAssignees,
@@ -164,6 +165,9 @@ export function useTaskMutations(
               status: u.status,
               updated_at: now,
               history: u.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;
@@ -192,6 +196,7 @@ export function useTaskMutations(
             status: "in_progress" as TaskStatus,
           };
 
+          const originalTask = task;
           const updated = {
             ...task,
             assignees: newAssignees,
@@ -216,6 +221,9 @@ export function useTaskMutations(
               status: u.status,
               updated_at: now,
               history: u.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;
@@ -250,6 +258,7 @@ export function useTaskMutations(
             (a) => a.status === "done",
           );
 
+          const originalTask = task;
           const updated = {
             ...task,
             assignees: newAssignees,
@@ -280,6 +289,9 @@ export function useTaskMutations(
               handled_at: now,
               updated_at: now,
               history: u.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;
@@ -295,6 +307,7 @@ export function useTaskMutations(
       setTasks((prev) =>
         prev.map((task) => {
           if (task.id !== taskId) return task;
+          const originalTask = task;
           const updated = {
             ...task,
             status: "approved" as TaskStatus,
@@ -318,6 +331,9 @@ export function useTaskMutations(
               approved_at: now,
               updated_at: now,
               history: updated.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;
@@ -333,6 +349,7 @@ export function useTaskMutations(
       setTasks((prev) =>
         prev.map((task) => {
           if (task.id !== taskId) return task;
+          const originalTask = task;
           const newAssignees = task.assignees.map((a) => ({
             ...a,
             status: "in_progress" as TaskStatus,
@@ -365,6 +382,9 @@ export function useTaskMutations(
               rejection_reason: reason,
               updated_at: now,
               history: u.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;
@@ -380,6 +400,7 @@ export function useTaskMutations(
       setTasks((prev) =>
         prev.map((task) => {
           if (task.id !== taskId) return task;
+          const originalTask = task;
           const updated = {
             ...task,
             updatedAt: now,
@@ -395,7 +416,10 @@ export function useTaskMutations(
           };
           if (companyId) {
             const u = taskToDbTask(updated, companyId);
-            updateTask(taskId, { checklist: u.checklist, updated_at: now });
+            updateTask(taskId, { checklist: u.checklist, updated_at: now }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
+            });
           }
           return updated;
         }),
@@ -410,6 +434,7 @@ export function useTaskMutations(
       setTasks((prev) =>
         prev.map((task) => {
           if (task.id !== taskId) return task;
+          const originalTask = task;
           const updated = {
             ...task,
             updatedAt: now,
@@ -441,6 +466,9 @@ export function useTaskMutations(
               comments: u.comments,
               history: u.history,
               updated_at: now,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;
@@ -463,6 +491,7 @@ export function useTaskMutations(
       setTasks((prev) =>
         prev.map((task) => {
           if (task.id !== taskId) return task;
+          const originalTask = task;
 
           const assignees = task.assignees.map((a) => {
             if (a.userId === fromUserId) {
@@ -484,7 +513,7 @@ export function useTaskMutations(
               ...task.history,
               {
                 id: generateHistoryId(),
-                action: "comment" as const,
+                action: "reassigned" as const,
                 userId: byUserId,
                 userName: byUserName,
                 timestamp: now,
@@ -494,23 +523,28 @@ export function useTaskMutations(
           };
           if (companyId) {
             const u = taskToDbTask(updated, companyId);
+            const taskTitle = task.title;
             updateTask(taskId, {
               assignees: u.assignees,
               history: u.history,
               updated_at: now,
+            }).then((success) => {
+              if (!success) {
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
+                return;
+              }
+              if (toUserId !== byUserId) {
+                sendNotification({
+                  recipientUserIds: [toUserId],
+                  type: "task_reassigned",
+                  title: "משימה הועברה אליך",
+                  body: `${byUserName} העביר אליך: ${taskTitle}`,
+                  url: `/dashboard/tasks`,
+                  referenceId: taskId,
+                  referenceType: "task",
+                });
+              }
             });
-
-            if (toUserId !== byUserId) {
-              sendNotification({
-                recipientUserIds: [toUserId],
-                type: "task_reassigned",
-                title: "משימה הועברה אליך",
-                body: `${byUserName} העביר אליך: ${task.title}`,
-                url: `/dashboard/tasks`,
-                referenceId: taskId,
-                referenceType: "task",
-              });
-            }
           }
           return updated;
         }),
@@ -533,6 +567,7 @@ export function useTaskMutations(
         prev.map((task) => {
           if (task.id !== taskId) return task;
           if (task.assignees.some((a) => a.userId === userId)) return task;
+          const originalTask = task;
 
           const updated = {
             ...task,
@@ -545,7 +580,7 @@ export function useTaskMutations(
               ...task.history,
               {
                 id: generateHistoryId(),
-                action: "comment" as const,
+                action: "assigned" as const,
                 userId: byUserId,
                 userName: byUserName,
                 timestamp: now,
@@ -555,23 +590,28 @@ export function useTaskMutations(
           };
           if (companyId) {
             const u = taskToDbTask(updated, companyId);
+            const taskTitle = task.title;
             updateTask(taskId, {
               assignees: u.assignees,
               history: u.history,
               updated_at: now,
+            }).then((success) => {
+              if (!success) {
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
+                return;
+              }
+              if (userId !== byUserId) {
+                sendNotification({
+                  recipientUserIds: [userId],
+                  type: "task_assigned",
+                  title: "צורפת למשימה",
+                  body: `${byUserName} הוסיף אותך ל: ${taskTitle}`,
+                  url: `/dashboard/tasks`,
+                  referenceId: taskId,
+                  referenceType: "task",
+                });
+              }
             });
-
-            if (userId !== byUserId) {
-              sendNotification({
-                recipientUserIds: [userId],
-                type: "task_assigned",
-                title: "צורפת למשימה",
-                body: `${byUserName} הוסיף אותך ל: ${task.title}`,
-                url: `/dashboard/tasks`,
-                referenceId: taskId,
-                referenceType: "task",
-              });
-            }
           }
           return updated;
         }),
@@ -589,6 +629,7 @@ export function useTaskMutations(
           const removedUser = task.assignees.find((a) => a.userId === userId);
           if (!removedUser) return task;
           if (task.assignees.length <= 1) return task;
+          const originalTask = task;
 
           const updated = {
             ...task,
@@ -598,7 +639,7 @@ export function useTaskMutations(
               ...task.history,
               {
                 id: generateHistoryId(),
-                action: "comment" as const,
+                action: "removed" as const,
                 userId: byUserId,
                 userName: byUserName,
                 timestamp: now,
@@ -612,6 +653,9 @@ export function useTaskMutations(
               assignees: u.assignees,
               history: u.history,
               updated_at: now,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
             });
           }
           return updated;

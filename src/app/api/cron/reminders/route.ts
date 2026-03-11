@@ -119,14 +119,24 @@ export async function GET(request: NextRequest) {
 
     const { data: staleFaults } = await admin
       .from("faults")
-      .select("id, company_id, title, assigned_to, reported_by, created_at")
+      .select(
+        "id, company_id, title, assigned_to, assigned_to_ids, reported_by, created_at, fault_statuses!inner(is_final)",
+      )
       .lt("created_at", threeDaysAgo)
+      .eq("fault_statuses.is_final", false)
       .limit(200);
 
     if (staleFaults) {
-      // Filter out faults with final status (we need to join with fault_statuses)
       for (const fault of staleFaults) {
-        const recipients = [fault.assigned_to, fault.reported_by].filter(Boolean);
+        const assignedIds: string[] =
+          Array.isArray(fault.assigned_to_ids) && fault.assigned_to_ids.length > 0
+            ? (fault.assigned_to_ids as string[])
+            : fault.assigned_to
+              ? [fault.assigned_to as string]
+              : [];
+        const recipients = Array.from(
+          new Set([...assignedIds, fault.reported_by as string]),
+        ).filter(Boolean);
         if (recipients.length === 0) continue;
 
         const todayStart = new Date();

@@ -81,13 +81,19 @@ export async function POST(request: NextRequest) {
     const newUserRole = body.role || "editor";
 
     // Check if user already exists (e.g. added in another company)
-    const { data: listData } = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
-    const existingAuthUser = listData?.users?.find(
-      (u) => u.email?.toLowerCase() === emailTrimmed,
-    );
+    // Query public.users by email — faster than listUsers and avoids the 1000-user pagination limit
+    const { data: existingPublicUser } = await admin
+      .from("users")
+      .select("id, email, is_active")
+      .eq("email", emailTrimmed)
+      .maybeSingle();
+
+    let existingAuthUser: { id: string; email?: string; user_metadata?: { name?: string } } | null =
+      null;
+    if (existingPublicUser) {
+      const { data: authData } = await admin.auth.admin.getUserById(existingPublicUser.id);
+      existingAuthUser = authData?.user ?? null;
+    }
 
     if (existingAuthUser) {
       // User exists – add to this company only (no new auth user)

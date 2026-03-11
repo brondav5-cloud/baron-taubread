@@ -479,7 +479,7 @@ export function useWorkflowMutations(
             updatedAt: now,
             history: [
               ...wf.history,
-              { id: generateStepId(), action: "comment" as const, userId: byUserId, userName: byUserName, timestamp: now, details: `הוסיף את ${userName} לשלב` },
+              { id: generateStepId(), action: "assigned" as const, userId: byUserId, userName: byUserName, timestamp: now, details: `הוסיף את ${userName} לשלב` },
             ],
           };
           if (companyId) {
@@ -513,7 +513,7 @@ export function useWorkflowMutations(
             updatedAt: now,
             history: [
               ...wf.history,
-              { id: generateStepId(), action: "comment" as const, userId: byUserId, userName: byUserName, timestamp: now, details: `הסיר את ${removedUserName || "משתמש"} מהשלב` },
+              { id: generateStepId(), action: "removed" as const, userId: byUserId, userName: byUserName, timestamp: now, details: `הסיר את ${removedUserName || "משתמש"} מהשלב` },
             ],
           };
           if (companyId) {
