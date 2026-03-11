@@ -61,6 +61,7 @@ export async function GET(request: NextRequest) {
           referenceId: task.id,
           referenceType: "task",
           sendEmail: true,
+          sendSms: true,
         });
         taskReminders++;
       }
@@ -107,6 +108,7 @@ export async function GET(request: NextRequest) {
           referenceId: wf.id,
           referenceType: "task",
           sendEmail: true,
+          sendSms: true,
         });
         workflowReminders++;
       }
@@ -149,6 +151,7 @@ export async function GET(request: NextRequest) {
           referenceId: fault.id,
           referenceType: "fault",
           sendEmail: true,
+          sendSms: true,
         });
         faultReminders++;
       }
