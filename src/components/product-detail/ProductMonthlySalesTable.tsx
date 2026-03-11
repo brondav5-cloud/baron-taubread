@@ -2,7 +2,7 @@
 
 import { clsx } from "clsx";
 import { formatNumber } from "@/lib/calculations";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui";
+import { Card, CardHeader, CardContent } from "@/components/ui";
 import {
   PRODUCT_MONTHS,
   type ProductMonthlyData,
