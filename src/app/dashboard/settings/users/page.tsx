@@ -1,15 +1,39 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Pencil, Plus, Trash2 } from "lucide-react";
+import { Users, Pencil, Plus, Trash2, Mail } from "lucide-react";
 import { useUsers, type AppUser } from "@/context/UsersContext";
+import { useAuth } from "@/hooks/useAuth";
 import { UserEditModal } from "@/components/settings/users/UserEditModal";
 import toast from "react-hot-toast";
 
 export default function UsersSettingsPage() {
   const { allUsers, isLoading, removeUser } = useUsers();
+  const { state } = useAuth();
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [sendingReset, setSendingReset] = useState(false);
+
+  const role = state.status === "authed" ? state.user.selectedCompanyRole ?? state.user.role : null;
+  const canSendResetAll = role === "admin" || role === "super_admin";
+
+  const handleSendPasswordResetAll = async () => {
+    if (!confirm("לשלוח אימייל איפוס סיסמה לכל המשתמשים? כל אחד יקבל לינק להגדרת סיסמה חדשה.")) return;
+    setSendingReset(true);
+    try {
+      const res = await fetch("/api/users/send-password-reset-all", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בשליחת אימיילים");
+        return;
+      }
+      toast.success(data.message ?? `נשלחו ${data.sent} אימיילים`);
+    } catch {
+      toast.error("שגיאה בשליחת אימיילים");
+    } finally {
+      setSendingReset(false);
+    }
+  };
 
   const handleRemove = async (user: AppUser) => {
     if (!confirm(`להסיר את ${user.name}? המשתמש לא יימחק אלא יסומן כלא פעיל.`))
@@ -36,13 +60,31 @@ export default function UsersSettingsPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" />
-          הוסף משתמש
-        </button>
+        <div className="flex items-center gap-2">
+          {canSendResetAll && (
+            <button
+              onClick={handleSendPasswordResetAll}
+              disabled={sendingReset || allUsers.length === 0}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {sendingReset ? (
+                <>שולח...</>
+              ) : (
+                <>
+                  <Mail className="w-4 h-4" />
+                  איפוס סיסמה לכולם
+                </>
+              )}
+            </button>
+          )}
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-primary-500 text-white rounded-xl hover:bg-primary-600 transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            הוסף משתמש
+          </button>
+        </div>
       </div>
 
       {isLoading ? (

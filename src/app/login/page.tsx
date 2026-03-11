@@ -24,6 +24,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [forgotSuccess, setForgotSuccess] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,6 +53,29 @@ export default function LoginPage() {
       setError(mapAuthError(msg));
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setForgotLoading(true);
+    try {
+      const res = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: forgotEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setError(data.error ?? "אירעה שגיאה, נסה שוב");
+        return;
+      }
+      setForgotSuccess(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "אירעה שגיאה");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -154,11 +181,56 @@ export default function LoginPage() {
               </label>
               <button
                 type="button"
+                onClick={() => {
+                  setShowForgotPassword(true);
+                  setForgotEmail(email);
+                  setForgotSuccess(false);
+                  setError("");
+                }}
                 className="text-primary-600 hover:text-primary-700 font-medium"
               >
                 שכחתי סיסמה
               </button>
             </div>
+
+            {/* Forgot password form */}
+            {showForgotPassword && (
+              <div className="p-4 bg-gray-50 rounded-xl space-y-3 border border-gray-100">
+                <p className="text-sm text-gray-700">
+                  הזן את האימייל שלך ונישלח לך לינק לאיפוס סיסמה
+                </p>
+                <form onSubmit={handleForgotPassword} className="flex gap-2">
+                  <input
+                    type="email"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    placeholder="your@email.com"
+                    className="input flex-1"
+                    dir="ltr"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50"
+                  >
+                    {forgotLoading ? "שולח..." : "שלח"}
+                  </button>
+                </form>
+                {forgotSuccess && (
+                  <p className="text-sm text-green-600">
+                    נשלח אימייל. בדוק את תיבת הדואר (כולל בספאם).
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(false)}
+                  className="text-sm text-gray-500 hover:text-gray-700"
+                >
+                  ביטול
+                </button>
+              </div>
+            )}
 
             {/* Error message */}
             {error && (
