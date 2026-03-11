@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSupabaseData } from "./useSupabaseData";
 import { DEFAULT_MONTH_SELECTION, type MonthSelection } from "@/components/ui";
-import type { DbProduct, DbStore } from "@/types/supabase";
+import type { DbProduct, DbStore, MonthlyData } from "@/types/supabase";
 import type { StatusLong, StatusShort } from "@/types/data";
 
 // ============================================
@@ -42,18 +42,20 @@ export const PRODUCT_DONUT_COLORS = [
 
 export interface ProductMonthlyData {
   month: string;
-  qty2024: number;
-  qty2025: number;
-  sales2024: number;
-  sales2025: number;
+  qtyCurrent: number;
+  qtyPrevious: number;
+  salesCurrent: number;
+  salesPrevious: number;
   holiday: string;
 }
 
 export interface ProductTotals {
-  qty2024: number;
-  qty2025: number;
-  sales2024: number;
-  sales2025: number;
+  qtyCurrent: number;
+  qtyPrevious: number;
+  salesCurrent: number;
+  salesPrevious: number;
+  currentYear: number;
+  previousYear: number;
 }
 
 export interface ProductChartData {
@@ -68,6 +70,80 @@ export interface TopStore {
   city: string;
   productQty: number;
   productPct: number;
+}
+
+export interface ProductStore {
+  store_external_id: number;
+  store_uuid: string;
+  store_name: string;
+  store_city: string | null;
+  monthly_qty: MonthlyData;
+  monthly_sales: MonthlyData;
+  total_qty: number;
+  total_sales: number;
+  // Computed metrics
+  qty_current_year: number;
+  qty_previous_year: number;
+  metric_12v12: number;
+  metric_6v6: number;
+  metric_3v3: number;
+  metric_2v2: number;
+  sales_current_year: number;
+}
+
+function sumPeriods(monthly: MonthlyData, periods: string[]): number {
+  return periods.reduce((sum, p) => sum + (monthly[p] ?? 0), 0);
+}
+
+function calcMetric(current: number, previous: number): number {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return ((current - previous) / previous) * 100;
+}
+
+function computeProductStoreMetrics(
+  row: Omit<ProductStore, "qty_current_year" | "qty_previous_year" | "metric_12v12" | "metric_6v6" | "metric_3v3" | "metric_2v2" | "sales_current_year">,
+  currentYear: number,
+  previousYear: number,
+): ProductStore {
+  // Derive periods directly from the row's monthly_qty keys — no need for monthsList
+  const currStr = String(currentYear);
+  const prevStr = String(previousYear);
+
+  const allQtyPeriods = Object.keys(row.monthly_qty).sort();
+  const currPeriods = allQtyPeriods.filter((p) => p.startsWith(currStr));
+  const prevPeriods = allQtyPeriods.filter((p) => p.startsWith(prevStr));
+
+  // Last N current periods, matching previous-year months
+  const last6curr = currPeriods.slice(-6);
+  const last6prev = last6curr.map((p) => `${prevStr}${p.slice(4)}`);
+  const last3curr = currPeriods.slice(-3);
+  const last3prev = last3curr.map((p) => `${prevStr}${p.slice(4)}`);
+  const last2curr = currPeriods.slice(-2);
+  const last2prev = last2curr.map((p) => `${prevStr}${p.slice(4)}`);
+
+  const qty_current_year = sumPeriods(row.monthly_qty, currPeriods);
+  const qty_previous_year = sumPeriods(row.monthly_qty, prevPeriods);
+  const sales_current_year = sumPeriods(row.monthly_sales, currPeriods);
+
+  return {
+    ...row,
+    qty_current_year,
+    qty_previous_year,
+    sales_current_year,
+    metric_12v12: calcMetric(qty_current_year, qty_previous_year),
+    metric_6v6: calcMetric(
+      sumPeriods(row.monthly_qty, last6curr),
+      sumPeriods(row.monthly_qty, last6prev),
+    ),
+    metric_3v3: calcMetric(
+      sumPeriods(row.monthly_qty, last3curr),
+      sumPeriods(row.monthly_qty, last3prev),
+    ),
+    metric_2v2: calcMetric(
+      sumPeriods(row.monthly_qty, last2curr),
+      sumPeriods(row.monthly_qty, last2prev),
+    ),
+  };
 }
 
 function dbProductToLegacy(p: DbProduct) {
@@ -156,12 +232,37 @@ export function useProductDetail() {
 
   const { products, stores, metadata } = useSupabaseData();
 
-  const [selectedYear, setSelectedYear] = useState<2024 | 2025>(2025);
+  // Derive years first so they're available for useState initialization
+  const currentYear = metadata?.current_year ?? new Date().getFullYear();
+  const previousYear = metadata?.previous_year ?? currentYear - 1;
+
+  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
   const [hideHolidays, setHideHolidays] = useState(false);
   const [storeSearch, setStoreSearch] = useState("");
   const [monthSelection, setMonthSelection] = useState<MonthSelection>(
     DEFAULT_MONTH_SELECTION,
   );
+
+  // Sync selectedYear when metadata loads
+  useEffect(() => {
+    if (metadata?.current_year) setSelectedYear(metadata.current_year);
+  }, [metadata?.current_year]);
+
+  // Product-specific stores data
+  const [rawProductStores, setRawProductStores] = useState<Omit<ProductStore, "qty_current_year" | "qty_previous_year" | "metric_12v12" | "metric_6v6" | "metric_3v3" | "metric_2v2" | "sales_current_year">[]>([]);
+  const [productStoresLoading, setProductStoresLoading] = useState(false);
+
+  useEffect(() => {
+    if (!productId) return;
+    setProductStoresLoading(true);
+    fetch(`/api/products/${productId}/stores`)
+      .then((r) => r.json())
+      .then((data) => {
+        setRawProductStores(data.productStores ?? []);
+      })
+      .catch(() => setRawProductStores([]))
+      .finally(() => setProductStoresLoading(false));
+  }, [productId]);
 
   const product = useMemo(() => {
     const dbProduct = products.find((p) => String(p.external_id) === productId);
@@ -170,66 +271,90 @@ export function useProductDetail() {
 
   const allStores = useMemo(() => stores.map(dbStoreToLegacy), [stores]);
 
-  const currentYear = metadata?.current_year ?? 2025;
-  const previousYear = metadata?.previous_year ?? 2024;
+  // All years that have data for this product — always include currentYear
+  const availableYears = useMemo((): number[] => {
+    const yearsSet = new Set<number>([currentYear]);
+    if (product?.monthly_qty) {
+      Object.keys(product.monthly_qty).forEach((period) => {
+        const y = parseInt(period.slice(0, 4), 10);
+        if (!isNaN(y)) yearsSet.add(y);
+      });
+    }
+    return Array.from(yearsSet).sort((a, b) => b - a);
+  }, [product?.monthly_qty, currentYear]);
 
+  // Monthly data for the selected year (current = selectedYear, previous = selectedYear-1)
   const monthlyData = useMemo((): ProductMonthlyData[] => {
     if (!product) return [];
+    const prevYear = selectedYear - 1;
     return PRODUCT_MONTHS.map((month, i) => {
-      const periodPrev = `${previousYear}${String(i + 1).padStart(2, "0")}`;
-      const periodCur = `${currentYear}${String(i + 1).padStart(2, "0")}`;
+      const periodCur = `${selectedYear}${String(i + 1).padStart(2, "0")}`;
+      const periodPrev = `${prevYear}${String(i + 1).padStart(2, "0")}`;
       return {
         month,
-        qty2024: product.monthly_qty?.[periodPrev] ?? 0,
-        qty2025: product.monthly_qty?.[periodCur] ?? 0,
-        sales2024: product.monthly_sales?.[periodPrev] ?? 0,
-        sales2025: product.monthly_sales?.[periodCur] ?? 0,
+        qtyCurrent: product.monthly_qty?.[periodCur] ?? 0,
+        qtyPrevious: product.monthly_qty?.[periodPrev] ?? 0,
+        salesCurrent: product.monthly_sales?.[periodCur] ?? 0,
+        salesPrevious: product.monthly_sales?.[periodPrev] ?? 0,
         holiday: "-",
       };
     });
-  }, [product, currentYear, previousYear]);
+  }, [product, selectedYear]);
 
   const totals = useMemo((): ProductTotals => {
-    const t = { qty2024: 0, qty2025: 0, sales2024: 0, sales2025: 0 };
+    const t = { qtyCurrent: 0, qtyPrevious: 0, salesCurrent: 0, salesPrevious: 0 };
     monthlyData.forEach((m) => {
-      t.qty2024 += m.qty2024;
-      t.qty2025 += m.qty2025;
-      t.sales2024 += m.sales2024;
-      t.sales2025 += m.sales2025;
+      t.qtyCurrent += m.qtyCurrent;
+      t.qtyPrevious += m.qtyPrevious;
+      t.salesCurrent += m.salesCurrent;
+      t.salesPrevious += m.salesPrevious;
     });
-    return t;
-  }, [monthlyData]);
+    return { ...t, currentYear: selectedYear, previousYear: selectedYear - 1 };
+  }, [monthlyData, selectedYear]);
+
+  // Compute product-specific metrics for each store
+  const productStores = useMemo((): ProductStore[] => {
+    if (!rawProductStores.length) return [];
+    return rawProductStores.map((row) =>
+      computeProductStoreMetrics(row, currentYear, previousYear),
+    );
+  }, [rawProductStores, currentYear, previousYear]);
 
   const topStores = useMemo((): TopStore[] => {
-    const top = allStores.slice(0, 6).map((s) => ({
-      id: s.id,
-      name: s.name,
-      city: s.city,
-      productQty: 0,
-      productPct: 0,
+    const sorted = [...productStores].sort(
+      (a, b) => b.qty_current_year - a.qty_current_year,
+    );
+    const top10 = sorted.slice(0, 10);
+    const totalQty = top10.reduce((s, r) => s + r.qty_current_year, 0);
+    return top10.map((r) => ({
+      id: r.store_external_id,
+      name: r.store_name,
+      city: r.store_city ?? "",
+      productQty: r.qty_current_year,
+      productPct: totalQty > 0 ? (r.qty_current_year / totalQty) * 100 : 0,
     }));
-    return top;
-  }, [allStores]);
+  }, [productStores]);
 
   const filteredStores = useMemo(() => {
-    if (!storeSearch) return allStores.slice(0, 40);
+    const sorted = [...productStores].sort(
+      (a, b) => b.qty_current_year - a.qty_current_year,
+    );
+    if (!storeSearch) return sorted;
     const q = storeSearch.toLowerCase();
-    return allStores
-      .filter(
-        (s) =>
-          s.name.toLowerCase().includes(q) ||
-          s.city.toLowerCase().includes(q),
-      )
-      .slice(0, 40);
-  }, [allStores, storeSearch]);
+    return sorted.filter(
+      (s) =>
+        s.store_name.toLowerCase().includes(q) ||
+        (s.store_city ?? "").toLowerCase().includes(q),
+    );
+  }, [productStores, storeSearch]);
 
   const chartData = useMemo((): ProductChartData[] => {
     return monthlyData.map((m) => ({
       month: m.month,
-      qty: selectedYear === currentYear ? m.qty2025 : m.qty2024,
-      sales: selectedYear === currentYear ? m.sales2025 : m.sales2024,
+      qty: m.qtyCurrent,
+      sales: m.salesCurrent,
     }));
-  }, [monthlyData, selectedYear, currentYear]);
+  }, [monthlyData]);
 
   const goToProductsList = () => router.push("/dashboard/products");
 
@@ -238,6 +363,9 @@ export function useProductDetail() {
     product,
     selectedYear,
     setSelectedYear,
+    availableYears,
+    currentYear,
+    previousYear,
     hideHolidays,
     setHideHolidays,
     storeSearch,
@@ -248,6 +376,8 @@ export function useProductDetail() {
     totals,
     topStores,
     filteredStores,
+    productStores,
+    productStoresLoading,
     chartData,
     allStores,
     goToProductsList,

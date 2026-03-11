@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Users } from "lucide-react";
+import { PdfReportModal, type PdfSection } from "@/components/ui";
 import { useStoreDetailSupabase } from "@/hooks/useStoreDetailSupabase";
 import { useStoreCityComparison } from "@/hooks/useStoreCityComparison";
 import { useStoreProducts } from "@/hooks/useStoreProducts";
@@ -35,9 +36,20 @@ const VALID_TABS: StoreTabType[] = [
   "competitors",
 ];
 
+const STORE_PDF_SECTIONS: PdfSection[] = [
+  { id: "metrics", label: "📊 מדדי ביצועים (12v12, 6v6, 3v3, 2v2)" },
+  { id: "summary", label: "💰 סיכום מכירות (כמות ומחזור)" },
+  { id: "delivery", label: "🚚 סיכום אספקות" },
+  { id: "chart", label: "📈 גרף מכירות חודשי" },
+  { id: "monthly", label: "📅 טבלת מכירות חודשיות" },
+  { id: "city", label: "📍 השוואת חנויות בעיר" },
+];
+
 export default function StoreDetailPage() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<StoreTabType>("overview");
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const openPdfModal = useCallback(() => setShowPdfModal(true), []);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -101,44 +113,56 @@ export default function StoreDetailPage() {
 
   return (
     <div className="space-y-6">
-      <StoreDetailHeader store={store} />
+      <StoreDetailHeader store={store} onPdfClick={openPdfModal} />
       <StoreTabs activeTab={activeTab} onTabChange={setActiveTab} />
 
       {activeTab === "overview" && (
         <>
-          <StoreMetricsCards
-            metrics={store.metrics}
-            metricsPeriodInfo={metricsPeriodInfo}
-          />
-          <StoreSummaryCards
-            selectedYear={selectedYear}
-            currentYearTotals={currentYearTotals}
-            previousYearTotals={previousYearTotals}
-          />
-          <StoreDeliverySummary
-            summary={storeDelivery}
-            isLoading={isLoadingDeliveries}
-          />
-          <StoreSalesChart data={chartData} />
-          <StoreMonthlyTable
-            yearMonthlyData={yearMonthlyData}
-            currentYearTotals={currentYearTotals}
-            selectedYear={selectedYear}
-            availableYears={availableYears}
-            onYearChange={setSelectedYear}
-          />
-          <StoreCityComparison
-            store={store}
-            cityStores={city.cityStores}
-            rankings={city.rankings}
-            cityAverages={city.cityAverages}
-            isLoading={city.isLoading}
-            sortKey={city.sortKey}
-            sortDir={city.sortDir}
-            onSort={city.handleSort}
-            totalInCity={city.totalInCity}
-            metricsPeriodInfo={metricsPeriodInfo}
-          />
+          <div id="pdf-section-metrics">
+            <StoreMetricsCards
+              metrics={store.metrics}
+              metricsPeriodInfo={metricsPeriodInfo}
+            />
+          </div>
+          <div id="pdf-section-summary">
+            <StoreSummaryCards
+              selectedYear={selectedYear}
+              currentYearTotals={currentYearTotals}
+              previousYearTotals={previousYearTotals}
+            />
+          </div>
+          <div id="pdf-section-delivery">
+            <StoreDeliverySummary
+              summary={storeDelivery}
+              isLoading={isLoadingDeliveries}
+            />
+          </div>
+          <div id="pdf-section-chart">
+            <StoreSalesChart data={chartData} />
+          </div>
+          <div id="pdf-section-monthly">
+            <StoreMonthlyTable
+              yearMonthlyData={yearMonthlyData}
+              currentYearTotals={currentYearTotals}
+              selectedYear={selectedYear}
+              availableYears={availableYears}
+              onYearChange={setSelectedYear}
+            />
+          </div>
+          <div id="pdf-section-city">
+            <StoreCityComparison
+              store={store}
+              cityStores={city.cityStores}
+              rankings={city.rankings}
+              cityAverages={city.cityAverages}
+              isLoading={city.isLoading}
+              sortKey={city.sortKey}
+              sortDir={city.sortDir}
+              onSort={city.handleSort}
+              totalInCity={city.totalInCity}
+              metricsPeriodInfo={metricsPeriodInfo}
+            />
+          </div>
         </>
       )}
 
@@ -165,6 +189,15 @@ export default function StoreDetailPage() {
           icon={Users}
           label="מתחרים"
           settingsPath="/dashboard/settings/competitors"
+        />
+      )}
+
+      {showPdfModal && (
+        <PdfReportModal
+          title={`דוח חנות: ${store.name}`}
+          subtitle={store.city ?? undefined}
+          sections={STORE_PDF_SECTIONS}
+          onClose={() => setShowPdfModal(false)}
         />
       )}
     </div>

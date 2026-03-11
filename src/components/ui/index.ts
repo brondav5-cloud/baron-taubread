@@ -48,3 +48,7 @@ export type { MonthSelection } from "./MonthSelector";
 // Sortable Table
 export { SortableTable, useTableSort } from "./SortableTable";
 export type { ColumnDef, SortConfig, SortDirection } from "./SortableTable";
+
+// PDF Report Modal
+export { PdfReportModal } from "./PdfReportModal";
+export type { PdfSection } from "./PdfReportModal";

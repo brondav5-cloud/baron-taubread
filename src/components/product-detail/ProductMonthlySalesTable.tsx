@@ -13,8 +13,9 @@ interface ProductMonthlySalesTableProps {
   productName: string;
   monthlyData: ProductMonthlyData[];
   totals: ProductTotals;
-  selectedYear: 2024 | 2025;
-  onYearChange: (year: 2024 | 2025) => void;
+  selectedYear: number;
+  onYearChange: (year: number) => void;
+  availableYears?: number[];
   hideHolidays: boolean;
   onHideHolidaysChange: (hide: boolean) => void;
 }
@@ -25,42 +26,35 @@ export function ProductMonthlySalesTable({
   totals,
   selectedYear,
   onYearChange,
+  availableYears = [selectedYear],
   hideHolidays,
   onHideHolidaysChange,
 }: ProductMonthlySalesTableProps) {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="text-sm sm:text-base font-semibold">
             📊 מכירות חודשיות - {productName} - {selectedYear}
-          </CardTitle>
-          <div className="flex items-center gap-3">
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <div className="flex items-center bg-gray-100 rounded-xl p-1">
-              <button
-                onClick={() => onYearChange(2025)}
-                className={clsx(
-                  "px-4 py-1.5 rounded-lg text-sm font-medium",
-                  selectedYear === 2025
-                    ? "bg-primary-500 text-white"
-                    : "text-gray-600",
-                )}
-              >
-                2025
-              </button>
-              <button
-                onClick={() => onYearChange(2024)}
-                className={clsx(
-                  "px-4 py-1.5 rounded-lg text-sm font-medium",
-                  selectedYear === 2024
-                    ? "bg-primary-500 text-white"
-                    : "text-gray-600",
-                )}
-              >
-                2024
-              </button>
+              {availableYears.map((year) => (
+                <button
+                  key={year}
+                  onClick={() => onYearChange(year)}
+                  className={clsx(
+                    "px-3 sm:px-4 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all",
+                    selectedYear === year
+                      ? "bg-primary-500 text-white"
+                      : "text-gray-600",
+                  )}
+                >
+                  {year}
+                </button>
+              ))}
             </div>
-            <label className="flex items-center gap-2 text-sm text-gray-600">
+            <label className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
               <input
                 type="checkbox"
                 checked={hideHolidays}
@@ -90,21 +84,37 @@ export function ProductMonthlySalesTable({
             </tr>
           </thead>
           <tbody>
+            {/* Current year qty */}
             <tr className="border-b bg-green-50">
               <td className="px-2 py-2 font-medium text-green-700">
                 כמות (נטו)
               </td>
               {monthlyData.map((m, i) => (
                 <td key={i} className="px-2 py-2 text-center text-green-700">
-                  {formatNumber(selectedYear === 2025 ? m.qty2025 : m.qty2024)}
+                  {formatNumber(m.qtyCurrent)}
                 </td>
               ))}
               <td className="px-3 py-2 text-center font-bold text-green-800 bg-green-100">
-                {formatNumber(
-                  selectedYear === 2025 ? totals.qty2025 : totals.qty2024,
-                )}
+                {formatNumber(totals.qtyCurrent)}
               </td>
             </tr>
+
+            {/* Previous year qty for comparison */}
+            <tr className="border-b">
+              <td className="px-2 py-2 font-medium text-gray-500">
+                כמות {totals.previousYear}
+              </td>
+              {monthlyData.map((m, i) => (
+                <td key={i} className="px-2 py-2 text-center text-gray-400">
+                  {formatNumber(m.qtyPrevious)}
+                </td>
+              ))}
+              <td className="px-3 py-2 text-center font-bold text-gray-500 bg-gray-50">
+                {formatNumber(totals.qtyPrevious)}
+              </td>
+            </tr>
+
+            {/* Sales */}
             <tr className="border-b bg-purple-50">
               <td className="px-2 py-2 font-medium text-purple-700">מחזור</td>
               {monthlyData.map((m, i) => (
@@ -112,34 +122,33 @@ export function ProductMonthlySalesTable({
                   key={i}
                   className="px-2 py-2 text-center text-purple-700 text-xs"
                 >
-                  {(
-                    (selectedYear === 2025 ? m.sales2025 : m.sales2024) / 1000
-                  ).toFixed(0)}
-                  K
+                  {m.salesCurrent > 0
+                    ? `${(m.salesCurrent / 1000).toFixed(0)}K`
+                    : "0K"}
                 </td>
               ))}
               <td className="px-3 py-2 text-center font-bold text-purple-800 bg-purple-100">
-                ₪
-                {(
-                  (selectedYear === 2025
-                    ? totals.sales2025
-                    : totals.sales2024) / 1000
-                ).toFixed(0)}
-                K
+                ₪{(totals.salesCurrent / 1000).toFixed(0)}K
               </td>
             </tr>
-            <tr className="bg-amber-50">
-              <td className="px-2 py-2 font-medium text-amber-700">🗓️ חגים</td>
-              {monthlyData.map((m, i) => (
-                <td
-                  key={i}
-                  className="px-2 py-2 text-center text-amber-700 text-xs"
-                >
-                  {m.holiday}
+
+            {/* Holidays */}
+            {!hideHolidays && (
+              <tr className="bg-amber-50">
+                <td className="px-2 py-2 font-medium text-amber-700">
+                  🗓️ חגים
                 </td>
-              ))}
-              <td className="px-3 py-2 text-center bg-amber-100">-</td>
-            </tr>
+                {monthlyData.map((m, i) => (
+                  <td
+                    key={i}
+                    className="px-2 py-2 text-center text-amber-700 text-xs"
+                  >
+                    {m.holiday}
+                  </td>
+                ))}
+                <td className="px-3 py-2 text-center bg-amber-100">-</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </CardContent>

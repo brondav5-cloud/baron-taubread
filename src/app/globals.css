@@ -359,6 +359,7 @@
   @media print {
     .print\:hidden { display: none !important; }
     .print\:block { display: block !important; }
+    .pdf-section-hidden { display: none !important; }
 
     @page {
       size: A4;
