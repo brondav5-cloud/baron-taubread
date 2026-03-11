@@ -324,7 +324,7 @@ export function useDashboardSupabase() {
     }
 
     const sorted = [...monthsList].sort();
-    const displayPeriods = sorted.slice(-12); // Last 12 months
+    const displayPeriods = sorted.slice(-12); // Last 12 months (used for totals/overview)
 
     return displayPeriods.map((periodKey) => {
       const parsed = parsePeriodKey(periodKey);
@@ -376,6 +376,69 @@ export function useDashboardSupabase() {
       };
     });
   }, [stores, currentYear, previousYear, metadata?.months_list]);
+
+  // Monthly data for the table — filtered to selectedYear only so columns always match the chosen year
+  const tableMonthlyData = useMemo((): MonthlyDataPoint[] => {
+    const monthsList = metadata?.months_list;
+    if (!monthsList || monthsList.length === 0) return monthlyData;
+
+    const yearStr = String(selectedYear);
+    const yearPeriods = monthsList
+      .filter((p) => p.startsWith(yearStr))
+      .sort();
+
+    if (yearPeriods.length === 0) return monthlyData;
+
+    return yearPeriods.map((periodKey) => {
+      const parsed = parsePeriodKey(periodKey);
+      const month = parsed?.label ?? periodKey;
+      const prevYear = parseInt(periodKey.slice(0, 4), 10) - 1;
+      const periodPrevious = `${prevYear}${periodKey.slice(4)}`;
+
+      const grossCurrent = sumMonthlyData(stores, "monthly_gross", periodKey);
+      const grossPrevious = sumMonthlyData(
+        stores,
+        "monthly_gross",
+        periodPrevious,
+      );
+      const qtyCurrent = sumMonthlyData(stores, "monthly_qty", periodKey);
+      const qtyPrevious = sumMonthlyData(stores, "monthly_qty", periodPrevious);
+      const returnsCurrent = sumMonthlyData(
+        stores,
+        "monthly_returns",
+        periodKey,
+      );
+      const returnsPrevious = sumMonthlyData(
+        stores,
+        "monthly_returns",
+        periodPrevious,
+      );
+      const salesCurrent = sumMonthlyData(stores, "monthly_sales", periodKey);
+      const salesPrevious = sumMonthlyData(
+        stores,
+        "monthly_sales",
+        periodPrevious,
+      );
+
+      return {
+        month,
+        periodKey,
+        grossCurrent,
+        grossPrevious,
+        qtyCurrent,
+        qtyPrevious,
+        returnsCurrent,
+        returnsPrevious,
+        salesCurrent,
+        salesPrevious,
+        returnsPctCurrent:
+          grossCurrent > 0 ? (returnsCurrent / grossCurrent) * 100 : 0,
+        returnsPctPrevious:
+          grossPrevious > 0 ? (returnsPrevious / grossPrevious) * 100 : 0,
+        holiday: "-",
+      };
+    });
+  }, [stores, metadata?.months_list, selectedYear, monthlyData]);
 
   // ============================================
   // TOTALS
@@ -585,6 +648,7 @@ export function useDashboardSupabase() {
     alertStores,
     statusDistribution,
     monthlyData,
+    tableMonthlyData,
     totals,
     halfYearData,
     citySales,

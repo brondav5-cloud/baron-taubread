@@ -46,6 +46,7 @@ export default function DashboardPage() {
     alertStores,
     statusDistribution,
     monthlyData,
+    tableMonthlyData,
     totals,
     halfYearData,
     citySales,
@@ -119,7 +120,7 @@ export default function DashboardPage() {
       {/* Monthly Sales Table - only when we have data */}
       {hasData && (
       <MonthlySalesTable
-        monthlyData={monthlyData}
+        monthlyData={tableMonthlyData}
         totals={totals}
         selectedYear={selectedYear}
         onYearChange={setSelectedYear}

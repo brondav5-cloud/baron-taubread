@@ -51,8 +51,8 @@ export function OverviewCards({
             <Store className="w-5 h-5 sm:w-6 sm:h-6" />
           </div>
           <div className="min-w-0">
-            <p className="text-2xl sm:text-3xl font-bold">{totalStores}</p>
-            <p className="text-xs sm:text-sm opacity-90">חנויות פעילות</p>
+            <p className="text-xl sm:text-2xl lg:text-3xl font-bold leading-tight">{totalStores}</p>
+            <p className="text-[11px] sm:text-sm opacity-90 leading-tight">חנויות פעילות</p>
             <p className="text-[10px] sm:text-xs opacity-75 hidden sm:block">
               מוצגות בנתונים
             </p>
@@ -67,12 +67,12 @@ export function OverviewCards({
             <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-xl sm:text-2xl font-bold text-gray-900">
+            <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 leading-tight">
               {formatNumber(totals.qtyCurrent)}
             </p>
-            <p className="text-[10px] sm:text-sm text-gray-600 truncate">
+            <p className="text-[10px] sm:text-xs text-gray-600 truncate leading-tight">
               {hasData
-                ? `סה"כ כמות (${totals.previousYearPeriodLabel ?? totals.previousYear} - ${totals.currentYearPeriodLabel ?? totals.currentYear})`
+                ? `סה"כ כמות`
                 : "סה\"כ כמות"}
             </p>
             <p
@@ -98,10 +98,10 @@ export function OverviewCards({
             <Package className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-xl sm:text-2xl font-bold text-gray-900">
+            <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 leading-tight">
               {totalProducts}
             </p>
-            <p className="text-xs sm:text-sm text-gray-600">מוצרים פעילים</p>
+            <p className="text-[11px] sm:text-sm text-gray-600 leading-tight">מוצרים פעילים</p>
             <p className="text-[10px] sm:text-xs text-gray-400 hidden sm:block">
               מתוך קטלוג
             </p>
@@ -119,10 +119,10 @@ export function OverviewCards({
             <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-xl sm:text-2xl font-bold text-red-600">
+            <p className="text-base sm:text-xl lg:text-2xl font-bold text-red-600 leading-tight">
               {alertCount}
             </p>
-            <p className="text-xs sm:text-sm text-gray-600">התראות</p>
+            <p className="text-[11px] sm:text-sm text-gray-600 leading-tight">התראות</p>
             <p className="text-[10px] sm:text-xs text-gray-400 hidden sm:block">
               דורשות טיפול
             </p>
@@ -137,8 +137,8 @@ export function OverviewCards({
             <BarChart3 className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-600" />
           </div>
           <div className="min-w-0">
-            <p className="text-xl sm:text-2xl font-bold text-gray-900">0</p>
-            <p className="text-xs sm:text-sm text-gray-600">סטטוס מגיבי</p>
+            <p className="text-base sm:text-xl lg:text-2xl font-bold text-gray-900 leading-tight">0</p>
+            <p className="text-[11px] sm:text-sm text-gray-600 leading-tight">סטטוס מגיבי</p>
             <p className="text-[10px] sm:text-xs text-gray-400 hidden sm:block">
               חנויות
             </p>
