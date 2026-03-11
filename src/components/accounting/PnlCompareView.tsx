@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo } from "react";
 import { clsx } from "clsx";
 import type { YearlyPnl, MonthlyPnl } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
 import {
   type ViewMode,

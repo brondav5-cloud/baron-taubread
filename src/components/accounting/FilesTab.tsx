@@ -8,16 +8,12 @@ import {
 import { clsx } from "clsx";
 import type { DbUploadedFile, ParsedAccount, ParsedTransaction } from "@/types/accounting";
 import { processAccountingExcel } from "@/lib/accountingExcelProcessor";
+import { MONTH_NAMES_FULL as MONTH_NAMES } from "@/lib/periodUtils";
 
 interface Props {
   files: DbUploadedFile[];
   onUploadComplete: () => void;
 }
-
-const MONTH_NAMES = [
-  "ינואר","פברואר","מרץ","אפריל","מאי","יוני",
-  "יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר",
-];
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("he-IL", {

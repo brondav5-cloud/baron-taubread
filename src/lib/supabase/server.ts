@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from "./env";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_COOKIE_NAME } from "./env";
 
 export function createServerSupabaseClient() {
   const cookieStore = cookies();
@@ -10,7 +10,7 @@ export function createServerSupabaseClient() {
     SUPABASE_ANON_KEY,
     {
       cookieOptions: {
-        name: "hlaiyxpiebmvkb-auth-token",
+        name: AUTH_COOKIE_NAME,
         path: "/",
       },
       cookies: {

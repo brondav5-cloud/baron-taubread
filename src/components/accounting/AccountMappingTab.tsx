@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { Search, Tag, FileText, DollarSign, Users, List } from "lucide-react";
@@ -6,7 +6,7 @@ import { clsx } from "clsx";
 import type {
   DbAccount, DbCustomTag, DbAccountTag, DbCounterAccountName,
 } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import type { AccountTransaction } from "./account-mapping/shared";
 import { TagsTab } from "./account-mapping/TagsTab";

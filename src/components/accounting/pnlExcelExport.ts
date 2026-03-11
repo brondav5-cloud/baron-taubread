@@ -1,6 +1,6 @@
-import type { YearlyPnl, MonthlyPnl } from "@/types/accounting";
+﻿import type { YearlyPnl, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { MONTH_SHORT } from "./pnlHelpers";
 

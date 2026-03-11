@@ -297,7 +297,7 @@ export function TreatmentProvider({ children }: TreatmentProviderProps) {
       ).then((ok) => {
         if (!ok)
           getStoreTreatments(companyId).then((rows) =>
-            setStores(rows.map(dbToStore)),
+            setStores(rows.map(dbToStore).filter((s) => s.treatmentStatus !== "resolved")),
           );
       });
     },
@@ -323,7 +323,7 @@ export function TreatmentProvider({ children }: TreatmentProviderProps) {
       ).then((ok) => {
         if (!ok)
           getStoreTreatments(companyId).then((rows) =>
-            setStores(rows.map(dbToStore)),
+            setStores(rows.map(dbToStore).filter((s) => s.treatmentStatus !== "resolved")),
           );
       });
     },

@@ -6,6 +6,8 @@ import type {
   StoreWithStatus,
   ProductWithStatus,
 } from "@/types/data";
+import { MONTH_NAMES_SHORT, MONTH_NAMES_FULL } from "@/lib/periodUtils";
+import { formatNumber } from "@/lib/utils";
 
 // ============================================
 // LONG TERM STATUS CALCULATION (based on 12v12)
@@ -119,16 +121,12 @@ export function getMetricBgColor(value: number | null | undefined): string {
 // FORMATTERS
 // ============================================
 
-/**
- * Format number with thousands separator
- */
-export function formatNumber(value: number | null | undefined): string {
-  if (value === null || value === undefined) return "-";
-  return new Intl.NumberFormat("he-IL").format(value);
-}
+// formatNumber is re-exported from utils.ts (canonical source)
+export { formatNumber } from "@/lib/utils";
 
 /**
- * Format currency (ILS)
+ * Format currency (ILS) — uses Intl style:currency for locale-correct symbol placement.
+ * Note: utils.ts has a different variant (always ₪ prefix); kept separate to preserve display.
  */
 export function formatCurrency(value: number | null | undefined): string {
   if (value === null || value === undefined) return "-";
@@ -141,7 +139,8 @@ export function formatCurrency(value: number | null | undefined): string {
 }
 
 /**
- * Format percentage with sign
+ * Format percentage with sign (showSign=true by default for metric displays).
+ * Note: utils.ts has a variant with showSign=false default; kept separate to preserve sign behavior.
  */
 export function formatPercent(
   value: number | null | undefined,
@@ -216,35 +215,7 @@ export function countByStatus<T extends { status_long: StatusLong }>(
 // PERIOD HELPERS
 // ============================================
 
-const MONTH_NAMES = [
-  "ינו",
-  "פבר",
-  "מרץ",
-  "אפר",
-  "מאי",
-  "יונ",
-  "יול",
-  "אוג",
-  "ספט",
-  "אוק",
-  "נוב",
-  "דצמ",
-];
-
-const MONTH_NAMES_FULL = [
-  "ינואר",
-  "פברואר",
-  "מרץ",
-  "אפריל",
-  "מאי",
-  "יוני",
-  "יולי",
-  "אוגוסט",
-  "ספטמבר",
-  "אוקטובר",
-  "נובמבר",
-  "דצמבר",
-];
+const MONTH_NAMES = MONTH_NAMES_SHORT;
 
 /**
  * Format period (YYYYMM) to Hebrew

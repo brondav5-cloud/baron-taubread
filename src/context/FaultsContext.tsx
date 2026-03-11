@@ -176,6 +176,9 @@ const DEFAULT_STATUSES = [
 // CONTEXT
 // ============================================
 
+/** Guards against concurrent default-status seeding (e.g. React StrictMode double-invoke). */
+const seedingCompanies = new Set<string>();
+
 const FaultsContext = createContext<FaultsContextValue | null>(null);
 
 export function FaultsProvider({ children }: { children: ReactNode }) {
@@ -197,17 +200,25 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     let types = await fetchFaultTypes(companyId);
     let statuses = await fetchFaultStatuses(companyId);
 
-    if (statuses.length === 0) {
-      for (const s of DEFAULT_STATUSES) {
-        const inserted = await insertFaultStatus({
-          company_id: companyId,
-          name: s.name,
-          color: s.color,
-          order: s.order,
-          is_final: s.is_final,
-          is_active: true,
-        });
-        if (inserted) statuses.push(inserted);
+    if (statuses.length === 0 && !seedingCompanies.has(companyId)) {
+      seedingCompanies.add(companyId);
+      try {
+        await Promise.all(
+          DEFAULT_STATUSES.map((s) =>
+            insertFaultStatus({
+              company_id: companyId,
+              name: s.name,
+              color: s.color,
+              order: s.order,
+              is_final: s.is_final,
+              is_active: true,
+            }),
+          ),
+        );
+        // Re-fetch to get the authoritative state (handles any concurrent seeding)
+        statuses = await fetchFaultStatuses(companyId);
+      } finally {
+        seedingCompanies.delete(companyId);
       }
     }
 

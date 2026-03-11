@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { sendEmailWithResult } from "@/lib/notifications/sendEmail";
 
 export async function POST(request: NextRequest) {
@@ -20,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "חסר meetingId" }, { status: 400 });
     }
 
-    const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const admin = getSupabaseAdmin();
 
     // Fetch meeting
     const { data: meeting, error: meetingError } = await admin

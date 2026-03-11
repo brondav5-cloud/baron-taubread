@@ -26,7 +26,10 @@ export async function loadXlsx(): Promise<XLSXModule> {
         cached = (window as any).XLSX;
         resolve(cached!);
       };
-      script.onerror = () => reject(new Error("Failed to load xlsx library"));
+      script.onerror = () => {
+        loading = null; // allow retry on next call
+        reject(new Error("Failed to load xlsx library"));
+      };
       document.head.appendChild(script);
     });
   }

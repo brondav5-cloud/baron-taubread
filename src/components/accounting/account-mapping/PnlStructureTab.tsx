@@ -1,9 +1,9 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo, useCallback } from "react";
 import { Plus, Trash2, Loader2, RefreshCw, Pencil, Check, X, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import { PARENT_SECTION_LABELS } from "@/types/accounting";
 

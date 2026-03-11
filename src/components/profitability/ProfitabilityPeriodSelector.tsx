@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Calendar, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
+import { MONTH_NAMES_FULL as MONTHS } from "@/lib/periodUtils";
 
 export type PeriodType = "year" | "half" | "quarter" | "month" | "custom";
 
@@ -19,21 +20,6 @@ interface Props {
   period: PeriodSelection;
   onChange: (period: PeriodSelection) => void;
 }
-
-const MONTHS = [
-  "ינואר",
-  "פברואר",
-  "מרץ",
-  "אפריל",
-  "מאי",
-  "יוני",
-  "יולי",
-  "אוגוסט",
-  "ספטמבר",
-  "אוקטובר",
-  "נובמבר",
-  "דצמבר",
-];
 
 const PERIOD_PRESETS: { type: PeriodType; label: string; months: number[] }[] =
   [

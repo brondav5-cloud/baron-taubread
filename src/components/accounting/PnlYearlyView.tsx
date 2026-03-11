@@ -1,12 +1,12 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Download, ChevronDown, ChevronRight, X } from "lucide-react";
 import { clsx } from "clsx";
 import type { YearlyPnl, DbAccount, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
-import { resolveGroupName } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
+import { resolveGroupName } from "@/lib/accountingCalc";
 import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import { SECTION_COLORS } from "./account-mapping/shared";
 import {

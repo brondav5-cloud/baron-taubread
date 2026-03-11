@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react";
 import { useSupabaseData } from "./useSupabaseData";
-import { parsePeriodKey, formatPeriodRange } from "@/lib/periodUtils";
+import { parsePeriodKey, formatPeriodRange, MONTH_NAMES_SHORT as MONTHS } from "@/lib/periodUtils";
 import type { DbStore } from "@/types/supabase";
 
 // ============================================
@@ -15,20 +15,6 @@ export const DASHBOARD_CHART_COLORS = [
   "#6b7280",
   "#f59e0b",
   "#ef4444",
-];
-export const MONTHS = [
-  "ינו",
-  "פבר",
-  "מרץ",
-  "אפר",
-  "מאי",
-  "יונ",
-  "יול",
-  "אוג",
-  "ספט",
-  "אוק",
-  "נוב",
-  "דצמ",
 ];
 
 // Status display mapping

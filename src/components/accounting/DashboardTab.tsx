@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import {
@@ -8,7 +8,7 @@ import {
 import { TrendingUp, TrendingDown, Minus, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
 import type { YearlyPnl, DbTransaction, DbAccount } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import { SECTION_COLORS } from "./account-mapping/shared";
 
 interface Props {

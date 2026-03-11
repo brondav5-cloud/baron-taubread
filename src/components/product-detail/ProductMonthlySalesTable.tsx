@@ -3,8 +3,8 @@
 import { clsx } from "clsx";
 import { formatNumber } from "@/lib/calculations";
 import { Card, CardHeader, CardContent } from "@/components/ui";
+import { MONTH_NAMES_SHORT as PRODUCT_MONTHS } from "@/lib/periodUtils";
 import {
-  PRODUCT_MONTHS,
   type ProductMonthlyData,
   type ProductTotals,
 } from "@/hooks/useProductDetail";

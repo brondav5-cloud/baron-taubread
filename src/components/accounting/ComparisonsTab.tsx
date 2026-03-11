@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import React, { useState, useMemo } from "react";
 import { TrendingUp, TrendingDown, Minus, Plus, X, ChevronDown, ChevronRight } from "lucide-react";
@@ -8,7 +8,7 @@ import {
 } from "recharts";
 import type { YearlyPnl, DbAccount, MonthlyPnl } from "@/types/accounting";
 import { PARENT_SECTION_LABELS, PARENT_SECTION_ORDER } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import { SECTION_COLORS } from "./account-mapping/shared";
 
 interface Props {

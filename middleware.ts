@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
-import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase/env';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_COOKIE_NAME } from '@/lib/supabase/env';
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -14,7 +14,7 @@ export async function middleware(request: NextRequest) {
     SUPABASE_ANON_KEY,
     {
       cookieOptions: {
-        name: 'hlaiyxpiebmvkb-auth-token',
+        name: AUTH_COOKIE_NAME,
         path: '/',
       },
       cookies: {

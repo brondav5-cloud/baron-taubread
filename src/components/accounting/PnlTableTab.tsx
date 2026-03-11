@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import React, { useState } from "react";
 import type { YearlyPnl, DbAccount } from "@/types/accounting";
-import type { VirtualGroup } from "@/hooks/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import type { PnlCustomSection } from "@/hooks/useAccountingData";
 import type { ViewMode } from "./pnlHelpers";
 import PnlYearlyView from "./PnlYearlyView";

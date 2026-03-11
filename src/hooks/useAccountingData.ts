@@ -13,8 +13,8 @@ import type {
   YearlyPnl,
   AccountAnomaly,
 } from "@/types/accounting";
-import { calcYearlyPnl, detectAnomalies, countClosingEntries, getVirtualGroupsFromPnl } from "./accountingCalc";
-import type { VirtualGroup } from "./accountingCalc";
+import { calcYearlyPnl, detectAnomalies, countClosingEntries, getVirtualGroupsFromPnl } from "@/lib/accountingCalc";
+import type { VirtualGroup } from "@/lib/accountingCalc";
 import { useAccountingMutations, type AccountingMutations } from "./useAccountingMutations";
 
 export interface PnlCustomSection {

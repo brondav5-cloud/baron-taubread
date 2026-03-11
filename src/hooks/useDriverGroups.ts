@@ -176,14 +176,19 @@ export function useDriverGroups() {
       productCosts: DriverProductCost[],
     ) => {
       if (!companyId) return null;
-      const newGroup = await driverGroupsRepo.createDriverGroup(
-        companyId,
-        name,
-        driverNames,
-        productCosts,
-      );
-      await refreshAll();
-      return newGroup;
+      try {
+        const newGroup = await driverGroupsRepo.createDriverGroup(
+          companyId,
+          name,
+          driverNames,
+          productCosts,
+        );
+        await refreshAll();
+        return newGroup;
+      } catch (err) {
+        console.error("[useDriverGroups] createDriverGroup failed:", err);
+        return null;
+      }
     },
     [companyId, refreshAll],
   );
@@ -222,13 +227,18 @@ export function useDriverGroups() {
   const handleCreateIndividual = useCallback(
     async (driverName: string, productCosts: DriverProductCost[]) => {
       if (!companyId) return null;
-      const newDriver = await driverGroupsRepo.createIndividualDriver(
-        companyId,
-        driverName,
-        productCosts,
-      );
-      await refreshAll();
-      return newDriver;
+      try {
+        const newDriver = await driverGroupsRepo.createIndividualDriver(
+          companyId,
+          driverName,
+          productCosts,
+        );
+        await refreshAll();
+        return newDriver;
+      } catch (err) {
+        console.error("[useDriverGroups] createIndividualDriver failed:", err);
+        return null;
+      }
     },
     [companyId, refreshAll],
   );

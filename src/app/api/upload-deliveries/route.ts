@@ -3,7 +3,6 @@
 // ============================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
   upsertDeliveries,
@@ -14,7 +13,7 @@ import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
 import { checkRateLimit, checkUploadRateDb, getClientIdentifier } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 // Each chunk is limited to 4MB (Vercel hard limit is 4.5MB per request)
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
@@ -22,9 +21,6 @@ const MAX_PROCESSING_MS = 55_000;
 const PAYLOAD_TOO_LARGE_MSG = {
   error: "גודל הבקשה חורג מהמותר. נסה שוב — הקובץ יחולק אוטומטית.",
 };
-
-const getSupabaseAdmin = () =>
-  createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 const DELIVERY_RATE_LIMIT = { max: 10, windowMs: 60_000 };
 

@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
-import { createClient } from "@supabase/supabase-js";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
-
-const getSupabaseAdmin = () =>
-  createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST(request: NextRequest) {
   try {

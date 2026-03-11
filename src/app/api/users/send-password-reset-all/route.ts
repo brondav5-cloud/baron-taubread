@@ -9,6 +9,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export async function POST() {
   try {
@@ -35,7 +36,7 @@ export async function POST() {
       );
     }
 
-    const admin = createClient(SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+    const admin = getSupabaseAdmin();
 
     let emails: string[];
 

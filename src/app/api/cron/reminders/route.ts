@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
 import { sendPushToUsers } from "@/lib/notifications/sendPush";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 
-const getAdmin = () => createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+const getAdmin = () => getSupabaseAdmin();
 
 export async function GET(request: NextRequest) {
   // Verify the request is from Vercel Cron

@@ -173,13 +173,17 @@ export async function createDriverGroup(
   };
 
   const supabase = createClient();
-  await supabase.from("driver_groups").insert({
+  const { error } = await supabase.from("driver_groups").insert({
     id: group.id,
     company_id: companyId,
     name,
     driver_names: driverNames,
     product_costs: productCosts,
   });
+  if (error) {
+    console.error("[driverGroups.repo] createDriverGroup:", error);
+    throw new Error(error.message);
+  }
   return group;
 }
 
@@ -254,12 +258,16 @@ export async function createIndividualDriver(
   };
 
   const supabase = createClient();
-  await supabase.from("individual_drivers").insert({
+  const { error } = await supabase.from("individual_drivers").insert({
     id: driver.id,
     company_id: companyId,
     driver_name: driverName,
     product_costs: productCosts,
   });
+  if (error) {
+    console.error("[driverGroups.repo] createIndividualDriver:", error);
+    throw new Error(error.message);
+  }
   return driver;
 }
 

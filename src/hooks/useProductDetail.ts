@@ -4,27 +4,9 @@ import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useSupabaseData } from "./useSupabaseData";
 import { DEFAULT_MONTH_SELECTION, type MonthSelection } from "@/components/ui";
+import { MONTH_NAMES_SHORT as PRODUCT_MONTHS } from "@/lib/periodUtils";
 import type { DbProduct, DbStore, MonthlyData } from "@/types/supabase";
 import type { StatusLong, StatusShort } from "@/types/data";
-
-// ============================================
-// CONSTANTS
-// ============================================
-
-export const PRODUCT_MONTHS = [
-  "ינו",
-  "פבר",
-  "מרץ",
-  "אפר",
-  "מאי",
-  "יונ",
-  "יול",
-  "אוג",
-  "ספט",
-  "אוק",
-  "נוב",
-  "דצמ",
-];
 export const PRODUCT_DONUT_COLORS = [
   "#22c55e",
   "#3b82f6",

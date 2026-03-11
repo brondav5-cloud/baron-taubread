@@ -291,12 +291,20 @@ export async function updateUploadStatus(
 // VISITS
 // ============================================
 
+/** Returns a YYYY-MM-DD date string N years before today. */
+function yearsAgoDate(years: number): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().substring(0, 10);
+}
+
 export async function getVisits(companyId: string): Promise<DbVisit[]> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("visits")
     .select("*")
     .eq("company_id", companyId)
+    .gte("date", yearsAgoDate(3))
     .order("date", { ascending: false })
     .limit(10000);
 
@@ -321,6 +329,7 @@ export async function getVisitsSummary(
     .from("visits")
     .select("store_external_id, date, competitors")
     .eq("company_id", companyId)
+    .gte("date", yearsAgoDate(3))
     .order("date", { ascending: false })
     .limit(10000);
 

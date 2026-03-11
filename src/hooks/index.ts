@@ -35,13 +35,13 @@ export { useSettings } from "./useSettings";
 // Product Detail hook
 export {
   useProductDetail,
-  PRODUCT_MONTHS,
   PRODUCT_DONUT_COLORS,
   type ProductMonthlyData,
   type ProductTotals,
   type ProductChartData,
   type TopStore,
 } from "./useProductDetail";
+export { MONTH_NAMES_SHORT as PRODUCT_MONTHS } from "@/lib/periodUtils";
 
 // Work Plan hook
 export {

@@ -2,17 +2,12 @@
  * API route for adding users - bypasses RLS using service role.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { checkRateLimit, getClientIdentifier } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
-import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from "@/lib/supabase/env";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type { UserPermissions } from "@/types/supabase";
-
-function getSupabaseAdmin() {
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-}
 
 const USERS_RATE_LIMIT = { max: 5, windowMs: 60_000 };
 

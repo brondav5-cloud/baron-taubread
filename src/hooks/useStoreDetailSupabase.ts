@@ -5,21 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { getDeliveriesByPeriod } from "@/lib/db/deliveries.repo";
+import { MONTH_NAMES_SHORT as MONTHS } from "@/lib/periodUtils";
 import type { DbStore, DataMetadata } from "@/types/supabase";
-export const MONTHS = [
-  "ינו",
-  "פבר",
-  "מרץ",
-  "אפר",
-  "מאי",
-  "יונ",
-  "יול",
-  "אוג",
-  "ספט",
-  "אוק",
-  "נוב",
-  "דצמ",
-];
 export const DONUT_COLORS = [
   "#22c55e",
   "#3b82f6",
