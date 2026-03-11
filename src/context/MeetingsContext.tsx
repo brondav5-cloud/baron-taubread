@@ -264,23 +264,32 @@ async function _createPendingTasks(
 
   if (!newTasks.length) return;
 
-  // Await notification so it is guaranteed to send before page navigation
-  const recipientUserIds = Array.from(
-    new Set(newTasks.map((pt) => pt.assigneeUserId).filter(Boolean)),
+  // Send one notification per task — SMS includes task title (≤200 chars total)
+  const trunc = (s: string, max: number) =>
+    s.length > max ? s.slice(0, max - 1) + "…" : s;
+
+  await Promise.all(
+    newTasks
+      .filter((pt) => Boolean(pt.assigneeUserId))
+      .map((pt) => {
+        const taskTitle = trunc(pt.taskTitle, 50);
+        const meetingShort = trunc(meetingTitle, 25);
+        const dueDateStr = pt.dueDate
+          ? `\nעד: ${new Date(pt.dueDate + "T00:00:00").toLocaleDateString("he-IL")}`
+          : "";
+        return sendNotificationAsync({
+          recipientUserIds: [pt.assigneeUserId],
+          type: "task_assigned",
+          title: `📌 ${taskTitle}`,
+          body: `מישיבת: ${meetingShort}${dueDateStr}`,
+          url: `/dashboard/meetings/${meetingId}`,
+          referenceId: meetingId,
+          referenceType: "task",
+          sendEmail: true,
+          sendSms: true,
+        });
+      }),
   );
-  if (recipientUserIds.length) {
-    await sendNotificationAsync({
-      recipientUserIds,
-      type: "task_assigned",
-      title: "משימה חדשה מישיבה",
-      body: `הוקצתה לך משימה מישיבת: ${meetingTitle}`,
-      url: `/dashboard/meetings/${meetingId}`,
-      referenceId: meetingId,
-      referenceType: "task",
-      sendEmail: true,
-      sendSms: true,
-    });
-  }
 
   // Create tasks in parallel (faster than sequential)
   const now = new Date().toISOString();

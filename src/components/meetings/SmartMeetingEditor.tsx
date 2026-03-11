@@ -75,6 +75,7 @@ export default function SmartMeetingEditor({
     topicId: string;
     rowId: string;
     originalText: string;
+    initialType: "decision" | "task";
   } | null>(null);
 
   // Sync blocks → text + decisions/tasks whenever blocks change
@@ -228,12 +229,13 @@ export default function SmartMeetingEditor({
               const row = topic.rows.find((r) => r.id === rowId);
               openTaskSheet(topic.id, rowId, row as Partial<TaskRow>);
             }}
-            onRequestConvert={(rowId) => {
+            onRequestConvert={(rowId, targetType) => {
               const row = topic.rows.find((r) => r.id === rowId);
               setConvertDialog({
                 topicId: topic.id,
                 rowId,
                 originalText: row?.content ?? "",
+                initialType: targetType,
               });
             }}
           />
@@ -267,6 +269,7 @@ export default function SmartMeetingEditor({
       {/* Convert dialog */}
       <ConvertDialog
         open={convertDialog !== null}
+        initialType={convertDialog?.initialType ?? "task"}
         originalText={convertDialog?.originalText ?? ""}
         users={users}
         onConfirm={handleConvertConfirm}
