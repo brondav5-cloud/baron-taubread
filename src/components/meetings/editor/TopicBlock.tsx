@@ -51,9 +51,10 @@ export default function TopicBlock({
             type="text"
             value={topic.title}
             onChange={(e) => onTitleChange(e.target.value)}
-            placeholder="שם הנושא..."
+            placeholder="הזן שם נושא..."
             dir="rtl"
-            className="flex-1 bg-transparent text-sm font-bold text-indigo-900 focus:outline-none placeholder:text-indigo-300"
+            autoFocus={!topic.title}
+            className="flex-1 bg-transparent text-sm font-bold text-indigo-900 focus:outline-none placeholder:font-normal placeholder:text-indigo-300"
           />
         )}
         {!readonly && canDelete && (

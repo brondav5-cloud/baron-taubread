@@ -36,7 +36,7 @@ export function useBlockEditor(setTopics: SetTopics) {
       {
         id: uid(),
         type: "topic",
-        title: "נושא חדש",
+        title: "",
         rows: [{ id: uid(), type: "text", content: "" }],
       },
     ]);

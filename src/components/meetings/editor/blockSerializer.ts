@@ -112,7 +112,7 @@ export function textToBlocks(
       {
         id: uid(),
         type: "topic",
-        title: "סיכום",
+        title: "",
         rows: [{ id: uid(), type: "text", content: "" }],
       },
     ];
@@ -124,7 +124,7 @@ export function textToBlocks(
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i] ?? "";
-    const topicMatch = line.match(/^##\s*נושא[:：]?\s*(.+)/);
+    const topicMatch = line.match(/^##\s*נושא[:：]?\s*(.*)/);
 
     if (topicMatch) {
       if (current) topics.push(current);
@@ -136,7 +136,7 @@ export function textToBlocks(
       };
     } else {
       if (!current) {
-        current = { id: uid(), type: "topic", title: "סיכום", rows: [] };
+        current = { id: uid(), type: "topic", title: "", rows: [] };
       }
       const row = parseLine(line, i, users);
       if (row) current.rows.push(row);
@@ -150,7 +150,7 @@ export function textToBlocks(
     topics.push({
       id: uid(),
       type: "topic",
-      title: "סיכום",
+      title: "",
       rows: [{ id: uid(), type: "text", content: "" }],
     });
   }
