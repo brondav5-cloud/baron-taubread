@@ -9,12 +9,12 @@ import toast from "react-hot-toast";
 
 export default function UsersSettingsPage() {
   const { allUsers, isLoading, removeUser } = useUsers();
-  const { state } = useAuth();
+  const authState = useAuth();
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
 
-  const role = state.status === "authed" ? state.user.selectedCompanyRole ?? state.user.role : null;
+  const role = authState.status === "authed" ? authState.user.selectedCompanyRole ?? authState.user.role : null;
   const canSendResetAll = role === "admin" || role === "super_admin";
 
   const handleSendPasswordResetAll = async () => {
