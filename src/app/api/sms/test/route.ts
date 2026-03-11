@@ -5,7 +5,7 @@ import { sendSms } from "@/lib/notifications/sendSms";
  * POST /api/sms/test
  * Body: { to: "05xxxxxxxx", body: "Test message" }
  *
- * Use for debugging: returns raw 019SMS response and success/failure.
+ * Use for debugging: returns raw ActiveTrail response and success/failure.
  * Protect this route in production (e.g. only allow for admins).
  */
 export async function POST(request: NextRequest) {

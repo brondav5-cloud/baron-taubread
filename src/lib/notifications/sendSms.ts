@@ -1,8 +1,8 @@
 const API_TOKEN = process.env.SMSPLUS_API_TOKEN ?? "";
-const USERNAME = process.env.SMSPLUS_USERNAME ?? "";
 const SENDER = process.env.SMSPLUS_SENDER || "BARON";
+const PROFILE_ID = process.env.SMSPLUS_PROFILE_ID;
 
-const API_URL = "https://019sms.co.il/api/SmsCampaign/OperationalMessage";
+const API_URL = "https://webapi.mymarketing.co.il/api/smscampaign/OperationalMessage";
 
 export interface SmsPayload {
   to: string;
@@ -10,7 +10,7 @@ export interface SmsPayload {
 }
 
 /**
- * Normalize phone number for 019SMS (Israeli format: 05xxxxxxxx or 5xxxxxxxx)
+ * Normalize phone number for Israeli format (05xxxxxxxx or 5xxxxxxxx)
  */
 function normalizePhone(phone: string): string | null {
   const cleaned = phone.replace(/[\s\-()]/g, "");
@@ -32,8 +32,8 @@ function normalizePhone(phone: string): string | null {
 }
 
 export async function sendSms(payload: SmsPayload): Promise<boolean> {
-  if (!API_TOKEN || !USERNAME) {
-    console.warn("[sendSms] SMSPlus/019SMS not configured (SMSPLUS_API_TOKEN, SMSPLUS_USERNAME)");
+  if (!API_TOKEN) {
+    console.warn("[sendSms] ActiveTrail not configured (SMSPLUS_API_TOKEN)");
     return false;
   }
 
@@ -43,11 +43,31 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
     return false;
   }
 
+  // ActiveTrail: either from_name or sms_sending_profile_id is required
+  const details: {
+    name: string;
+    content: string;
+    from_name?: string;
+    sms_sending_profile_id?: number;
+    can_unsubscribe: boolean;
+    unsubscribe_text: string;
+  } = {
+    name: `op-${Date.now()}`,
+    content: payload.body,
+    can_unsubscribe: false,
+    unsubscribe_text: "",
+  };
+
+  if (PROFILE_ID) {
+    details.sms_sending_profile_id = parseInt(PROFILE_ID, 10);
+  } else {
+    details.from_name = SENDER;
+  }
+
   const body = {
-    username: USERNAME,
-    source: SENDER,
-    destinations: [{ phone: normalizedPhone }],
-    message: payload.body,
+    details,
+    scheduling: { send_now: true },
+    mobiles: [{ phone_number: normalizedPhone }],
   };
 
   try {
@@ -55,38 +75,29 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${API_TOKEN}`,
+        Authorization: API_TOKEN,
       },
       body: JSON.stringify(body),
     });
 
     const responseText = await res.text();
-    let responseJson: { status?: number; message?: string } | null = null;
+    let responseJson: { id?: number; Message?: string; message?: string } | null = null;
     try {
-      responseJson = JSON.parse(responseText) as { status?: number; message?: string };
+      responseJson = JSON.parse(responseText) as {
+        id?: number;
+        Message?: string;
+        message?: string;
+      };
     } catch {
       // responseText is the raw body
     }
 
-    // 019SMS returns HTTP 200 but status 0 = success, status !== 0 = error
-    const apiStatus = responseJson?.status;
-    const apiMessage = responseJson?.message ?? responseText;
-
     if (!res.ok) {
+      const errMsg = responseJson?.Message ?? responseJson?.message ?? responseText;
       const err = new Error(
-        `[sendSms] 019SMS API error ${res.status}: ${responseText}`
+        `[sendSms] ActiveTrail API error ${res.status}: ${errMsg}`
       ) as Error & { status?: number; response?: unknown };
       err.status = res.status;
-      err.response = responseJson ?? responseText;
-      console.error("[sendSms]", err.message, err.response);
-      throw err;
-    }
-
-    if (apiStatus !== undefined && apiStatus !== 0) {
-      const err = new Error(
-        `[sendSms] 019SMS API status ${apiStatus}: ${apiMessage}`
-      ) as Error & { status?: number; response?: unknown };
-      err.status = apiStatus;
       err.response = responseJson ?? responseText;
       console.error("[sendSms]", err.message, err.response);
       throw err;
