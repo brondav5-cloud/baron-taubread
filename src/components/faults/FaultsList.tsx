@@ -102,7 +102,10 @@ export function FaultsList({ faults, onFaultClick }: FaultsListProps) {
                 )}
               </div>
               <p className="text-sm text-gray-500">
-                {fault.reportedByName} → {fault.assignedToName}
+                {fault.reportedByName} →{" "}
+                {fault.assignedToNames.length > 0
+                  ? fault.assignedToNames.join(", ")
+                  : fault.assignedToName}
               </p>
             </div>
             <span

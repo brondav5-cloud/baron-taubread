@@ -46,6 +46,8 @@ export interface Fault {
   reportedByName: string;
   assignedTo: string;
   assignedToName: string;
+  assignedToIds: string[];
+  assignedToNames: string[];
   photos: string[];
   comments: Array<{
     id: string;
@@ -94,6 +96,7 @@ interface FaultsContextValue {
   deleteFaultStatus: (id: string) => Promise<boolean>;
   createFault: (input: CreateFaultInput) => Promise<Fault | null>;
   updateFaultStatus: (faultId: string, statusId: string) => Promise<boolean>;
+  markFaultViewed: (faultId: string) => Promise<void>;
   addComment: (faultId: string, text: string) => Promise<boolean>;
   getVisibleFaults: () => Fault[];
   canComment: (fault: Fault) => boolean;
@@ -105,6 +108,8 @@ interface CreateFaultInput {
   description?: string;
   assignedTo: string;
   assignedToName: string;
+  assignedToIds?: string[];
+  assignedToNames?: string[];
   photos?: string[];
   notifyEmail?: boolean;
   notifySms?: boolean;
@@ -121,6 +126,19 @@ function dbToFault(
 ): Fault {
   const type = types.find((t) => t.id === db.type_id);
   const status = statuses.find((s) => s.id === db.status_id);
+  // Normalise multi-assignee fields: fall back to legacy single-assignee columns
+  const assignedToIds: string[] =
+    Array.isArray(db.assigned_to_ids) && db.assigned_to_ids.length > 0
+      ? db.assigned_to_ids
+      : db.assigned_to
+        ? [db.assigned_to]
+        : [];
+  const assignedToNames: string[] =
+    Array.isArray(db.assigned_to_names) && db.assigned_to_names.length > 0
+      ? db.assigned_to_names
+      : db.assigned_to_name
+        ? [db.assigned_to_name]
+        : [];
   return {
     id: db.id,
     companyId: db.company_id,
@@ -130,8 +148,10 @@ function dbToFault(
     description: db.description || "",
     reportedBy: db.reported_by,
     reportedByName: db.reported_by_name,
-    assignedTo: db.assigned_to,
-    assignedToName: db.assigned_to_name,
+    assignedTo: assignedToIds[0] ?? db.assigned_to ?? "",
+    assignedToName: assignedToNames[0] ?? db.assigned_to_name ?? "",
+    assignedToIds,
+    assignedToNames,
     photos: db.photos || [],
     comments: db.comments || [],
     history: db.history || [],
@@ -279,6 +299,16 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
   const createFault = useCallback(
     async (input: CreateFaultInput): Promise<Fault | null> => {
       if (!companyId) return null;
+      const ids = input.assignedToIds?.length
+        ? input.assignedToIds
+        : input.assignedTo
+          ? [input.assignedTo]
+          : [];
+      const names = input.assignedToNames?.length
+        ? input.assignedToNames
+        : input.assignedToName
+          ? [input.assignedToName]
+          : [];
       const { data, error } = await insertFault({
         company_id: companyId,
         type_id: input.typeId,
@@ -290,8 +320,10 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
         description: input.description || "",
         reported_by: userId,
         reported_by_name: currentUser.name,
-        assigned_to: input.assignedTo,
-        assigned_to_name: input.assignedToName,
+        assigned_to: ids[0] ?? "",
+        assigned_to_name: names[0] ?? "",
+        assigned_to_ids: ids,
+        assigned_to_names: names,
         photos: input.photos || [],
         comments: [],
         history: [
@@ -308,9 +340,10 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
       if (error || !data) return null;
       await refetch();
 
-      if (input.assignedTo && input.assignedTo !== userId) {
+      const notifyIds = ids.filter((id) => id !== userId);
+      if (notifyIds.length > 0) {
         sendNotification({
-          recipientUserIds: [input.assignedTo],
+          recipientUserIds: notifyIds,
           type: "fault_assigned",
           title: "תקלה חדשה הוקצתה לך",
           body: `${currentUser.name}: ${input.title}`,
@@ -351,7 +384,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
 
         const notifyIds = Array.from(
           new Set(
-            [fault.reportedBy, fault.assignedTo].filter(
+            [fault.reportedBy, ...fault.assignedToIds].filter(
               (id): id is string => !!id && id !== userId,
             ),
           ),
@@ -408,7 +441,9 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     (fault: Fault): boolean => {
       const isAdmin = currentUser.role === "admin";
       return (
-        fault.assignedTo === userId || fault.reportedBy === userId || isAdmin
+        fault.assignedToIds.includes(userId) ||
+        fault.reportedBy === userId ||
+        isAdmin
       );
     },
     [userId, currentUser.role],
@@ -418,9 +453,48 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     const isAdmin = currentUser.role === "admin";
     if (isAdmin) return faults;
     return faults.filter(
-      (f) => f.reportedBy === userId || f.assignedTo === userId,
+      (f) =>
+        f.reportedBy === userId || f.assignedToIds.includes(userId),
     );
   }, [faults, userId, currentUser.role]);
+
+  /**
+   * Auto-transition: if the current user is an assignee and the fault is
+   * still in the first status (חדש / order=1), silently move it to the
+   * second status (נצפה / order=2) to indicate it was seen.
+   */
+  const markFaultViewed = useCallback(
+    async (faultId: string): Promise<void> => {
+      const fault = faults.find((f) => f.id === faultId);
+      if (!fault) return;
+      const isAssignee = fault.assignedToIds.includes(userId);
+      if (!isAssignee) return;
+      const firstStatus = faultStatuses
+        .filter((s) => s.is_active)
+        .sort((a, b) => a.order - b.order)[0];
+      const secondStatus = faultStatuses
+        .filter((s) => s.is_active)
+        .sort((a, b) => a.order - b.order)[1];
+      if (!firstStatus || !secondStatus) return;
+      if (fault.statusId !== firstStatus.id) return;
+      await updateFault(faultId, {
+        status_id: secondStatus.id,
+        history: [
+          ...fault.history,
+          {
+            id: `h_${Date.now()}`,
+            action: "status",
+            userId,
+            userName: currentUser.name,
+            timestamp: new Date().toISOString(),
+            details: `סטטוס: ${secondStatus.name}`,
+          },
+        ],
+      });
+      await refetch();
+    },
+    [faults, faultStatuses, userId, currentUser.name, refetch],
+  );
 
   const value: FaultsContextValue = {
     faultTypes,
@@ -436,6 +510,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     deleteFaultStatus,
     createFault,
     updateFaultStatus,
+    markFaultViewed,
     addComment,
     getVisibleFaults,
     canComment,

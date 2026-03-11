@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import Image from "next/image";
-import { useFaults, type Fault } from "@/context/FaultsContext";
+import { useFaults } from "@/context/FaultsContext";
+import { useUsers } from "@/context/UsersContext";
 
 interface FaultDetailModalProps {
-  fault: Fault | null;
+  faultId: string | null;
   onClose: () => void;
 }
 
@@ -21,13 +22,31 @@ const COLOR_MAP: Record<string, string> = {
   pink: "bg-pink-100 text-pink-700",
 };
 
-export function FaultDetailModal({ fault, onClose }: FaultDetailModalProps) {
-  const { faultStatuses, updateFaultStatus, addComment, canComment } =
+export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
+  const { faults, faultStatuses, updateFaultStatus, markFaultViewed, addComment, canComment } =
     useFaults();
+  const { currentUser } = useUsers();
   const [commentText, setCommentText] = useState("");
   const [saving, setSaving] = useState(false);
 
-  if (!fault) return null;
+  // Always get the LIVE fault from context — realtime updates are reflected automatically
+  const fault = faults.find((f) => f.id === faultId) ?? null;
+
+  // Track which fault ID we already marked as viewed so we only fire once per open
+  const viewedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!faultId || viewedRef.current === faultId) return;
+    viewedRef.current = faultId;
+    markFaultViewed(faultId);
+  }, [faultId, markFaultViewed]);
+
+  // Reset comment input when the modal opens for a different fault
+  useEffect(() => {
+    setCommentText("");
+  }, [faultId]);
+
+  if (!faultId || !fault) return null;
 
   const activeStatuses = faultStatuses
     .filter((s) => s.is_active)
@@ -36,8 +55,14 @@ export function FaultDetailModal({ fault, onClose }: FaultDetailModalProps) {
 
   const handleStatusChange = async (statusId: string) => {
     setSaving(true);
-    await updateFaultStatus(fault.id, statusId);
+    const ok = await updateFaultStatus(fault.id, statusId);
     setSaving(false);
+    if (ok) {
+      const status = faultStatuses.find((s) => s.id === statusId);
+      if (status?.is_final) {
+        onClose();
+      }
+    }
   };
 
   const handleAddComment = async () => {
@@ -47,6 +72,11 @@ export function FaultDetailModal({ fault, onClose }: FaultDetailModalProps) {
     setCommentText("");
     setSaving(false);
   };
+
+  const assigneeDisplay =
+    fault.assignedToNames.length > 0
+      ? fault.assignedToNames.join(", ")
+      : fault.assignedToName || "—";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -83,8 +113,10 @@ export function FaultDetailModal({ fault, onClose }: FaultDetailModalProps) {
               <p className="font-medium">{fault.reportedByName}</p>
             </div>
             <div>
-              <span className="text-gray-500">מוקצה אל:</span>
-              <p className="font-medium">{fault.assignedToName}</p>
+              <span className="text-gray-500">
+                {fault.assignedToNames.length > 1 ? "מוקצה אל:" : "מוקצה אל:"}
+              </span>
+              <p className="font-medium">{assigneeDisplay}</p>
             </div>
           </div>
 
@@ -130,9 +162,17 @@ export function FaultDetailModal({ fault, onClose }: FaultDetailModalProps) {
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${fault.statusId === s.id ? "ring-2 ring-primary-500" : "hover:bg-gray-100"} ${COLOR_MAP[s.color] ?? "bg-gray-100 text-gray-700"}`}
                   >
                     {s.name}
+                    {s.is_final && (
+                      <span className="mr-1 text-xs opacity-60">✓</span>
+                    )}
                   </button>
                 ))}
               </div>
+              {activeStatuses.some((s) => s.is_final && fault.statusId !== s.id) && (
+                <p className="text-xs text-gray-400 mt-1">
+                  סטטוס עם ✓ יסגור את החלון אוטומטית
+                </p>
+              )}
             </div>
           )}
 
@@ -148,6 +188,9 @@ export function FaultDetailModal({ fault, onClose }: FaultDetailModalProps) {
                   <div key={c.id} className="p-3 bg-gray-50 rounded-lg">
                     <p className="text-sm font-medium text-gray-900">
                       {c.userName}
+                      {c.userId === currentUser.id && (
+                        <span className="text-xs text-gray-400 mr-1">(אתה)</span>
+                      )}
                     </p>
                     <p className="text-sm text-gray-700 mt-0.5">{c.text}</p>
                     <p className="text-xs text-gray-400 mt-1">

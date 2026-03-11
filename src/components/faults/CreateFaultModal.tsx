@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { X } from "lucide-react";
+import { X, Users, XCircle } from "lucide-react";
 import { useFaults } from "@/context/FaultsContext";
 import { useUsers } from "@/context/UsersContext";
 import { FaultPhotosInput } from "./FaultPhotosInput";
@@ -19,7 +19,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
   const [typeId, setTypeId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [assignedTo, setAssignedTo] = useState("");
+  const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [notifySms, setNotifySms] = useState(false);
@@ -40,29 +40,55 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
     setPhotos([]);
     setNotifyEmail(false);
     setNotifySms(false);
-    setAssignedTo(firstType?.default_assignee_id || allUsers[0]?.id || "");
+    const defaultAssignee = firstType?.default_assignee_id || allUsers[0]?.id;
+    setAssignedToIds(defaultAssignee ? [defaultAssignee] : []);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when modal opens
   }, [isOpen]);
 
   useEffect(() => {
     if (!typeId) return;
     const ft = faultTypes.find((t) => t.id === typeId && t.is_active);
-    if (ft?.default_assignee_id) setAssignedTo(ft.default_assignee_id);
+    if (ft?.default_assignee_id) {
+      setAssignedToIds((prev) =>
+        prev.includes(ft.default_assignee_id!)
+          ? prev
+          : [ft.default_assignee_id!],
+      );
+    }
   }, [typeId, faultTypes]);
+
+  const toggleAssignee = (userId: string) => {
+    setAssignedToIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId],
+    );
+  };
+
+  const removeAssignee = (userId: string) => {
+    setAssignedToIds((prev) => prev.filter((id) => id !== userId));
+  };
+
+  const selectedUsers = allUsers.filter((u) => assignedToIds.includes(u.id));
+  const unselectedUsers = allUsers.filter((u) => !assignedToIds.includes(u.id));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!typeId.trim() || !title.trim()) return;
-    const assignee = allUsers.find((u) => u.id === assignedTo);
-    if (!assignee) return;
+    if (!typeId.trim() || !title.trim() || assignedToIds.length === 0) return;
+    const ids = assignedToIds;
+    const names = ids.map(
+      (id) => allUsers.find((u) => u.id === id)?.name ?? "",
+    );
 
     setSaving(true);
     const fault = await createFault({
       typeId,
       title: title.trim(),
       description: description.trim(),
-      assignedTo: assignee.id,
-      assignedToName: assignee.name,
+      assignedTo: ids[0] ?? "",
+      assignedToName: names[0] ?? "",
+      assignedToIds: ids,
+      assignedToNames: names,
       photos,
       notifyEmail,
       notifySms,
@@ -141,23 +167,59 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
             />
           </div>
+
+          {/* Multi-assignee selector */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
               מוקצה אל *
             </label>
-            <select
-              value={assignedTo}
-              onChange={(e) => setAssignedTo(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="">בחר אחראי</option>
-              {allUsers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.avatar} {u.name}
-                </option>
-              ))}
-            </select>
+
+            {/* Selected assignees chips */}
+            {selectedUsers.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                {selectedUsers.map((u) => (
+                  <span
+                    key={u.id}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-50 text-primary-700 rounded-full text-sm border border-primary-200"
+                  >
+                    {u.avatar} {u.name}
+                    <button
+                      type="button"
+                      onClick={() => removeAssignee(u.id)}
+                      className="ml-0.5 hover:text-primary-900"
+                    >
+                      <XCircle className="w-3.5 h-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Dropdown to add more */}
+            {unselectedUsers.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                <select
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) toggleAssignee(e.target.value);
+                  }}
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 text-sm"
+                >
+                  <option value="">הוסף אחראי...</option>
+                  {unselectedUsers.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.avatar} {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {assignedToIds.length === 0 && (
+              <p className="text-xs text-red-500 mt-1">יש לבחור לפחות אחראי אחד</p>
+            )}
           </div>
+
           <FaultPhotosInput
             photos={photos}
             maxPhotos={2}
@@ -165,9 +227,9 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
           />
 
           {/* Notification Toggles */}
-          {assignedTo && (
+          {assignedToIds.length > 0 && (
             <div className="bg-gray-50 rounded-xl p-3 space-y-2">
-              <p className="text-xs font-medium text-gray-500">שלח התראה למוקצה</p>
+              <p className="text-xs font-medium text-gray-500">שלח התראה למוקצים</p>
               <div className="flex gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -203,7 +265,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
             </button>
             <button
               type="submit"
-              disabled={!typeId || !title.trim() || !assignedTo || saving}
+              disabled={!typeId || !title.trim() || assignedToIds.length === 0 || saving}
               className="flex-1 py-2.5 px-4 bg-primary-600 text-white rounded-xl font-medium hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {saving ? "שומר..." : "דווח תקלה"}

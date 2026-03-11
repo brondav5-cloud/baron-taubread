@@ -39,6 +39,8 @@ export interface DbFault {
   reported_by_name: string;
   assigned_to: string;
   assigned_to_name: string;
+  assigned_to_ids: string[];
+  assigned_to_names: string[];
   photos: string[];
   comments: Array<{
     id: string;

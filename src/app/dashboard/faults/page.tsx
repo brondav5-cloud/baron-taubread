@@ -9,12 +9,11 @@ import {
   CreateFaultModal,
   FaultDetailModal,
 } from "@/components/faults";
-import type { Fault } from "@/context/FaultsContext";
 
 export default function FaultsPage() {
   const { getVisibleFaults, isLoading } = useFaults();
   const [showCreate, setShowCreate] = useState(false);
-  const [selectedFault, setSelectedFault] = useState<Fault | null>(null);
+  const [selectedFaultId, setSelectedFaultId] = useState<string | null>(null);
 
   const visibleFaults = getVisibleFaults();
 
@@ -65,7 +64,7 @@ export default function FaultsPage() {
         <div className="p-12 text-center text-gray-500">טוען...</div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-200 p-4">
-          <FaultsList faults={visibleFaults} onFaultClick={setSelectedFault} />
+          <FaultsList faults={visibleFaults} onFaultClick={(f) => setSelectedFaultId(f.id)} />
         </div>
       )}
 
@@ -74,8 +73,8 @@ export default function FaultsPage() {
         onClose={() => setShowCreate(false)}
       />
       <FaultDetailModal
-        fault={selectedFault}
-        onClose={() => setSelectedFault(null)}
+        faultId={selectedFaultId}
+        onClose={() => setSelectedFaultId(null)}
       />
     </div>
   );
