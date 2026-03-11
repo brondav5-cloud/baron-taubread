@@ -2,10 +2,7 @@ const API_TOKEN = process.env.SMSPLUS_API_TOKEN ?? "";
 const USERNAME = process.env.SMSPLUS_USERNAME ?? "";
 const SENDER = process.env.SMSPLUS_SENDER || "BARON";
 
-const API_URL =
-  process.env.NODE_ENV === "development"
-    ? "https://019sms.co.il/api/test"
-    : "https://019sms.co.il/api";
+const API_URL = "https://019sms.co.il/api/SmsCampaign/OperationalMessage";
 
 export interface SmsPayload {
   to: string;
@@ -46,11 +43,10 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
     return false;
   }
 
-  // destinations: object with phone(s). Per 019SMS docs: "object" with "phone" field(s)
   const body = {
     username: USERNAME,
     source: SENDER,
-    destinations: { phone: normalizedPhone },
+    destinations: [{ phone: normalizedPhone }],
     message: payload.body,
   };
 
