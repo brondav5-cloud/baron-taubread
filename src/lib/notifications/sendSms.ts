@@ -46,10 +46,11 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
     return false;
   }
 
+  // destinations: object with phone(s). Per 019SMS docs: "object" with "phone" field(s)
   const body = {
     username: USERNAME,
     source: SENDER,
-    destinations: [{ phone: normalizedPhone }],
+    destinations: { phone: normalizedPhone },
     message: payload.body,
   };
 
@@ -64,18 +65,32 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
     });
 
     const responseText = await res.text();
-    let responseJson: unknown = null;
+    let responseJson: { status?: number; message?: string } | null = null;
     try {
-      responseJson = JSON.parse(responseText);
+      responseJson = JSON.parse(responseText) as { status?: number; message?: string };
     } catch {
       // responseText is the raw body
     }
+
+    // 019SMS returns HTTP 200 but status 0 = success, status !== 0 = error
+    const apiStatus = responseJson?.status;
+    const apiMessage = responseJson?.message ?? responseText;
 
     if (!res.ok) {
       const err = new Error(
         `[sendSms] 019SMS API error ${res.status}: ${responseText}`
       ) as Error & { status?: number; response?: unknown };
       err.status = res.status;
+      err.response = responseJson ?? responseText;
+      console.error("[sendSms]", err.message, err.response);
+      throw err;
+    }
+
+    if (apiStatus !== undefined && apiStatus !== 0) {
+      const err = new Error(
+        `[sendSms] 019SMS API status ${apiStatus}: ${apiMessage}`
+      ) as Error & { status?: number; response?: unknown };
+      err.status = apiStatus;
       err.response = responseJson ?? responseText;
       console.error("[sendSms]", err.message, err.response);
       throw err;
