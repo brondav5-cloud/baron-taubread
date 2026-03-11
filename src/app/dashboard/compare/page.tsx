@@ -6,7 +6,6 @@ import { Card, CardContent, PageHeader } from "@/components/ui";
 import { LoadingState } from "@/components/common";
 import { useComparisonSupabase } from "@/hooks/useComparisonSupabase";
 import {
-  CriteriaStoreSelector,
   SelectedStoresTags,
   CityStatsCards,
   SelectedStoresSection,
@@ -110,38 +109,7 @@ export default function ComparePage() {
         icon={<GitCompare className="w-6 h-6 text-purple-500" />}
       />
 
-      {/* חיפוש ובחירה לפי עיר, סוכן, רשת, נהג או קבוצת נהגים */}
-      <Card>
-        <CardContent className="py-4">
-          <div className="space-y-4">
-            <CriteriaStoreSelector
-              storeSearch={storeSearch}
-              onSearchChange={setStoreSearch}
-              searchResults={searchResults}
-              onSelectStore={addStore}
-              selectedCriteriaType={selectedCriteriaType}
-              onCriteriaTypeChange={(type) => {
-                setSelectedCriteriaType(type);
-                setSelectedCriteriaValue("");
-                if (type === "city") setSelectedCity("");
-              }}
-              selectedCriteriaValue={selectedCriteriaValue}
-              onCriteriaValueChange={(value) => {
-                setSelectedCriteriaValue(value);
-                if (selectedCriteriaType === "city") setSelectedCity(value);
-              }}
-              criteriaValueOptions={criteriaValueOptions}
-            />
-            <SelectedStoresTags
-              stores={selectedStores}
-              onRemoveStore={(id) => removeStore(String(id))}
-              onClearAll={clearAllStores}
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* בחירת חנויות לפי - עיר, רשת, סוכן, נהג, קבוצת נהגים (סינון מתקדם) */}
+      {/* בחירת חנויות לפי - עיר, רשת, סוכן, נהג, קבוצת נהגים (סינון מתקדם) + חיפוש חופשי */}
       <CompareFiltersPanel
         show={showFilters}
         filters={filters}
@@ -152,7 +120,24 @@ export default function ComparePage() {
         onClearFilters={clearFilters}
         onToggle={() => setShowFilters((prev) => !prev)}
         onAddAllFiltered={addAllFilteredStores}
+        storeSearch={storeSearch}
+        onSearchChange={setStoreSearch}
+        searchResults={searchResults}
+        onSelectStore={addStore}
       />
+
+      {/* תגיות חנויות שנבחרו */}
+      {selectedStores.length > 0 && (
+        <Card>
+          <CardContent className="py-3">
+            <SelectedStoresTags
+              stores={selectedStores}
+              onRemoveStore={(id) => removeStore(String(id))}
+              onClearAll={clearAllStores}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {/* רשימת חנויות לפי בחירה - מוצגת כשנבחרה קטגוריה וערך (עיר, סוכן, רשת, נהג, קבוצה) */}
       {selectedCriteriaValue && criteriaStores.length > 0 && (

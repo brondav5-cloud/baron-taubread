@@ -30,10 +30,28 @@ const ALL_MONTHS = [
   { id: "202510", label: "אוק 25", short: "אוק", year: 2025, month: 10 },
   { id: "202511", label: "נוב 25", short: "נוב", year: 2025, month: 11 },
   { id: "202512", label: "דצמ 25", short: "דצמ", year: 2025, month: 12 },
+  { id: "202601", label: "ינו 26", short: "ינו", year: 2026, month: 1 },
+  { id: "202602", label: "פבר 26", short: "פבר", year: 2026, month: 2 },
+  { id: "202603", label: "מרץ 26", short: "מרץ", year: 2026, month: 3 },
+  { id: "202604", label: "אפר 26", short: "אפר", year: 2026, month: 4 },
+  { id: "202605", label: "מאי 26", short: "מאי", year: 2026, month: 5 },
+  { id: "202606", label: "יונ 26", short: "יונ", year: 2026, month: 6 },
+  { id: "202607", label: "יול 26", short: "יול", year: 2026, month: 7 },
+  { id: "202608", label: "אוג 26", short: "אוג", year: 2026, month: 8 },
+  { id: "202609", label: "ספט 26", short: "ספט", year: 2026, month: 9 },
+  { id: "202610", label: "אוק 26", short: "אוק", year: 2026, month: 10 },
+  { id: "202611", label: "נוב 26", short: "נוב", year: 2026, month: 11 },
+  { id: "202612", label: "דצמ 26", short: "דצמ", year: 2026, month: 12 },
 ];
 
 // Quick select presets
 const PRESETS = [
+  {
+    id: "h1_2026",
+    label: "H1 2026",
+    months: ["202601", "202602", "202603", "202604", "202605", "202606"],
+  },
+  { id: "q1_2026", label: "Q1 2026", months: ["202601", "202602", "202603"] },
   {
     id: "h2_2025",
     label: "H2 2025",
@@ -46,6 +64,24 @@ const PRESETS = [
   },
   { id: "q4_2025", label: "Q4 2025", months: ["202510", "202511", "202512"] },
   { id: "q3_2025", label: "Q3 2025", months: ["202507", "202508", "202509"] },
+  {
+    id: "year_2026",
+    label: "2026",
+    months: [
+      "202601",
+      "202602",
+      "202603",
+      "202604",
+      "202605",
+      "202606",
+      "202607",
+      "202608",
+      "202609",
+      "202610",
+      "202611",
+      "202612",
+    ],
+  },
   {
     id: "year_2025",
     label: "2025",
@@ -277,6 +313,37 @@ export function MonthSelector({ value, onChange }: MonthSelectorProps) {
                   </button>
                 );
               })}
+            </div>
+
+            {/* Year 2026 */}
+            <div>
+              <p className="text-xs font-medium text-gray-500 mb-2">2026</p>
+              <div className="grid grid-cols-6 gap-1.5">
+                {ALL_MONTHS.filter((m) => m.year === 2026).map((month) => {
+                  const isSelected =
+                    activeTab === "compare"
+                      ? value.compareMonths.includes(month.id)
+                      : value.months.includes(month.id);
+                  return (
+                    <button
+                      key={month.id}
+                      onClick={() =>
+                        toggleMonth(month.id, activeTab === "compare")
+                      }
+                      className={clsx(
+                        "px-2 py-2 rounded-lg text-xs font-medium transition-colors",
+                        isSelected
+                          ? activeTab === "compare"
+                            ? "bg-orange-500 text-white"
+                            : "bg-primary-500 text-white"
+                          : "bg-gray-50 text-gray-700 hover:bg-gray-100",
+                      )}
+                    >
+                      {month.short}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Year 2025 */}
