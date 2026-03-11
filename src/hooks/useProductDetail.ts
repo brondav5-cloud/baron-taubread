@@ -164,7 +164,7 @@ export function useProductDetail() {
   );
 
   const product = useMemo(() => {
-    const dbProduct = products.find((p) => p.id === productId);
+    const dbProduct = products.find((p) => p.external_id === productId);
     return dbProduct ? dbProductToLegacy(dbProduct) : null;
   }, [products, productId]);
 
