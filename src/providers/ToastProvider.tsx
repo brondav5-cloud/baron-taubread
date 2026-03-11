@@ -12,14 +12,12 @@ export function ToastProvider({ children }: ToastProviderProps) {
     <>
       {children}
       <Toaster
-        position="bottom-left"
+        position="top-center"
         reverseOrder={false}
         gutter={12}
         containerClassName=""
         containerStyle={{
-          bottom: 24,
-          left: 24,
-          right: "auto",
+          top: 16,
         }}
         toastOptions={{
           // Default options for all toasts
