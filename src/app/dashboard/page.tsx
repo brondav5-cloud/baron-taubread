@@ -45,7 +45,6 @@ export default function DashboardPage() {
     bottomStores,
     alertStores,
     statusDistribution,
-    monthlyData,
     tableMonthlyData,
     totals,
     halfYearData,
