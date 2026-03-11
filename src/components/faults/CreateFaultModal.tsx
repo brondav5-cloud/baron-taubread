@@ -24,6 +24,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [notifySms, setNotifySms] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const activeTypes = faultTypes
     .filter((t) => t.is_active)
@@ -40,6 +41,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
     setPhotos([]);
     setNotifyEmail(false);
     setNotifySms(false);
+    setError(null);
     const defaultAssignee = firstType?.default_assignee_id || allUsers[0]?.id;
     setAssignedToIds(defaultAssignee ? [defaultAssignee] : []);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only reset when modal opens
@@ -74,6 +76,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     if (!typeId.trim() || !title.trim() || assignedToIds.length === 0) return;
     const ids = assignedToIds;
     const names = ids.map(
@@ -81,20 +84,29 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
     );
 
     setSaving(true);
-    const fault = await createFault({
-      typeId,
-      title: title.trim(),
-      description: description.trim(),
-      assignedTo: ids[0] ?? "",
-      assignedToName: names[0] ?? "",
-      assignedToIds: ids,
-      assignedToNames: names,
-      photos,
-      notifyEmail,
-      notifySms,
-    });
-    setSaving(false);
-    if (fault) onClose();
+    try {
+      const fault = await createFault({
+        typeId,
+        title: title.trim(),
+        description: description.trim(),
+        assignedTo: ids[0] ?? "",
+        assignedToName: names[0] ?? "",
+        assignedToIds: ids,
+        assignedToNames: names,
+        photos,
+        notifyEmail,
+        notifySms,
+      });
+      if (fault) {
+        onClose();
+      } else {
+        setError("שמירת התקלה נכשלה. בדוק שהמיגרציה רצה ב-Supabase או נסה שוב.");
+      }
+    } catch {
+      setError("שגיאה לא צפויה. נסה שוב.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!isOpen) return null;
@@ -252,6 +264,12 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
                   <span className="text-sm text-gray-700">SMS</span>
                 </label>
               </div>
+            </div>
+          )}
+
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+              {error}
             </div>
           )}
 
