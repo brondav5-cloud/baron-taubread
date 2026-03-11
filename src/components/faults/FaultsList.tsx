@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useFaults, type Fault } from "@/context/FaultsContext";
+import { useAuth } from "@/hooks/useAuth";
 
 const COLOR_MAP: Record<string, string> = {
   blue: "bg-blue-100 text-blue-700",
@@ -24,6 +25,8 @@ export function FaultsList({ faults, onFaultClick }: FaultsListProps) {
   const [filterType, setFilterType] = useState<string>("all");
 
   const { faultStatuses, faultTypes } = useFaults();
+  const auth = useAuth();
+  const ownCompanyId = auth.status === "authed" ? auth.user.company_id : null;
 
   const filtered = useMemo(() => {
     let list = faults;
@@ -88,9 +91,16 @@ export function FaultsList({ faults, onFaultClick }: FaultsListProps) {
           >
             <span className="text-2xl">{fault.typeIcon || "⚠️"}</span>
             <div className="flex-1 min-w-0">
-              <p className="font-medium text-gray-900 truncate">
-                {fault.title}
-              </p>
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-gray-900 truncate">
+                  {fault.title}
+                </p>
+                {ownCompanyId && fault.companyId !== ownCompanyId && (
+                  <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-600 border border-blue-100">
+                    חברה אחרת
+                  </span>
+                )}
+              </div>
               <p className="text-sm text-gray-500">
                 {fault.reportedByName} → {fault.assignedToName}
               </p>

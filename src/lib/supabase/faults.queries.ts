@@ -78,6 +78,21 @@ export async function getFaultTypes(companyId: string): Promise<DbFaultType[]> {
   return data || [];
 }
 
+/** Returns all fault types accessible to the current user (own + cross-company, via RLS). */
+export async function getAllAccessibleFaultTypes(): Promise<DbFaultType[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("fault_types")
+    .select("*")
+    .order("order");
+
+  if (error) {
+    console.error("Error fetching all fault types:", error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function insertFaultType(
   row: Omit<DbFaultType, "id" | "created_at">,
 ): Promise<DbFaultType | null> {
@@ -133,6 +148,21 @@ export async function getFaultStatuses(
   return data || [];
 }
 
+/** Returns all fault statuses accessible to the current user (own + cross-company, via RLS). */
+export async function getAllAccessibleFaultStatuses(): Promise<DbFaultStatus[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("fault_statuses")
+    .select("*")
+    .order("order");
+
+  if (error) {
+    console.error("Error fetching all fault statuses:", error);
+    return [];
+  }
+  return data || [];
+}
+
 export async function insertFaultStatus(
   row: Omit<DbFaultStatus, "id" | "created_at">,
 ): Promise<DbFaultStatus | null> {
@@ -173,17 +203,39 @@ export async function deleteFaultStatus(id: string): Promise<boolean> {
 
 export async function getFaults(companyId: string): Promise<DbFault[]> {
   const supabase = createClient();
-  const { data, error } = await supabase
+
+  // Query 1: own company
+  const q1 = supabase
     .from("faults")
     .select("*")
     .eq("company_id", companyId)
     .order("created_at", { ascending: false });
 
-  if (error) {
-    console.error("Error fetching faults:", error);
-    return [];
-  }
-  return data || [];
+  // Query 2: cross-company faults (RLS returns only what user is allowed to see)
+  const q2 = supabase
+    .from("faults")
+    .select("*")
+    .neq("company_id", companyId)
+    .order("created_at", { ascending: false });
+
+  const [r1, r2] = await Promise.all([q1, q2]);
+
+  if (r1.error) console.error("[getFaults] company query:", r1.error);
+  if (r2.error) console.error("[getFaults] cross-company query:", r2.error);
+
+  const all = [...(r1.data || []), ...(r2.data || [])];
+
+  const seen = new Set<string>();
+  return all
+    .filter((f) => {
+      if (seen.has(f.id)) return false;
+      seen.add(f.id);
+      return true;
+    })
+    .sort(
+      (a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
 }
 
 export async function insertFault(

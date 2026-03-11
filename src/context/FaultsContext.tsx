@@ -13,6 +13,8 @@ import { useUsers } from "@/context/UsersContext";
 import {
   getFaultTypes as fetchFaultTypes,
   getFaultStatuses as fetchFaultStatuses,
+  getAllAccessibleFaultTypes as fetchAllFaultTypes,
+  getAllAccessibleFaultStatuses as fetchAllFaultStatuses,
   getFaults as fetchFaults,
   insertFault,
   insertFaultType,
@@ -35,6 +37,7 @@ import { useRealtimeTable } from "@/hooks/useRealtimeTable";
 
 export interface Fault {
   id: string;
+  companyId: string;
   typeId: string;
   statusId: string;
   title: string;
@@ -120,6 +123,7 @@ function dbToFault(
   const status = statuses.find((s) => s.id === db.status_id);
   return {
     id: db.id,
+    companyId: db.company_id,
     typeId: db.type_id,
     statusId: db.status_id,
     title: db.title,
@@ -187,10 +191,17 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    const rawFaults = await fetchFaults(companyId);
+    // Fetch all accessible types/statuses (cross-company via RLS) for resolving
+    // type names and status colors on faults from other companies
+    const [allTypes, allStatuses, rawFaults] = await Promise.all([
+      fetchAllFaultTypes(),
+      fetchAllFaultStatuses(),
+      fetchFaults(companyId),
+    ]);
+
     setFaultTypes(types);
     setFaultStatuses(statuses);
-    setFaults(rawFaults.map((f) => dbToFault(f, types, statuses)));
+    setFaults(rawFaults.map((f) => dbToFault(f, allTypes, allStatuses)));
   }, [companyId]);
 
   const addFaultType = useCallback(
