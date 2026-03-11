@@ -104,20 +104,6 @@ export default function SmartMeetingEditor({
     [onChange],
   );
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (mention.active && e.key === "Escape") {
-        setMention({ active: false, query: "", atIndex: -1 });
-        return;
-      }
-      if (mention.active && e.key === "Enter" && filteredUsers.length === 1) {
-        e.preventDefault();
-        insertMention(filteredUsers[0]!);
-      }
-    },
-    [mention.active, filteredUsers],
-  );
-
   const insertMention = useCallback(
     (user: User) => {
       const ta = textareaRef.current;
@@ -137,6 +123,20 @@ export default function SmartMeetingEditor({
       }, 0);
     },
     [value, mention.atIndex, onChange],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (mention.active && e.key === "Escape") {
+        setMention({ active: false, query: "", atIndex: -1 });
+        return;
+      }
+      if (mention.active && e.key === "Enter" && filteredUsers.length === 1) {
+        e.preventDefault();
+        insertMention(filteredUsers[0]!);
+      }
+    },
+    [mention.active, filteredUsers, insertMention],
   );
 
   // Auto-resize textarea

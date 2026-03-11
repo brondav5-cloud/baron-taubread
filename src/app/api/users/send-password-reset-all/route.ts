@@ -41,7 +41,7 @@ export async function POST() {
 
     if (role === "super_admin") {
       const { data: users } = await admin.from("users").select("email").eq("is_active", true);
-      emails = [...new Set((users ?? []).map((u) => u.email).filter(Boolean))] as string[];
+      emails = Array.from(new Set((users ?? []).map((u) => u.email).filter(Boolean))) as string[];
     } else if (companyId) {
       const { data: members } = await admin
         .from("user_companies")
@@ -56,7 +56,7 @@ export async function POST() {
         .select("email")
         .in("id", userIds)
         .eq("is_active", true);
-      emails = [...new Set((users ?? []).map((u) => u.email).filter(Boolean))] as string[];
+      emails = Array.from(new Set((users ?? []).map((u) => u.email).filter(Boolean))) as string[];
     } else {
       return NextResponse.json(
         { error: "יש לבחור חברה" },
