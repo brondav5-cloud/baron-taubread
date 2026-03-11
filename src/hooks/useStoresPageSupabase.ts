@@ -41,6 +41,7 @@ export interface StoresFilters {
   driver_groups: string[];
   status_long: string[];
   status_short: string[];
+  minQty?: number;
 }
 
 export interface TotalsData {
@@ -126,8 +127,8 @@ export function useStoresPageSupabase() {
   const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(
     new Set(),
   );
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>("qty");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [pageSize, setPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState<StoresFilters>({
@@ -138,6 +139,7 @@ export function useStoresPageSupabase() {
     driver_groups: [],
     status_long: [],
     status_short: [],
+    minQty: undefined,
   });
   const [deliveriesByStore, setDeliveriesByStore] = useState<
     Map<number, number>
@@ -287,6 +289,13 @@ export function useStoresPageSupabase() {
       )
         return false;
 
+      if (
+        filters.minQty != null &&
+        filters.minQty > 0 &&
+        (store.metrics?.qty_current_year ?? 0) < filters.minQty
+      )
+        return false;
+
       return true;
     });
   }, [allStores, filters, search, driverToGroup]);
@@ -296,7 +305,10 @@ export function useStoresPageSupabase() {
   // ============================================
 
   const activeFiltersCount = useMemo(() => {
-    return Object.values(filters).filter((arr) => arr.length > 0).length;
+    let count = Object.entries(filters).filter(([k, v]) =>
+      k === "minQty" ? (v as number) > 0 : (v as string[]).length > 0,
+    ).length;
+    return count;
   }, [filters]);
 
   // ============================================
@@ -531,6 +543,7 @@ export function useStoresPageSupabase() {
       driver_groups: [],
       status_long: [],
       status_short: [],
+      minQty: undefined,
     });
   }, []);
 

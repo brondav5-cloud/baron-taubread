@@ -79,7 +79,7 @@ export function StoresFiltersPanel({
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
         {/* Cities */}
         <FilterSelect
           label="עיר"
@@ -135,6 +135,25 @@ export function StoresFiltersPanel({
           selected={filters.status_short}
           onChange={(value) => onUpdateFilter("status_short", value)}
         />
+
+        {/* Min Qty */}
+        <div className="space-y-2">
+          <label className="block text-sm font-medium text-gray-700">
+            מינימום כמות (שנה שוטפת)
+          </label>
+          <input
+            type="number"
+            value={filters.minQty ?? ""}
+            onChange={(e) =>
+              onUpdateFilter(
+                "minQty",
+                e.target.value ? Number(e.target.value) : undefined,
+              )
+            }
+            placeholder="0"
+            className="w-full px-3 py-2 border rounded-xl text-sm"
+          />
+        </div>
       </div>
     </div>
   );

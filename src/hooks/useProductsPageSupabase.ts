@@ -81,8 +81,8 @@ export function useProductsPageSupabase() {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("metrics");
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>("qty");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [pageSize, setPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState<ProductsFilters>({
