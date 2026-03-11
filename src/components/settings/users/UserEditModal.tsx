@@ -20,15 +20,10 @@ const ROLE_OPTIONS = [
 ];
 
 const PERMISSION_MODULES: { key: UserPermissionModule; label: string }[] = [
-  { key: "dashboard", label: "דשבורד" },
-  { key: "stores", label: "חנויות" },
-  { key: "products", label: "מוצרים" },
-  { key: "tasks", label: "משימות" },
-  { key: "faults", label: "תקלות" },
-  { key: "visits", label: "ביקורים" },
   { key: "profitability", label: "רווחיות" },
-  { key: "upload", label: "העלאת נתונים" },
+  { key: "expenses", label: "רווח והפסד" },
   { key: "settings", label: "הגדרות" },
+  { key: "upload", label: "העלאת נתונים (Excel)" },
 ];
 
 const AVATAR_OPTIONS = [
