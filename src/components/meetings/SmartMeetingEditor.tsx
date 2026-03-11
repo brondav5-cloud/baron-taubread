@@ -1,49 +1,38 @@
 "use client";
 
-/**
- * SmartMeetingEditor — a single textarea that auto-extracts:
- *  • Lines starting with "החלטה:" or "✅" → Decisions panel
- *  • Lines containing "@Name ..." → Tasks panel
- *
- * @mention UX: type @ → dropdown appears → select user → inserts "@Name "
- * Task parsing: "@Name [title] עד [DD/MM]"
- */
-
-import {
-  useState,
-  useRef,
-  useCallback,
-  useEffect,
-  useMemo,
-} from "react";
-import type { MeetingTaskMention, MeetingTaskPriority } from "@/types/meeting";
-import { MEETING_PRIORITY_CONFIG } from "@/types/meeting";
-import { parseContent } from "./meetingParser";
+import { useState, useEffect, useCallback, useRef } from "react";
+import type { TopicBlock, ContentRow, EditorUser, RowType, TaskRow } from "./editor/types";
+import { textToBlocks, blocksToText } from "./editor/blockSerializer";
+import { useBlockEditor } from "./editor/useBlockEditor";
+import TopicBlockComponent from "./editor/TopicBlock";
+import TaskSheet, { type TaskSheetData } from "./editor/TaskSheet";
+import BlockToolbar from "./editor/BlockToolbar";
 import type { ParsedDecision, ParsedTask } from "./meetingParser";
 export type { ParsedDecision, ParsedTask } from "./meetingParser";
+import type { MeetingTaskMention, MeetingTaskPriority } from "@/types/meeting";
+import { MEETING_PRIORITY_CONFIG } from "@/types/meeting";
 
-interface User {
-  id: string;
-  name: string;
-}
+// ── Props ───────────────────────────────────────────────────
 
 interface SmartMeetingEditorProps {
   value: string;
   onChange: (text: string) => void;
-  users: User[];
+  users: EditorUser[];
   onDecisionsChange: (decisions: ParsedDecision[]) => void;
   onTasksChange: (tasks: ParsedTask[]) => void;
   placeholder?: string;
   readonly?: boolean;
 }
 
+// ── Task sheet state ────────────────────────────────────────
 
-// ── @mention dropdown ────────────────────────────────────────
-interface MentionState {
-  active: boolean;
-  query: string;
-  atIndex: number; // position of @ in textarea
+interface TaskSheetState {
+  topicId: string;
+  rowId: string | null; // null = new task
+  row?: Partial<TaskRow>;
 }
+
+// ── Main component ──────────────────────────────────────────
 
 export default function SmartMeetingEditor({
   value,
@@ -51,178 +40,195 @@ export default function SmartMeetingEditor({
   users,
   onDecisionsChange,
   onTasksChange,
-  placeholder = "כתוב חופשי...\n\nהחלטה: [טקסט] ← יופיע בתיבת החלטות\n@שם [משימה] עד [תאריך] ← יופיע בתיבת משימות",
   readonly = false,
 }: SmartMeetingEditorProps) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [mention, setMention] = useState<MentionState>({
-    active: false,
-    query: "",
-    atIndex: -1,
-  });
-
-  // Filtered users for dropdown
-  const filteredUsers = useMemo(
-    () =>
-      mention.active
-        ? users
-            .filter((u) =>
-              u.name.toLowerCase().includes(mention.query.toLowerCase()),
-            )
-            .slice(0, 6)
-        : [],
-    [mention.active, mention.query, users],
+  // Lazy init blocks from text (once on mount)
+  const valueRef = useRef(value);
+  const [topics, setTopicsRaw] = useState<TopicBlock[]>(() =>
+    textToBlocks(valueRef.current, users),
   );
 
-  // Parse content and notify parents
+  // Re-init once when users load (edit mode: users arrive after first render)
+  const usersInitRef = useRef(users.length > 0);
   useEffect(() => {
-    const { decisions, tasks } = parseContent(value, users);
+    if (!usersInitRef.current && users.length > 0) {
+      usersInitRef.current = true;
+      if (valueRef.current.trim()) {
+        setTopicsRaw(textToBlocks(valueRef.current, users));
+      }
+    }
+  }, [users]);
+
+  const setTopics = useCallback(
+    (fn: (prev: TopicBlock[]) => TopicBlock[]) => setTopicsRaw(fn),
+    [],
+  );
+
+  const editor = useBlockEditor(setTopics);
+
+  // Task sheet
+  const [taskSheet, setTaskSheet] = useState<TaskSheetState | null>(null);
+
+  // Sync blocks → text + decisions/tasks whenever blocks change
+  useEffect(() => {
+    const text = blocksToText(topics);
+    onChange(text);
+
+    const decisions: ParsedDecision[] = [];
+    const tasks: ParsedTask[] = [];
+    let idx = 0;
+    for (const topic of topics) {
+      for (const row of topic.rows) {
+        if (row.type === "decision" && row.content.trim()) {
+          decisions.push({ id: `dec_${row.id}`, text: row.content, lineIndex: idx });
+        } else if (row.type === "task" && row.assigneeId) {
+          tasks.push({
+            id: row.id,
+            userId: row.assigneeId,
+            userName: row.assigneeName,
+            title: row.content,
+            dueDate: row.dueDate,
+            priority: row.priority,
+            lineIndex: idx,
+          });
+        }
+        idx++;
+      }
+    }
     onDecisionsChange(decisions);
     onTasksChange(tasks);
-  }, [value, users, onDecisionsChange, onTasksChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [topics]);
 
-  const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      const newVal = e.target.value;
-      onChange(newVal);
+  // ── TaskSheet handlers ────────────────────────────────────
 
-      // Detect @mention trigger
-      const cursor = e.target.selectionStart ?? 0;
-      const textBefore = newVal.slice(0, cursor);
-      const lastAt = textBefore.lastIndexOf("@");
+  const openTaskSheet = useCallback(
+    (topicId: string, rowId: string | null, row?: Partial<TaskRow>) => {
+      setTaskSheet({ topicId, rowId, row });
+    },
+    [],
+  );
 
-      if (lastAt !== -1) {
-        const afterAt = textBefore.slice(lastAt + 1);
-        // No spaces — still in the middle of a mention
-        if (!afterAt.includes(" ") && !afterAt.includes("\n")) {
-          setMention({ active: true, query: afterAt, atIndex: lastAt });
-          return;
-        }
+  const handleTaskConfirm = useCallback(
+    (data: TaskSheetData) => {
+      if (!taskSheet) return;
+      const { topicId, rowId } = taskSheet;
+      if (rowId) {
+        // Editing existing task row
+        editor.updateRow(topicId, rowId, data as Partial<ContentRow>);
+      } else {
+        // Adding new task row
+        editor.addRow(topicId, "task");
+        // Update the just-added row (last one)
+        setTopicsRaw((prev) =>
+          prev.map((t) => {
+            if (t.id !== topicId) return t;
+            const last = t.rows[t.rows.length - 1];
+            if (!last) return t;
+            return {
+              ...t,
+              rows: t.rows.map((r) =>
+                r.id === last.id
+                  ? ({ ...r, ...data } as ContentRow)
+                  : r,
+              ),
+            };
+          }),
+        );
       }
-      setMention({ active: false, query: "", atIndex: -1 });
+      setTaskSheet(null);
     },
-    [onChange],
+    [taskSheet, editor],
   );
 
-  const insertMention = useCallback(
-    (user: User) => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      const before = value.slice(0, mention.atIndex);
-      const after = value.slice(ta.selectionStart ?? mention.atIndex);
-      const inserted = `@${user.name} `;
-      const newVal = before + inserted + after;
-      onChange(newVal);
-      setMention({ active: false, query: "", atIndex: -1 });
+  // ── Mobile toolbar handler ────────────────────────────────
 
-      // Restore cursor after the inserted mention
-      setTimeout(() => {
-        const pos = mention.atIndex + inserted.length;
-        ta.setSelectionRange(pos, pos);
-        ta.focus();
-      }, 0);
-    },
-    [value, mention.atIndex, onChange],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (mention.active && e.key === "Escape") {
-        setMention({ active: false, query: "", atIndex: -1 });
+  const handleToolbarAdd = useCallback(
+    (type: RowType | "topic") => {
+      if (type === "topic") {
+        editor.addTopic();
         return;
       }
-      if (mention.active && e.key === "Enter" && filteredUsers.length === 1) {
-        e.preventDefault();
-        insertMention(filteredUsers[0]!);
+      const lastTopic = topics[topics.length - 1];
+      if (!lastTopic) return;
+      if (type === "task") {
+        openTaskSheet(lastTopic.id, null);
+      } else {
+        editor.addRow(lastTopic.id, type);
       }
     },
-    [mention.active, filteredUsers, insertMention],
+    [topics, editor, openTaskSheet],
   );
 
-  // Auto-resize textarea
-  useEffect(() => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = `${Math.max(200, ta.scrollHeight)}px`;
-  }, [value]);
+  // ── Render ────────────────────────────────────────────────
 
   return (
-    <div className="relative">
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={handleChange}
-        onKeyDown={handleKeyDown}
-        readOnly={readonly}
-        placeholder={placeholder}
-        dir="rtl"
-        className="w-full resize-none border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300 leading-7 bg-white font-inherit"
-        style={{ minHeight: 200, lineHeight: "1.8" }}
+    <div className="relative" dir="rtl">
+      <div className={`space-y-3 ${!readonly ? "pb-20 md:pb-0" : ""}`}>
+        {topics.map((topic) => (
+          <TopicBlockComponent
+            key={topic.id}
+            topic={topic}
+            users={users}
+            readonly={readonly}
+            canDelete={topics.length > 1}
+            onTitleChange={(title) => editor.updateTopicTitle(topic.id, title)}
+            onDelete={() => editor.deleteTopic(topic.id)}
+            onAddRow={(type, afterRowId) => {
+              if (type === "task") {
+                openTaskSheet(topic.id, null);
+              } else {
+                editor.addRow(topic.id, type, afterRowId);
+              }
+            }}
+            onUpdateRow={(rowId, updates) =>
+              editor.updateRow(topic.id, rowId, updates)
+            }
+            onDeleteRow={(rowId) => editor.deleteRow(topic.id, rowId)}
+            onChangeRowType={(rowId, newType) => {
+              if (newType === "task") {
+                editor.changeRowType(topic.id, rowId, "task");
+                openTaskSheet(topic.id, rowId);
+              } else {
+                editor.changeRowType(topic.id, rowId, newType);
+              }
+            }}
+            onRequestTaskEdit={(rowId) => {
+              const row = topic.rows.find((r) => r.id === rowId);
+              openTaskSheet(topic.id, rowId, row as Partial<TaskRow>);
+            }}
+          />
+        ))}
+
+        {/* Add topic button (desktop) */}
+        {!readonly && (
+          <button
+            type="button"
+            onClick={editor.addTopic}
+            className="hidden md:flex items-center gap-2 px-4 py-2.5 rounded-xl border border-dashed border-indigo-200 text-indigo-500 text-sm hover:bg-indigo-50 hover:border-indigo-400 transition-colors w-full justify-center"
+          >
+            <span>📋</span>
+            <span>+ הוסף נושא חדש</span>
+          </button>
+        )}
+      </div>
+
+      {/* Mobile toolbar */}
+      {!readonly && <BlockToolbar onAdd={handleToolbarAdd} />}
+
+      {/* Task sheet */}
+      <TaskSheet
+        open={taskSheet !== null}
+        task={taskSheet?.row}
+        users={users}
+        onConfirm={handleTaskConfirm}
+        onClose={() => setTaskSheet(null)}
       />
-
-      {/* @mention dropdown */}
-      {mention.active && filteredUsers.length > 0 && (
-        <div className="absolute right-0 left-0 mx-2 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden"
-             style={{ top: "calc(100% + 4px)" }}>
-          <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-xs text-gray-400 font-medium">
-            בחר משתמש לשיוך משימה
-          </div>
-          {filteredUsers.map((u) => (
-            <button
-              key={u.id}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                insertMention(u);
-              }}
-              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-right transition-colors"
-            >
-              <span className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                {u.name.charAt(0)}
-              </span>
-              <span className="text-sm font-medium text-gray-800">{u.name}</span>
-              <span className="text-xs text-gray-400 mr-auto">משימה חדשה</span>
-            </button>
-          ))}
-          {mention.query && filteredUsers.length === 0 && (
-            <div className="px-4 py-3 text-sm text-gray-400">לא נמצאו משתמשים</div>
-          )}
-        </div>
-      )}
-
-      {/* Hint line */}
-      {!readonly && (
-        <div className="mt-2 space-y-1">
-          <div className="flex gap-3 text-xs text-gray-400 flex-wrap">
-            <span>
-              <span className="font-semibold text-emerald-600">החלטה:</span>{" "}
-              [טקסט] — תיבת החלטות
-            </span>
-            <span>
-              <span className="font-semibold text-orange-500">@שם</span>{" "}
-              [משימה]{" "}
-              <span className="font-semibold text-orange-400">עד DD/MM</span>{" "}
-              — תיבת משימות
-            </span>
-            <span>
-              <span className="font-semibold text-emerald-600">✅</span>{" "}
-              [טקסט] — גם החלטה
-            </span>
-          </div>
-          <div className="text-xs text-indigo-500 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1 inline-block">
-            💡 <span className="font-semibold">החלטה + הקצאה:</span>{" "}
-            <code className="bg-white px-1 rounded">
-              החלטה: [טקסט] @שם עד DD/MM
-            </code>{" "}
-            — נכנס גם לשתי התיבות
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
-// ── Live panels ──────────────────────────────────────────────
+// ── DecisionsPanel (re-exported for MeetingForm summary) ───
 
 interface DecisionsPanelProps {
   decisions: ParsedDecision[];
@@ -250,6 +256,8 @@ export function DecisionsPanel({ decisions }: DecisionsPanelProps) {
   );
 }
 
+// ── TasksPanel (re-exported for MeetingForm summary) ────────
+
 interface TasksPanelProps {
   tasks: ParsedTask[];
   onPriorityChange?: (taskId: string, priority: MeetingTaskPriority) => void;
@@ -269,6 +277,7 @@ export function TasksPanel({ tasks, onPriorityChange, onDueDateChange }: TasksPa
       <div className="space-y-2">
         {tasks.map((t) => {
           const isOverdue = t.dueDate && new Date(t.dueDate) < new Date();
+          const priorityCfg = MEETING_PRIORITY_CONFIG[t.priority];
           return (
             <div
               key={t.id}
@@ -288,41 +297,31 @@ export function TasksPanel({ tasks, onPriorityChange, onDueDateChange }: TasksPa
                     value={t.dueDate}
                     onChange={(e) => onDueDateChange(t.id, e.target.value)}
                     className={`text-xs border rounded-lg px-2 py-1 focus:outline-none focus:ring-1 focus:ring-orange-300 ${
-                      isOverdue
-                        ? "border-red-300 bg-red-50 text-red-600"
-                        : "border-orange-200 bg-white text-gray-600"
+                      isOverdue ? "border-red-300 bg-red-50 text-red-600" : "border-orange-200 bg-white text-gray-600"
                     }`}
                   />
                 ) : (
                   t.dueDate && (
-                    <span
-                      className={`text-xs font-medium ${
-                        isOverdue ? "text-red-600" : "text-gray-500"
-                      }`}
-                    >
+                    <span className={`text-xs font-medium ${isOverdue ? "text-red-600" : "text-gray-500"}`}>
                       {isOverdue ? "⚠️ " : ""}
-                      {new Date(t.dueDate).toLocaleDateString("he-IL")}
+                      {new Date(t.dueDate + "T00:00:00").toLocaleDateString("he-IL")}
                     </span>
                   )
                 )}
                 {onPriorityChange ? (
                   <select
                     value={t.priority}
-                    onChange={(e) =>
-                      onPriorityChange(t.id, e.target.value as MeetingTaskPriority)
-                    }
+                    onChange={(e) => onPriorityChange(t.id, e.target.value as MeetingTaskPriority)}
                     className="text-xs border border-orange-200 rounded-lg px-1.5 py-1 bg-white focus:outline-none"
                   >
                     {(Object.entries(MEETING_PRIORITY_CONFIG) as [MeetingTaskPriority, typeof MEETING_PRIORITY_CONFIG[MeetingTaskPriority]][]).map(
                       ([k, v]) => (
-                        <option key={k} value={k}>
-                          {v.icon} {v.label}
-                        </option>
+                        <option key={k} value={k}>{v.icon} {v.label}</option>
                       ),
                     )}
                   </select>
                 ) : (
-                  <span>{MEETING_PRIORITY_CONFIG[t.priority].icon}</span>
+                  <span>{priorityCfg.icon}</span>
                 )}
               </div>
             </div>
@@ -333,7 +332,8 @@ export function TasksPanel({ tasks, onPriorityChange, onDueDateChange }: TasksPa
   );
 }
 
-// ── Converter: ParsedTask → MeetingTaskMention ───────────────
+// ── parsedTaskToMention (re-exported for MeetingForm) ───────
+
 export function parsedTaskToMention(t: ParsedTask): MeetingTaskMention {
   return {
     id: t.id,

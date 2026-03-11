@@ -417,13 +417,10 @@ export function useProductsPageSupabase() {
     return months?.length ? generateMetricsPeriodLabels(months) : null;
   }, [periodSelector.metricsPeriodInfo?.metricsMonths]);
 
-  const currentYear = metadata?.current_year ?? new Date().getFullYear();
-
   return {
     isLoading,
     error,
     refetch,
-    currentYear,
     periodLabel,
     periodSelector,
     metricsPeriodInfo: periodSelector.metricsPeriodInfo,

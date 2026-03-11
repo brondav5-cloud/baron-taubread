@@ -20,7 +20,6 @@ interface ProductsFiltersPanelProps {
   activeFiltersCount: number;
   onFiltersChange: (filters: ProductsFilters) => void;
   onClearFilters: () => void;
-  currentYear?: number;
 }
 
 export function ProductsFiltersPanel({
@@ -32,7 +31,6 @@ export function ProductsFiltersPanel({
   activeFiltersCount,
   onFiltersChange,
   onClearFilters,
-  currentYear,
 }: ProductsFiltersPanelProps) {
   if (!show) return null;
 
@@ -84,10 +82,7 @@ export function ProductsFiltersPanel({
         {/* Min Quantity Filter */}
         <div>
           <label className="block text-xs text-gray-500 mb-1">
-            מינימום כמות
-            {currentYear && (
-              <span className="text-gray-400 mr-1">(שנה {currentYear})</span>
-            )}
+            מינימום פריטים
           </label>
           <input
             type="number"

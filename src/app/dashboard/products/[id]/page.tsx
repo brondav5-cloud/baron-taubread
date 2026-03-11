@@ -1,9 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { useProductDetail } from "@/hooks/useProductDetail";
-import { PdfReportModal, type PdfSection } from "@/components/ui";
 import { Button, EmptyState } from "@/components/ui";
 import {
   ProductDetailHeader,
@@ -22,18 +20,7 @@ const ProductStoresDonut = dynamic(
   { ssr: false },
 );
 
-const PRODUCT_PDF_SECTIONS: PdfSection[] = [
-  { id: "metrics", label: "📊 מדדי ביצועים (12v12, 6v6, 3v3, 2v2)" },
-  { id: "summary", label: "💰 כרטיסי סיכום (כמות ומחזור)" },
-  { id: "monthly", label: "📅 טבלת מכירות חודשיות" },
-  { id: "chart", label: "📈 גרף מכירות" },
-  { id: "donut", label: "🥧 חלוקת חנויות TOP 10" },
-  { id: "stores", label: "🏪 טבלת חנויות שמוכרות את המוצר" },
-];
-
 export default function ProductDetailPage() {
-  const [showPdfModal, setShowPdfModal] = useState(false);
-  const openPdfModal = useCallback(() => setShowPdfModal(true), []);
   const {
     product,
 
@@ -85,63 +72,41 @@ export default function ProductDetailPage() {
         product={product}
         monthSelection={monthSelection}
         onMonthSelectionChange={setMonthSelection}
-        onPdfClick={openPdfModal}
       />
 
       {/* Metrics Row */}
-      <div id="pdf-section-metrics">
-        <ProductMetricsRow product={product} />
-      </div>
+      <ProductMetricsRow product={product} />
 
       {/* Summary Cards */}
-      <div id="pdf-section-summary">
-        <ProductSummaryCards product={product} />
-      </div>
+      <ProductSummaryCards product={product} />
 
       {/* Monthly Sales Table */}
-      <div id="pdf-section-monthly">
-        <ProductMonthlySalesTable
-          productName={product.name}
-          monthlyData={monthlyData}
-          totals={totals}
-          selectedYear={selectedYear}
-          onYearChange={setSelectedYear}
-          availableYears={availableYears}
-          hideHolidays={hideHolidays}
-          onHideHolidaysChange={setHideHolidays}
-        />
-      </div>
+      <ProductMonthlySalesTable
+        productName={product.name}
+        monthlyData={monthlyData}
+        totals={totals}
+        selectedYear={selectedYear}
+        onYearChange={setSelectedYear}
+        availableYears={availableYears}
+        hideHolidays={hideHolidays}
+        onHideHolidaysChange={setHideHolidays}
+      />
 
       {/* Sales Chart */}
-      <div id="pdf-section-chart">
-        <ProductSalesChart data={chartData} />
-      </div>
+      <ProductSalesChart data={chartData} />
 
       {/* Stores Donut */}
-      <div id="pdf-section-donut">
-        <ProductStoresDonut stores={topStores} />
-      </div>
+      <ProductStoresDonut stores={topStores} />
 
       {/* Stores Table */}
-      <div id="pdf-section-stores">
-        <ProductStoresTable
-          stores={filteredStores}
-          search={storeSearch}
-          onSearchChange={setStoreSearch}
-          isLoading={productStoresLoading}
-          currentYear={currentYear}
-          previousYear={previousYear}
-        />
-      </div>
-
-      {showPdfModal && (
-        <PdfReportModal
-          title={`דוח מוצר: ${product.name}`}
-          subtitle={product.category ?? undefined}
-          sections={PRODUCT_PDF_SECTIONS}
-          onClose={() => setShowPdfModal(false)}
-        />
-      )}
+      <ProductStoresTable
+        stores={filteredStores}
+        search={storeSearch}
+        onSearchChange={setStoreSearch}
+        isLoading={productStoresLoading}
+        currentYear={currentYear}
+        previousYear={previousYear}
+      />
     </div>
   );
 }

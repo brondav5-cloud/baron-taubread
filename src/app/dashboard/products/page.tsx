@@ -33,7 +33,6 @@ export default function ProductsPage() {
     pageSize,
     changePageSize,
     filteredCount,
-    currentYear,
   } = hook;
 
   if (isLoading) {
@@ -85,7 +84,6 @@ export default function ProductsPage() {
         onUpdateFilter={updateFilter}
         onClearFilters={clearFilters}
         activeFiltersCount={activeFiltersCount}
-        currentYear={currentYear}
       />
 
       <ProductsSearchBar value={search} onChange={setSearch} />

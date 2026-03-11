@@ -9,7 +9,6 @@ import {
   Building2,
   FileSpreadsheet,
   ClipboardList,
-  FileText,
 } from "lucide-react";
 import { clsx } from "clsx";
 import type { DbStore } from "@/types/supabase";
@@ -70,7 +69,6 @@ function StatusBadge({
 interface StoreDetailHeaderProps {
   store: DbStore;
   onExportExcel?: () => void;
-  onPdfClick?: () => void;
 }
 
 // ============================================
@@ -80,7 +78,6 @@ interface StoreDetailHeaderProps {
 export function StoreDetailHeader({
   store,
   onExportExcel,
-  onPdfClick,
 }: StoreDetailHeaderProps) {
   const metrics = store.metrics;
 
@@ -133,13 +130,6 @@ export function StoreDetailHeader({
           >
             <ClipboardList className="w-4 h-4" />3 תעודות ביקור אחרונות
           </Link>
-          <button
-            onClick={onPdfClick}
-            className="flex items-center gap-2 px-4 py-2 bg-red-500 text-white rounded-xl text-sm font-medium hover:bg-red-600 transition-colors"
-          >
-            <FileText className="w-4 h-4" />
-            PDF
-          </button>
           {onExportExcel && (
             <button
               onClick={onExportExcel}

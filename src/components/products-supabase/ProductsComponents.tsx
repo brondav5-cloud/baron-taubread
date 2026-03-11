@@ -92,7 +92,6 @@ export function ProductsFiltersPanel({
   onUpdateFilter,
   onClearFilters,
   activeFiltersCount,
-  currentYear,
 }: {
   show: boolean;
   filters: ProductsFilters;
@@ -103,7 +102,6 @@ export function ProductsFiltersPanel({
   ) => void;
   onClearFilters: () => void;
   activeFiltersCount: number;
-  currentYear?: number;
 }) {
   if (!show) return null;
   return (
@@ -147,11 +145,6 @@ export function ProductsFiltersPanel({
         <div className="space-y-2">
           <label className="block text-sm font-medium text-gray-700">
             מינימום כמות
-            {currentYear && (
-              <span className="text-xs font-normal text-gray-400 mr-1">
-                (שנה {currentYear})
-              </span>
-            )}
           </label>
           <input
             type="number"

@@ -14,7 +14,7 @@ import {
   Users,
   ChevronLeft,
   Loader2,
-  Image as ImageIcon,
+  Image,
 } from "lucide-react";
 import { clsx } from "clsx";
 import Link from "next/link";
@@ -408,7 +408,7 @@ export default function SettingsPage() {
         <SettingsSection
           title="לוגו חברה"
           description="לוגו המופיע בסיכומי ישיבות ובכותרת"
-          icon={<ImageIcon className="w-5 h-5 text-gray-600" />}
+          icon={<Image className="w-5 h-5 text-gray-600" />}
         >
           <div className="flex items-center gap-5">
             <div className="w-20 h-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 overflow-hidden flex-shrink-0">
@@ -416,13 +416,13 @@ export default function SettingsPage() {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={logoUrl} alt="לוגו" className="w-full h-full object-contain p-1" />
               ) : (
-                <ImageIcon className="w-8 h-8 text-gray-300" />
+                <Image className="w-8 h-8 text-gray-300" />
               )}
             </div>
             <div>
               <label className="cursor-pointer">
                 <span className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 hover:bg-gray-50 transition-colors ${logoUploading ? "opacity-50 pointer-events-none" : ""}`}>
-                  {logoUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImageIcon className="w-4 h-4" />}
+                  {logoUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Image className="w-4 h-4" />}
                   {logoUploading ? "מעלה..." : "העלה לוגו"}
                 </span>
                 <input
