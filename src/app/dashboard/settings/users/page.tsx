@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Pencil, Plus, Trash2, Mail } from "lucide-react";
+import { Users, Pencil, Plus, Trash2, Send } from "lucide-react";
 import { useUsers, type AppUser } from "@/context/UsersContext";
 import { useAuth } from "@/hooks/useAuth";
 import { UserEditModal } from "@/components/settings/users/UserEditModal";
@@ -71,7 +71,7 @@ export default function UsersSettingsPage() {
                 <>שולח...</>
               ) : (
                 <>
-                  <Mail className="w-4 h-4" />
+                  <Send className="w-4 h-4" />
                   איפוס סיסמה לכולם
                 </>
               )}
