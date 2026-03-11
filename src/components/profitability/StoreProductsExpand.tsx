@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo } from "react";
 import { ChevronDown, Package, TrendingUp, TrendingDown } from "lucide-react";
@@ -41,15 +41,15 @@ export function StoreProductsExpand({
         id: p.external_id,
         name: p.name,
         category: p.category || "",
-        sales_2025: m.sales_current_year ?? 0,
-        qty_2025: m.qty_current_year ?? 0,
+        sales_current_year: m.sales_current_year ?? 0,
+        qty_current_year: m.qty_current_year ?? 0,
       };
     });
 
     // Simulate product-level data for this store
     return products.slice(0, 15).map((product) => {
       const qty = Math.floor(Math.random() * 500) + 50;
-      const avgPrice = product.sales_2025 / (product.qty_2025 || 1);
+      const avgPrice = product.sales_current_year / (product.qty_current_year || 1);
       const sales = qty * avgPrice;
 
       // Calculate margin based on profit type

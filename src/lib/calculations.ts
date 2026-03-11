@@ -349,7 +349,7 @@ export function filterStores(
       return false;
 
     // Min quantity filter
-    if (filters.minQty && store.qty_2025 < filters.minQty) return false;
+    if (filters.minQty && store.qty_current_year < filters.minQty) return false;
 
     return true;
   });
@@ -363,31 +363,31 @@ export const METRIC_INFO = {
   "12v12": {
     label: "שנתי",
     shortLabel: "12v12",
-    description: "השוואת סך הכמות בכל 2024 מול כל 2025",
-    period: "24→25",
+    description: "השוואת סך הכמות בשנה הקודמת מול השנה הנוכחית",
+    period: "שנה קודמת → נוכחית",
   },
   "6v6": {
     label: "6 חודשים",
     shortLabel: "6v6",
-    description: "השוואת ינו-יונ 2025 מול יול-דצמ 2025",
+    description: "השוואת ינו-יונ מול יול-דצמ (H1 מול H2)",
     period: "H1→H2",
   },
   "3v3": {
     label: "3 חודשים",
     shortLabel: "3v3",
-    description: "השוואת אוק-דצמ 2024 מול אוק-דצמ 2025",
-    period: "Q4 24→25",
+    description: "השוואת Q4 השנה הקודמת מול Q4 השנה הנוכחית",
+    period: "Q4 שנה קודמת → נוכחית",
   },
   "2v2": {
     label: "2 חודשים",
     shortLabel: "2v2",
-    description: "השוואת ספט-אוק מול נוב-דצמ 2025",
+    description: "השוואת ספט-אוק מול נוב-דצמ",
     period: "ספט→נוב",
   },
   peak: {
     label: "מרחק מהשיא",
     shortLabel: "שיא",
-    description: "דצמבר 2025 מול ממוצע 4 החודשים הגבוהים",
+    description: "החודש האחרון מול ממוצע 4 החודשים הגבוהים",
     period: "",
   },
   returns: {

@@ -46,6 +46,8 @@ export function ProductsMainTable({
   totals,
   calcChange,
 }: ProductsMainTableProps) {
+  const currentYear = new Date().getFullYear();
+  const previousYear = currentYear - 1;
   return (
     <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
       <div className="overflow-x-auto">
@@ -97,10 +99,10 @@ export function ProductsMainTable({
                 <>
                   <th className="px-3 py-3 text-center">כמות</th>
                   <th className="px-3 py-3 text-center">מחזור</th>
-                  <th className="px-3 py-3 text-center">כמות 2024</th>
-                  <th className="px-3 py-3 text-center">כמות 2025</th>
-                  <th className="px-3 py-3 text-center">מחזור 2024</th>
-                  <th className="px-3 py-3 text-center">מחזור 2025</th>
+                  <th className="px-3 py-3 text-center">כמות {previousYear}</th>
+                  <th className="px-3 py-3 text-center">כמות {currentYear}</th>
+                  <th className="px-3 py-3 text-center">מחזור {previousYear}</th>
+                  <th className="px-3 py-3 text-center">מחזור {currentYear}</th>
                 </>
               )}
               <th className="px-2 py-3"></th>
@@ -267,8 +269,8 @@ export function ProductsMainTable({
                           {formatPercent(product.metric_12v12)}
                         </span>
                         <div className="text-xs text-gray-400">
-                          {formatNumber(product.qty_2024)}←
-                          {formatNumber(product.qty_2025)}
+                          {formatNumber(product.qty_previous_year)}←
+                          {formatNumber(product.qty_current_year)}
                         </div>
                       </td>
                       <td className="px-3 py-3 text-center">
@@ -382,16 +384,16 @@ export function ProductsMainTable({
                         ₪{formatNumber(Math.round(main.sales))}
                       </td>
                       <td className="px-3 py-3 text-center">
-                        {formatNumber(product.qty_2024)}
+                        {formatNumber(product.qty_previous_year)}
                       </td>
                       <td className="px-3 py-3 text-center font-bold">
-                        {formatNumber(product.qty_2025)}
+                        {formatNumber(product.qty_current_year)}
                       </td>
                       <td className="px-3 py-3 text-center">
-                        ₪{formatNumber(Math.round(product.sales_2024))}
+                        ₪{formatNumber(Math.round(product.sales_previous_year))}
                       </td>
                       <td className="px-3 py-3 text-center font-bold">
-                        ₪{formatNumber(Math.round(product.sales_2025))}
+                        ₪{formatNumber(Math.round(product.sales_current_year))}
                       </td>
                     </>
                   )}

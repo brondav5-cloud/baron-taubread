@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // PROFITABILITY CALCULATIONS
 // ============================================
 
@@ -162,7 +162,7 @@ export function calculateQuickStoreProfit(
   store: StoreWithStatus,
   avgMargin: number = 0.32, // ברירת מחדל 32%
 ): { estimatedProfit: number; margin: number } {
-  const revenue = store.sales_2025 || 0;
+  const revenue = store.sales_current_year || 0;
   const estimatedProfit = revenue * avgMargin;
 
   return {
@@ -178,7 +178,7 @@ export function calculateQuickProductProfit(
   product: ProductWithStatus,
   avgMargin: number = 0.35, // ברירת מחדל 35%
 ): { estimatedProfit: number; margin: number } {
-  const revenue = product.sales_2025 || 0;
+  const revenue = product.sales_current_year || 0;
   const estimatedProfit = revenue * avgMargin;
 
   return {

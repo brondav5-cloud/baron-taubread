@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
@@ -35,7 +35,7 @@ export interface ComparisonStore {
   returns_pct_last6: number;
   status_long: string;
   status_short: string;
-  sales_2025: number;
+  sales_current_year: number;
   monthly_qty: Record<string, number>;
   monthly_sales: Record<string, number>;
   monthly_gross: Record<string, number>;
@@ -97,7 +97,7 @@ function dbStoreToComparisonStore(
   const currentYearMonths = Object.keys(months).filter((k) =>
     k.startsWith(String(currentYear)),
   );
-  const sales2025 = currentYearMonths.reduce(
+  const salesCurrentYear = currentYearMonths.reduce(
     (sum, k) => sum + (store.monthly_sales?.[k] || 0),
     0,
   );
@@ -121,7 +121,7 @@ function dbStoreToComparisonStore(
     returns_pct_last6: m.returns_pct_current ?? 0,
     status_long: m.status_long || "יציב",
     status_short: m.status_short || "יציב",
-    sales_2025: sales2025,
+    sales_current_year: salesCurrentYear,
     monthly_qty: store.monthly_qty || {},
     monthly_sales: store.monthly_sales || {},
     monthly_gross: store.monthly_gross || {},
@@ -450,7 +450,7 @@ export function useComparisonSupabase() {
       avg2v2: criteriaStores.reduce((sum, s) => sum + s.metric_2v2, 0) / count,
       avgReturns:
         criteriaStores.reduce((sum, s) => sum + s.returns_pct_last6, 0) / count,
-      totalSales: criteriaStores.reduce((sum, s) => sum + s.sales_2025, 0),
+      totalSales: criteriaStores.reduce((sum, s) => sum + s.sales_current_year, 0),
       count,
     };
   }, [criteriaStores]);
@@ -464,7 +464,7 @@ export function useComparisonSupabase() {
       avg2v2: cityStores.reduce((sum, s) => sum + s.metric_2v2, 0) / count,
       avgReturns:
         cityStores.reduce((sum, s) => sum + s.returns_pct_last6, 0) / count,
-      totalSales: cityStores.reduce((sum, s) => sum + s.sales_2025, 0),
+      totalSales: cityStores.reduce((sum, s) => sum + s.sales_current_year, 0),
       count,
     };
   }, [cityStores]);

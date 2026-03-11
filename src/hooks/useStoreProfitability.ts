@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // USE STORE PROFITABILITY HOOK
 // ============================================
 
@@ -54,7 +54,7 @@ export function useStoreProfitability(
   return useMemo(() => {
     if (!store) return null;
 
-    const revenue = store.sales_2025 || 0;
+    const revenue = store.sales_current_year || 0;
     const driverGroup = ctx.getDriverGroup(store.driver);
     const hasDriverGroup = driverGroup !== null;
 

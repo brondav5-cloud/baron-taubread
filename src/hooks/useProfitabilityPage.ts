@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useCallback } from "react";
 import { useRouter } from "next/navigation";
@@ -100,8 +100,8 @@ export function useProfitabilityPage() {
         network: s.network || "",
         status_long: (s.metrics?.status_long || "יציב") as StatusLong,
         status_short: (s.metrics?.status_short || "יציב") as StatusShort,
-        qty_2025: s.metrics?.qty_current_year ?? 0,
-        sales_2025: s.metrics?.sales_current_year ?? 0,
+        qty_current_year: s.metrics?.qty_current_year ?? 0,
+        sales_current_year: s.metrics?.sales_current_year ?? 0,
         returns_pct_last6: s.metrics?.returns_pct_current ?? 0,
       })),
     [dbStores],
@@ -156,7 +156,7 @@ export function useProfitabilityPage() {
 
       if (hasCosts && avgProductCost > 0) {
         const avgPrice =
-          store.qty_2025 > 0 ? store.sales_2025 / store.qty_2025 : 0;
+          store.qty_current_year > 0 ? store.sales_current_year / store.qty_current_year : 0;
         const baseMargin =
           avgPrice > 0 ? (avgPrice - avgProductCost) / avgPrice : 0;
         grossMargin = Math.max(-1, Math.min(1, baseMargin * 1.2));
@@ -178,12 +178,12 @@ export function useProfitabilityPage() {
         status_long: store.status_long,
         status_short: store.status_short,
         driverGroup: driverGroupName,
-        qty: store.qty_2025,
-        sales: store.sales_2025,
+        qty: store.qty_current_year,
+        sales: store.sales_current_year,
         returns: store.returns_pct_last6,
-        grossProfit: store.sales_2025 * grossMargin,
-        operatingProfit: store.sales_2025 * operatingMargin,
-        netProfit: store.sales_2025 * netMargin,
+        grossProfit: store.sales_current_year * grossMargin,
+        operatingProfit: store.sales_current_year * operatingMargin,
+        netProfit: store.sales_current_year * netMargin,
         grossMargin: grossMargin * 100,
         operatingMargin: operatingMargin * 100,
         netMargin: netMargin * 100,

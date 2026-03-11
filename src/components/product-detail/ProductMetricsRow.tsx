@@ -13,10 +13,12 @@ interface ProductMetricsRowProps {
 }
 
 export function ProductMetricsRow({ product }: ProductMetricsRowProps) {
+  const cy = new Date().getFullYear();
+  const py = cy - 1;
   return (
     <div className="grid grid-cols-3 lg:grid-cols-6 gap-3">
       <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-        <p className="text-xs text-gray-500 mb-1">שנתי (24←25)</p>
+        <p className="text-xs text-gray-500 mb-1">שנתי ({String(py).slice(2)}←{String(cy).slice(2)})</p>
         <p
           className={clsx(
             "text-2xl font-bold",
@@ -26,7 +28,7 @@ export function ProductMetricsRow({ product }: ProductMetricsRowProps) {
           {formatPercent(product.metric_12v12)}
         </p>
         <p className="text-xs text-gray-400">
-          {formatNumber(product.qty_2024)}←{formatNumber(product.qty_2025)}
+          {formatNumber(product.qty_previous_year)}←{formatNumber(product.qty_current_year)}
         </p>
       </div>
       <div className="bg-white rounded-xl p-4 text-center shadow-sm">
@@ -44,7 +46,7 @@ export function ProductMetricsRow({ product }: ProductMetricsRowProps) {
         </p>
       </div>
       <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-        <p className="text-xs text-gray-500 mb-1">3 חודשים (25←24)</p>
+        <p className="text-xs text-gray-500 mb-1">3 חודשים ({String(cy).slice(2)}←{String(py).slice(2)})</p>
         <p
           className={clsx(
             "text-2xl font-bold",

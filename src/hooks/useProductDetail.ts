@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -135,11 +135,11 @@ function dbProductToLegacy(p: DbProduct) {
     ...p,
     id: p.external_id,
     category: p.category ?? "",
-    qty_2024: m.qty_previous_year ?? 0,
-    qty_2025: m.qty_current_year ?? 0,
+    qty_previous_year: m.qty_previous_year ?? 0,
+    qty_current_year: m.qty_current_year ?? 0,
     qty_total: (m.qty_previous_year ?? 0) + (m.qty_current_year ?? 0),
-    sales_2024: m.sales_previous_year ?? 0,
-    sales_2025: m.sales_current_year ?? 0,
+    sales_previous_year: m.sales_previous_year ?? 0,
+    sales_current_year: m.sales_current_year ?? 0,
     qty_prev6: m.qty_6v6_previous ?? 0,
     qty_last6: m.qty_6v6_current ?? 0,
     qty_prev3: m.qty_3v3_previous ?? 0,
@@ -175,11 +175,11 @@ function dbStoreToLegacy(s: DbStore) {
     driver: s.driver ?? "",
     status_long: (mx.status_long ?? "יציב") as StatusLong,
     status_short: (mx.status_short ?? "יציב") as StatusShort,
-    qty_2024: m.qty_previous_year ?? 0,
-    qty_2025: m.qty_current_year ?? 0,
+    qty_previous_year: m.qty_previous_year ?? 0,
+    qty_current_year: m.qty_current_year ?? 0,
     qty_total: (m.qty_previous_year ?? 0) + (m.qty_current_year ?? 0),
-    sales_2024: m.sales_previous_year ?? 0,
-    sales_2025: m.sales_current_year ?? 0,
+    sales_previous_year: m.sales_previous_year ?? 0,
+    sales_current_year: m.sales_current_year ?? 0,
     qty_prev6: m.qty_6v6_previous ?? 0,
     qty_last6: m.qty_6v6_current ?? 0,
     qty_prev3: m.qty_3v3_previous ?? 0,

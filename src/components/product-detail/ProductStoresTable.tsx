@@ -21,8 +21,8 @@ export function ProductStoresTable({
   search,
   onSearchChange,
   isLoading = false,
-  currentYear = 2026,
-  previousYear = 2025,
+  currentYear = new Date().getFullYear(),
+  previousYear = new Date().getFullYear() - 1,
 }: ProductStoresTableProps) {
   return (
     <Card>

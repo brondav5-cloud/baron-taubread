@@ -1,4 +1,4 @@
-// ============================================
+﻿// ============================================
 // NETWORK DATA LOADER
 // ============================================
 
@@ -160,7 +160,7 @@ export function getNetworkForStore(storeId: number): Network | null {
 }
 
 export function getNetworkStoresData<
-  T extends { id: number; sales_2025?: number },
+  T extends { id: number; sales_current_year?: number },
 >(
   networkId: string,
   allStores: T[],
@@ -177,7 +177,7 @@ export function getNetworkStoresData<
   );
 
   const totalSales = networkStores.reduce(
-    (sum, s) => sum + (s.sales_2025 || 0),
+    (sum, s) => sum + (s.sales_current_year || 0),
     0,
   );
   const avgSales =

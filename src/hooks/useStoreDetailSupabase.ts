@@ -104,7 +104,7 @@ export function useStoreDetailSupabase() {
   const [error, setError] = useState<string | null>(null);
 
   // UI State
-  const [selectedYear, setSelectedYear] = useState<number>(2025);
+  const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
 
   // Load store from Supabase
   useEffect(() => {
@@ -217,7 +217,10 @@ export function useStoreDetailSupabase() {
 
   // Available years from metadata
   const availableYears = useMemo((): number[] => {
-    if (!metadata?.months_list?.length) return [2024, 2025];
+    if (!metadata?.months_list?.length) {
+      const y = new Date().getFullYear();
+      return [y - 1, y];
+    }
     const years = new Set<number>();
     metadata.months_list.forEach((p) => {
       const year = parseInt(p.slice(0, 4), 10);

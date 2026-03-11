@@ -43,6 +43,7 @@ export async function exportStoresToExcel(
   const XLSX = await loadXlsx();
 
   const { filename = "חנויות", sheetName = "חנויות" } = options;
+  const currentYear = new Date().getFullYear();
 
   const data = stores.map((store, index) => ({
     "#": index + 1,
@@ -59,9 +60,9 @@ export async function exportStoresToExcel(
     "2v2": formatPercent(store.metric_2v2),
     מהשיא: formatPercent(store.metric_peak_distance),
     "אחוז החזרות": `${store.returns_pct_last6.toFixed(1)}%`,
-    "כמות 2025": formatNum(store.qty_2025),
-    "כמות נטו 2025": formatNum(store.qty_total),
-    "מכירות 2025": formatNum(store.sales_2025),
+    [`כמות ${currentYear}`]: formatNum(store.qty_current_year),
+    "כמות נטו": formatNum(store.qty_total),
+    [`מכירות ${currentYear}`]: formatNum(store.sales_current_year),
     "ערך נוכחי": formatNum(store.current_value),
     שיא: formatNum(store.peak_value),
   }));
@@ -108,6 +109,7 @@ export async function exportProductsToExcel(
   const XLSX = await loadXlsx();
 
   const { filename = "מוצרים", sheetName = "מוצרים" } = options;
+  const currentYear = new Date().getFullYear();
 
   const data = products.map((product, index) => ({
     "#": index + 1,
@@ -121,8 +123,8 @@ export async function exportProductsToExcel(
     "2v2": formatPercent(product.metric_2v2),
     מהשיא: formatPercent(product.metric_peak_distance),
     "אחוז החזרות": `${product.returns_pct_last6.toFixed(1)}%`,
-    "כמות 2025": formatNum(product.qty_2025),
-    "מכירות 2025": formatNum(product.sales_2025),
+    [`כמות ${currentYear}`]: formatNum(product.qty_current_year),
+    [`מכירות ${currentYear}`]: formatNum(product.sales_current_year),
     "ערך נוכחי": formatNum(product.current_value),
     שיא: formatNum(product.peak_value),
   }));
@@ -166,6 +168,8 @@ export async function exportStoreDetailToExcel(
 
   const { filename = `חנות_${store.name}` } = options;
   const wb = XLSX.utils.book_new();
+  const currentYear = new Date().getFullYear();
+  const previousYear = currentYear - 1;
 
   // Sheet 1: Store Info
   const infoData = [
@@ -187,9 +191,9 @@ export async function exportStoreDetailToExcel(
     ["אחוז החזרות", `${store.returns_pct_last6.toFixed(1)}%`],
     ["", ""],
     ["סיכומים", ""],
-    ["כמות 2025", formatNum(store.qty_2025)],
-    ["כמות נטו 2025", formatNum(store.qty_total)],
-    ["מכירות 2025", formatNum(store.sales_2025)],
+    [`כמות ${currentYear}`, formatNum(store.qty_current_year)],
+    [`כמות נטו ${currentYear}`, formatNum(store.qty_total)],
+    [`מכירות ${currentYear}`, formatNum(store.sales_current_year)],
     ["ערך נוכחי", formatNum(store.current_value)],
     ["שיא", formatNum(store.peak_value)],
   ];
@@ -215,20 +219,20 @@ export async function exportStoreDetailToExcel(
   ];
 
   const monthlyData: (string | number)[][] = [
-    ["חודש", "כמות 2024", "כמות 2025", "שינוי"],
+    ["חודש", `כמות ${previousYear}`, `כמות ${currentYear}`, "שינוי"],
   ];
 
   months.forEach((month, i) => {
-    const period2024 = `2024${String(i + 1).padStart(2, "0")}`;
-    const period2025 = `2025${String(i + 1).padStart(2, "0")}`;
-    const qty2024 = store.monthly_qty[period2024] ?? 0;
-    const qty2025 = store.monthly_qty[period2025] ?? 0;
-    const change = qty2024 > 0 ? ((qty2025 - qty2024) / qty2024) * 100 : 0;
+    const periodPrev = `${previousYear}${String(i + 1).padStart(2, "0")}`;
+    const periodCur = `${currentYear}${String(i + 1).padStart(2, "0")}`;
+    const qtyPrev = store.monthly_qty[periodPrev] ?? 0;
+    const qtyCur = store.monthly_qty[periodCur] ?? 0;
+    const change = qtyPrev > 0 ? ((qtyCur - qtyPrev) / qtyPrev) * 100 : 0;
 
     monthlyData.push([
       month,
-      formatNum(qty2024),
-      formatNum(qty2025),
+      formatNum(qtyPrev),
+      formatNum(qtyCur),
       formatPercent(change),
     ]);
   });
@@ -259,7 +263,8 @@ export async function exportDashboardSummaryToExcel(
   // Calculate stats
   const totalStores = stores.length;
   const totalProducts = products.length;
-  const totalSales = stores.reduce((sum, s) => sum + s.sales_2025, 0);
+  const currentYear = new Date().getFullYear();
+  const totalSales = stores.reduce((sum, s) => sum + s.sales_current_year, 0);
   const totalQty = stores.reduce((sum, s) => sum + s.qty_total, 0);
   const avgMetric12v12 =
     stores.reduce((sum, s) => sum + s.metric_12v12, 0) / totalStores;
@@ -280,8 +285,8 @@ export async function exportDashboardSummaryToExcel(
     ["", ""],
     ["מספר חנויות", totalStores],
     ["מספר מוצרים", totalProducts],
-    ['סה"כ מכירות 2025', `₪${totalSales.toLocaleString("he-IL")}`],
-    ['סה"כ כמות נטו 2025', totalQty.toLocaleString("he-IL")],
+    [`סה"כ מכירות ${currentYear}`, `₪${totalSales.toLocaleString("he-IL")}`],
+    [`סה"כ כמות נטו ${currentYear}`, totalQty.toLocaleString("he-IL")],
     ["ממוצע 12v12", formatPercent(avgMetric12v12)],
     ["ממוצע 6v6", formatPercent(avgMetric6v6)],
     ["", ""],

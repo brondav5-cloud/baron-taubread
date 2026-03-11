@@ -15,7 +15,7 @@ export function CitySalesCards({ cities }: CitySalesCardsProps) {
       <CardHeader>
         <CardTitle>🏙️ מכירות לפי ערים</CardTitle>
         <p className="text-sm text-gray-500">
-          H2 2025 (יול-דצמ) | לחץ על עיר להשוואה מפורטת
+          H2 (יול-דצמ) | לחץ על עיר להשוואה מפורטת
         </p>
       </CardHeader>
       <CardContent>

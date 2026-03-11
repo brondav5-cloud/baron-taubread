@@ -14,12 +14,12 @@ export interface StoreData {
   driver: string;
   agent: string;
 
-  // Yearly totals
-  qty_2024: number;
-  qty_2025: number;
+  // Yearly totals (current_year = year of uploaded data, previous_year = year before)
+  qty_current_year: number;
+  qty_previous_year: number;
   qty_total: number;
-  sales_2024: number;
-  sales_2025: number;
+  sales_current_year: number;
+  sales_previous_year: number;
 
   // Period quantities for metrics calculation
   qty_prev6: number; // Jan-Jun 2025
@@ -62,12 +62,12 @@ export interface ProductData {
   name: string;
   category: string;
 
-  // Yearly totals
-  qty_2024: number;
-  qty_2025: number;
+  // Yearly totals (current_year = year of uploaded data, previous_year = year before)
+  qty_current_year: number;
+  qty_previous_year: number;
   qty_total: number;
-  sales_2024: number;
-  sales_2025: number;
+  sales_current_year: number;
+  sales_previous_year: number;
 
   // Period quantities
   qty_prev6: number;

@@ -78,7 +78,7 @@ export default function ProductDetailPage() {
       <ProductMetricsRow product={product} />
 
       {/* Summary Cards */}
-      <ProductSummaryCards product={product} />
+      <ProductSummaryCards product={product} currentYear={currentYear} previousYear={previousYear} />
 
       {/* Monthly Sales Table */}
       <ProductMonthlySalesTable
