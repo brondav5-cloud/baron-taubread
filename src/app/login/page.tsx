@@ -115,7 +115,53 @@ export default function LoginPage() {
         </div>
 
         {/* Login Card */}
-        <div className="bg-white rounded-2xl shadow-elevated p-8">
+        <div className="bg-white rounded-2xl shadow-elevated p-8 space-y-5">
+          {showForgotPassword ? (
+            <div className="space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900">איפוס סיסמה</h2>
+              <p className="text-sm text-gray-600">
+                הזן את האימייל שלך ונישלח לך לינק לאיפוס סיסמה
+              </p>
+              <form onSubmit={handleForgotPassword} className="space-y-3">
+                <input
+                  type="email"
+                  value={forgotEmail}
+                  onChange={(e) => setForgotEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="input w-full"
+                  dir="ltr"
+                  required
+                  autoFocus
+                />
+                <div className="flex gap-2">
+                  <button
+                    type="submit"
+                    disabled={forgotLoading}
+                    className="btn btn-primary flex-1"
+                  >
+                    {forgotLoading ? "שולח..." : "שלח לינק לאיפוס"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPassword(false)}
+                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </form>
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+              {forgotSuccess && (
+                <p className="text-sm text-green-600 p-3 bg-green-50 rounded-lg">
+                  נשלח אימייל. בדוק את תיבת הדואר (כולל בספאם).
+                </p>
+              )}
+            </div>
+          ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
@@ -181,56 +227,19 @@ export default function LoginPage() {
               </label>
               <button
                 type="button"
-                onClick={() => {
-                  setShowForgotPassword(true);
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShowForgotPassword(!showForgotPassword);
                   setForgotEmail(email);
                   setForgotSuccess(false);
                   setError("");
                 }}
-                className="text-primary-600 hover:text-primary-700 font-medium"
+                className="text-primary-600 hover:text-primary-700 font-medium cursor-pointer underline"
               >
                 שכחתי סיסמה
               </button>
             </div>
-
-            {/* Forgot password form */}
-            {showForgotPassword && (
-              <div className="p-4 bg-gray-50 rounded-xl space-y-3 border border-gray-100">
-                <p className="text-sm text-gray-700">
-                  הזן את האימייל שלך ונישלח לך לינק לאיפוס סיסמה
-                </p>
-                <form onSubmit={handleForgotPassword} className="flex gap-2">
-                  <input
-                    type="email"
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    placeholder="your@email.com"
-                    className="input flex-1"
-                    dir="ltr"
-                    required
-                  />
-                  <button
-                    type="submit"
-                    disabled={forgotLoading}
-                    className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium hover:bg-primary-600 disabled:opacity-50"
-                  >
-                    {forgotLoading ? "שולח..." : "שלח"}
-                  </button>
-                </form>
-                {forgotSuccess && (
-                  <p className="text-sm text-green-600">
-                    נשלח אימייל. בדוק את תיבת הדואר (כולל בספאם).
-                  </p>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(false)}
-                  className="text-sm text-gray-500 hover:text-gray-700"
-                >
-                  ביטול
-                </button>
-              </div>
-            )}
 
             {/* Error message */}
             {error && (
@@ -255,6 +264,7 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+          )}
         </div>
 
         {/* Footer */}
