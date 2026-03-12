@@ -286,7 +286,7 @@ function TabInstructions({ tab }: { tab: UploadTab }) {
       <h3 className="font-medium text-green-900 mb-2">תעודות משלוח</h3>
       <ul className="text-sm text-green-700 space-y-1 list-disc list-inside">
         <li>גרור מספר קבצים בבת אחת</li>
-        <li>עמודות נדרשות: תאריך מסמך, מזהה לקוח, שם לקוח, ערך כספי (לפני מע"מ)</li>
+        <li>עמודות נדרשות: תאריך מסמך, מזהה לקוח, שם לקוח, ערך כספי (לפני מע&quot;מ)</li>
         <li>רק שורות עם ערך כספי חיובי יילקחו</li>
       </ul>
     </div>
