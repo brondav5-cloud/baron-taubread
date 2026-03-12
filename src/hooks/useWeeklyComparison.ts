@@ -54,8 +54,8 @@ export interface WeeklyComparisonData {
   stores:           StoreWeekComparison[];
   isLoading:        boolean;
   error:            string | null;
-  showExcluded:     boolean;
-  setShowExcluded:  (v: boolean) => void;
+  excludedFilter:     "hide" | "show" | "only";
+  setExcludedFilter:  (v: "hide" | "show" | "only") => void;
   showIrregular:    boolean;
   setShowIrregular: (v: boolean) => void;
   weeksCount:       number;
@@ -139,7 +139,7 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   const [rawData,         setRawData]         = useState<RawWeekRow[]>([]);
   const [availableWeeks,  setAvailableWeeks]  = useState<string[]>([]);
   const [selectedWeek,    setSelectedWeek]    = useState<string>("");
-  const [showExcluded,    setShowExcluded]    = useState(false);
+  const [excludedFilter,  setExcludedFilter]  = useState<"hide" | "show" | "only">("hide");
   const [showIrregular,   setShowIrregular]   = useState(true);
   const [weeksCount,      setWeeksCount]      = useState(1);
   const [excludedNames,   setExcludedNames]   = useState<Set<string>>(new Set());
@@ -255,13 +255,13 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   }, [companyId, selectedWeek, fetchKey]);
 
   const stores = useMemo(
-    () => computeComparison(rawData, selectedWeek, weeksCount, excludedNames, irregularNames, showExcluded, showIrregular),
-    [rawData, selectedWeek, weeksCount, excludedNames, irregularNames, showExcluded, showIrregular],
+    () => computeComparison(rawData, selectedWeek, weeksCount, excludedNames, irregularNames, excludedFilter, showIrregular),
+    [rawData, selectedWeek, weeksCount, excludedNames, irregularNames, excludedFilter, showIrregular],
   );
 
   return {
     selectedWeek, availableWeeks, stores, isLoading, error,
-    showExcluded,  setShowExcluded,
+    excludedFilter, setExcludedFilter,
     showIrregular, setShowIrregular,
     weeksCount,    setWeeksCount,
     selectWeek: setSelectedWeek,
@@ -280,7 +280,7 @@ function computeComparison(
   weeksCount:     number,
   excludedNames:  Set<string>,
   irregularNames: Set<string>,
-  showExcluded:   boolean,
+  excludedFilter: "hide" | "show" | "only",
   showIrregular:  boolean,
 ): StoreWeekComparison[] {
   if (!selectedWeek || rawData.length === 0) return [];
@@ -392,7 +392,8 @@ function computeComparison(
     storeAggs.forEach((agg) => {
       const isExcluded  = excludedNames.has(agg.product_name_normalized);
       const isIrregular = irregularNames.has(agg.product_name_normalized);
-      if (isExcluded  && !showExcluded)  return;
+      if (excludedFilter === "hide" && isExcluded)  return; // hide excluded
+      if (excludedFilter === "only" && !isExcluded) return; // only excluded
       if (isIrregular && !showIrregular) return;
 
       const spKey   = `${storeId}|${agg.product_name_normalized}`;

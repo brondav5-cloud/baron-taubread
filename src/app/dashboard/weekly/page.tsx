@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   BarChart3,
   TrendingUp,
@@ -14,32 +14,80 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useWeeklyComparison } from "@/hooks/useWeeklyComparison";
+import { useStoresAndProducts } from "@/context/StoresAndProductsContext";
 import { StoreRow } from "@/components/weekly/WeeklyStoreRow";
 import { OrderModeTable } from "@/components/weekly/OrderModeTable";
 import { WeeklyHeatmap } from "@/components/weekly/WeeklyHeatmap";
 import Link from "next/link";
 
+interface StoreFilters {
+  agent:   string;
+  driver:  string;
+  network: string;
+  city:    string;
+}
+const EMPTY_FILTERS: StoreFilters = { agent: "", driver: "", network: "", city: "" };
+
 export default function WeeklyPage() {
   const weekly = useWeeklyComparison();
+  const { stores: dbStores } = useStoresAndProducts();
+
   const [expandedStores, setExpandedStores] = useState<Set<number>>(new Set());
   const [searchQuery,    setSearchQuery]    = useState("");
   const [filterTrend,    setFilterTrend]    = useState<"all" | "down" | "up" | "stable">("all");
   const [orderMode,      setOrderMode]      = useState(false);
   const [heatmapMode,    setHeatmapMode]    = useState(false);
+  const [showFilters,    setShowFilters]    = useState(false);
+  const [storeFilters,   setStoreFilters]   = useState<StoreFilters>(EMPTY_FILTERS);
 
-  const toggleStore = (id: number) =>
-    setExpandedStores((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const expandAll   = () => setExpandedStores(new Set(weekly.stores.map((s) => s.storeExternalId)));
-  const collapseAll = () => setExpandedStores(new Set());
+  // Lookup: external_id → store metadata
+  const storeMetaMap = useMemo(
+    () => new Map(dbStores.map((s) => [s.external_id, s])),
+    [dbStores],
+  );
+
+  const toggleStore = useCallback((id: number) =>
+    setExpandedStores((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; }),
+    [],
+  );
+  const expandAll   = useCallback(() => setExpandedStores(new Set(weekly.stores.map((s) => s.storeExternalId))), [weekly.stores]);
+  const collapseAll = useCallback(() => setExpandedStores(new Set()), []);
+
+  // Build filter options from stores that actually appear in weekly data
+  const filterOptions = useMemo(() => {
+    const agents   = new Set<string>();
+    const drivers  = new Set<string>();
+    const networks = new Set<string>();
+    const cities   = new Set<string>();
+    weekly.stores.forEach((s) => {
+      const meta = storeMetaMap.get(s.storeExternalId);
+      if (meta?.agent)   agents.add(meta.agent);
+      if (meta?.driver)  drivers.add(meta.driver);
+      if (meta?.network) networks.add(meta.network);
+      if (meta?.city)    cities.add(meta.city);
+    });
+    const sort = (set: Set<string>) => Array.from(set).sort((a, b) => a.localeCompare(b, "he"));
+    return { agents: sort(agents), drivers: sort(drivers), networks: sort(networks), cities: sort(cities) };
+  }, [weekly.stores, storeMetaMap]);
+
+  const activeFiltersCount = useMemo(
+    () => Object.values(storeFilters).filter(Boolean).length,
+    [storeFilters],
+  );
 
   const filteredStores = useMemo(
     () =>
       weekly.stores.filter((s) => {
         if (searchQuery && !s.storeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
         if (filterTrend !== "all" && s.overallTrend.direction !== filterTrend) return false;
+        const meta = storeMetaMap.get(s.storeExternalId);
+        if (storeFilters.agent   && meta?.agent   !== storeFilters.agent)   return false;
+        if (storeFilters.driver  && meta?.driver  !== storeFilters.driver)  return false;
+        if (storeFilters.network && meta?.network !== storeFilters.network) return false;
+        if (storeFilters.city    && meta?.city    !== storeFilters.city)    return false;
         return true;
       }),
-    [weekly.stores, searchQuery, filterTrend],
+    [weekly.stores, searchQuery, filterTrend, storeFilters, storeMetaMap],
   );
 
   const summary = useMemo(() => ({
@@ -205,14 +253,40 @@ export default function WeeklyPage() {
         {/* Row 2: visibility toggles + expand/collapse + order mode + product analysis */}
         <div className="flex flex-wrap gap-3 items-center">
 
-          {/* Show excluded */}
-          <button
-            onClick={() => weekly.setShowExcluded(!weekly.showExcluded)}
-            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
-          >
-            {weekly.showExcluded ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-            {weekly.showExcluded ? "הסתר מוחרגים" : "הצג מוחרגים"}
-          </button>
+          {/* Excluded products filter — 3-way */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-500 font-medium ml-1">מוחרגים:</span>
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+              {(
+                [
+                  { value: "hide", label: "הסתר", icon: <EyeOff className="w-3 h-3" /> },
+                  { value: "show", label: "הכל",  icon: <Eye    className="w-3 h-3" /> },
+                  { value: "only", label: "רק מוחרגים", icon: null },
+                ] as const
+              ).map(({ value, label, icon }) => (
+                <button
+                  key={value}
+                  onClick={() => weekly.setExcludedFilter(value)}
+                  title={
+                    value === "hide" ? "הסתר מוצרים מוחרגים (ברירת מחדל)"
+                    : value === "show" ? "הצג את כל המוצרים כולל מוחרגים"
+                    : "הצג מוחרגים בלבד — לבדיקת רשימת ההחרגה"
+                  }
+                  className={clsx(
+                    "flex items-center gap-1 px-2.5 py-1.5 font-medium transition-colors",
+                    weekly.excludedFilter === value
+                      ? value === "only"
+                        ? "bg-orange-500 text-white"
+                        : "bg-gray-700 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50",
+                  )}
+                >
+                  {icon}
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Show irregular */}
           <button
@@ -228,15 +302,36 @@ export default function WeeklyPage() {
 
           <span className="text-gray-200">|</span>
 
+          {/* Advanced filters toggle */}
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={clsx(
+              "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+              showFilters || activeFiltersCount > 0
+                ? "bg-purple-50 text-purple-700 border-purple-300"
+                : "bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100",
+            )}
+          >
+            <span className="text-sm leading-none">⚙</span>
+            פילטרים
+            {activeFiltersCount > 0 && (
+              <span className="bg-purple-600 text-white rounded-full text-[10px] w-4 h-4 flex items-center justify-center font-bold">
+                {activeFiltersCount}
+              </span>
+            )}
+          </button>
+
           {/* Expand / collapse */}
-          {!orderMode && (
+          {!orderMode && !heatmapMode && (
             <>
+              <span className="text-gray-200">|</span>
               <button onClick={expandAll}   className="text-xs text-purple-600 hover:text-purple-800 underline">פתח הכל</button>
               <span className="text-gray-300">|</span>
               <button onClick={collapseAll} className="text-xs text-purple-600 hover:text-purple-800 underline">סגור הכל</button>
-              <span className="text-gray-200">|</span>
             </>
           )}
+
+          <span className="text-gray-200">|</span>
 
           {/* Order mode toggle */}
           <button
@@ -275,12 +370,55 @@ export default function WeeklyPage() {
           </Link>
 
           {/* Active filters summary */}
-          {(searchQuery || filterTrend !== "all") && (
+          {(searchQuery || filterTrend !== "all" || activeFiltersCount > 0) && (
             <span className="text-xs text-gray-400">
               מציג {filteredStores.length} מתוך {weekly.stores.length} חנויות
             </span>
           )}
         </div>
+
+        {/* ─── Advanced filters panel ─── */}
+        {showFilters && (
+          <div className="border-t border-gray-100 pt-3 mt-1">
+            <div className="flex flex-wrap gap-3 items-end">
+              {(
+                [
+                  { key: "agent",   label: "סוכן",  options: filterOptions.agents   },
+                  { key: "driver",  label: "נהג",   options: filterOptions.drivers  },
+                  { key: "network", label: "רשת",   options: filterOptions.networks },
+                  { key: "city",    label: "עיר",   options: filterOptions.cities   },
+                ] as const
+              ).map(({ key, label, options }) =>
+                options.length > 0 ? (
+                  <div key={key} className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-gray-600">{label}</label>
+                    <select
+                      value={storeFilters[key]}
+                      onChange={(e) => setStoreFilters((prev) => ({ ...prev, [key]: e.target.value }))}
+                      className={clsx(
+                        "border rounded-lg px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-purple-500 min-w-[120px]",
+                        storeFilters[key] ? "border-purple-400 bg-purple-50 text-purple-800" : "border-gray-300 text-gray-700",
+                      )}
+                    >
+                      <option value="">הכל</option>
+                      {options.map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  </div>
+                ) : null,
+              )}
+
+              {activeFiltersCount > 0 && (
+                <button
+                  onClick={() => setStoreFilters(EMPTY_FILTERS)}
+                  className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 mb-0.5"
+                >
+                  <span className="text-sm leading-none">✕</span>
+                  נקה פילטרים
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ─── Summary Cards ─── */}
@@ -320,6 +458,17 @@ export default function WeeklyPage() {
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700">
           <AlertTriangle className="w-5 h-5 flex-shrink-0" />
           <span>{weekly.error}</span>
+        </div>
+      )}
+
+      {/* ─── Excluded-only banner ─── */}
+      {weekly.excludedFilter === "only" && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-orange-800 text-sm">
+          <EyeOff className="w-4 h-4 flex-shrink-0" />
+          <span>
+            <strong>תצוגת מוחרגים בלבד</strong>
+            {" "}· מוצגים רק מוצרים שסומנו כמוחרגים. לחזרה לתצוגה רגילה — בחר &quot;הסתר&quot; או &quot;הכל&quot;.
+          </span>
         </div>
       )}
 
