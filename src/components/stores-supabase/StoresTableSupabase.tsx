@@ -369,13 +369,13 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
 
                       <th className="px-4 py-3 text-right">
                         <button
-                          onClick={() => onHeaderClick("deliveries")}
+                          onClick={() => onHeaderClick("gross")}
                           className="flex flex-col items-start"
                         >
                           <span className="font-medium text-gray-700 flex items-center gap-1">
                             אספקות
                             <SortIcon
-                              sortKey="deliveries"
+                              sortKey="gross"
                               currentKey={sortKey}
                               direction={sortDirection}
                             />
@@ -611,7 +611,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
 
                           <td className="px-4 py-3">
                             <NumberCell
-                              value={store.periodData.deliveries ?? 0}
+                              value={store.periodData.gross ?? 0}
                             />
                           </td>
                           <td className="px-4 py-3">
@@ -680,12 +680,12 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
                           <td className="px-4 py-3">
                             <div className="flex flex-col gap-1">
                               <NumberCell
-                                value={store.periodData.deliveries ?? 0}
+                                value={store.periodData.gross ?? 0}
                               />
                               {store.compareData && (
                                 <span className="text-orange-600">
                                   <NumberCell
-                                    value={store.compareData.deliveries ?? 0}
+                                    value={store.compareData.gross ?? 0}
                                   />
                                 </span>
                               )}

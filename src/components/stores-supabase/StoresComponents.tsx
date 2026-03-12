@@ -525,7 +525,7 @@ export function StoresTotalsBar({
             />
             <TotalCard
               label="אספקות"
-              value={(totals.deliveries ?? 0).toLocaleString()}
+              value={(totals.gross ?? 0).toLocaleString()}
             />
             <TotalCard label="החזרות" value={totals.returns.toLocaleString()} />
           </>

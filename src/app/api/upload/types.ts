@@ -25,8 +25,14 @@ export interface UploadPayload {
   };
   stats: {
     rowsCount: number;
+    rowsSkipped?: number;
     storesCount: number;
     productsCount: number;
+    storeProductsCount?: number;
+    totalGrossQty?: number;
+    totalNetQty?: number;
+    totalReturnsQty?: number;
+    totalSalesAmount?: number;
     processingTimeMs: number;
   };
 }

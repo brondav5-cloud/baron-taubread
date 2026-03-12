@@ -58,6 +58,50 @@ export async function upsertWeeklyRecords(
 }
 
 // ============================================================
+// SPOT-CHECK: verify totals saved to DB for a period
+// Used after last chunk to confirm data integrity.
+// ============================================================
+
+export async function verifyProductDeliveryTotals(
+  supabase: SupabaseClient,
+  companyId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<{
+  dbStoresCount: number;
+  dbTotalGrossQty: number;
+  dbTotalReturnsQty: number;
+  dbRecordsCount: number;
+}> {
+  const { data, error } = await supabase
+    .from("store_product_weekly")
+    .select("store_external_id, gross_qty, returns_qty")
+    .eq("company_id", companyId)
+    .gte("week_start_date", periodStart)
+    .lte("week_start_date", periodEnd);
+
+  if (error || !data) {
+    return { dbStoresCount: 0, dbTotalGrossQty: 0, dbTotalReturnsQty: 0, dbRecordsCount: 0 };
+  }
+
+  const uniqueStores = new Set<number>();
+  let totalGross = 0;
+  let totalReturns = 0;
+  for (const row of data) {
+    uniqueStores.add(row.store_external_id as number);
+    totalGross   += Number(row.gross_qty   ?? 0);
+    totalReturns += Number(row.returns_qty ?? 0);
+  }
+
+  return {
+    dbStoresCount:    uniqueStores.size,
+    dbTotalGrossQty:  totalGross,
+    dbTotalReturnsQty: totalReturns,
+    dbRecordsCount:   data.length,
+  };
+}
+
+// ============================================================
 // LOG UPLOAD
 // ============================================================
 

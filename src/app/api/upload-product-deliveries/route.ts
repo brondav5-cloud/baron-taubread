@@ -9,6 +9,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   upsertWeeklyRecords,
   createProductDeliveryUpload,
+  verifyProductDeliveryTotals,
 } from "@/lib/db/productDeliveries.repo";
 import { upsertDeliveries } from "@/lib/db/deliveries.repo";
 import type { ProductDeliveryUploadPayload } from "@/types/productDeliveries";
@@ -161,6 +162,35 @@ export async function POST(request: NextRequest) {
     // Log upload record only on the last chunk
     if (isLastChunk) {
       const stats = payload.stats;
+
+      // DB spot-check: verify totals actually saved match what the client sent
+      let dbVerification = null;
+      if (stats.periodStart && stats.periodEnd) {
+        const dbTotals = await verifyProductDeliveryTotals(
+          supabaseAdmin,
+          companyId,
+          stats.periodStart,
+          stats.periodEnd,
+        );
+
+        const returnsDiff = Math.abs(dbTotals.dbTotalReturnsQty - stats.totalReturnsQty);
+        const grossDiff   = Math.abs(dbTotals.dbTotalGrossQty   - stats.totalGrossQty);
+        const returnsWarning = stats.totalReturnsQty > 0 && returnsDiff / stats.totalReturnsQty > 0.005;
+        const grossWarning   = stats.totalGrossQty   > 0 && grossDiff   / stats.totalGrossQty   > 0.005;
+
+        dbVerification = {
+          status:           (returnsWarning || grossWarning) ? "warning" : "ok",
+          dbStoresCount:    dbTotals.dbStoresCount,
+          dbTotalGrossQty:  dbTotals.dbTotalGrossQty,
+          dbTotalReturnsQty: dbTotals.dbTotalReturnsQty,
+          dbRecordsCount:   dbTotals.dbRecordsCount,
+          returnsMatch:     !returnsWarning,
+          grossMatch:       !grossWarning,
+          returnsDiff,
+          grossDiff,
+        };
+      }
+
       await createProductDeliveryUpload(supabaseAdmin, companyId, {
         filename:           payload.filename,
         uploaded_by:        user.id,
@@ -182,15 +212,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         stats: {
-          recordsUpserted:  result.upserted,
-          storesCount:      payload.stats.storesCount,
-          productsCount:    payload.stats.productsCount,
-          weeksCount:       payload.stats.weeksCount,
-          periodStart:      payload.stats.periodStart,
-          periodEnd:        payload.stats.periodEnd,
-          totalGrossQty:    payload.stats.totalGrossQty,
-          totalReturnsQty:  payload.stats.totalReturnsQty,
-          processingTimeMs: processingTime,
+          recordsUpserted:   result.upserted,
+          storesCount:       payload.stats.storesCount,
+          productsCount:     payload.stats.productsCount,
+          weeksCount:        payload.stats.weeksCount,
+          periodStart:       payload.stats.periodStart,
+          periodEnd:         payload.stats.periodEnd,
+          totalGrossQty:     payload.stats.totalGrossQty,
+          totalReturnsQty:   payload.stats.totalReturnsQty,
+          rowsProcessed:     payload.stats.rowsProcessed,
+          rowsSkipped:       payload.stats.rowsSkipped,
+          processingTimeMs:  processingTime,
+          dbVerification,
         },
       });
     }

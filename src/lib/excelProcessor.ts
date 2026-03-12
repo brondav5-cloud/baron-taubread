@@ -117,6 +117,18 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
 
     const processingTimeMs = Date.now() - startTime;
 
+    // Compute file-level totals for validation (from aggregated store data only)
+    let totalGrossQty = 0;
+    let totalNetQty = 0;
+    let totalReturnsQty = 0;
+    let totalSalesAmount = 0;
+    Array.from(storesMap.values()).forEach((store) => {
+      Object.values(store.monthly_gross).forEach((v) => { totalGrossQty += v; });
+      Object.values(store.monthly_qty).forEach((v) => { totalNetQty += v; });
+      Object.values(store.monthly_returns).forEach((v) => { totalReturnsQty += v; });
+      Object.values(store.monthly_sales).forEach((v) => { totalSalesAmount += v; });
+    });
+
     return {
       success: true,
       stores: Array.from(storesMap.values()),
@@ -142,6 +154,11 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
         rowsCount: rows.length,
         storesCount: storesMap.size,
         productsCount: productsMap.size,
+        storeProductsCount: storeProductsMap.size,
+        totalGrossQty,
+        totalNetQty,
+        totalReturnsQty,
+        totalSalesAmount,
         processingTimeMs,
       },
     };

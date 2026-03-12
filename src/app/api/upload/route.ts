@@ -268,6 +268,7 @@ export async function POST(request: NextRequest) {
         product_category: string | null;
         monthly_qty: Record<string, number>;
         monthly_sales: Record<string, number>;
+        monthly_returns: Record<string, number>;
         total_qty: number;
         total_sales: number;
       }> = [];
@@ -319,6 +320,40 @@ export async function POST(request: NextRequest) {
         });
         throw new Error(`שגיאה בשמירת הנתונים: ${rpcError.message}`);
       }
+
+      // ============================================
+      // 6c. IN-MEMORY VERIFICATION (no extra DB roundtrip)
+      // Compare what client reported vs. what we actually prepared and saved.
+      // Only sums months that belong to THIS upload (not historical months).
+      // ============================================
+
+      const uploadedMonthsSet = new Set(periods.all);
+
+      let serverTotalGross = 0;
+      for (const sr of storeRecords) {
+        for (const [month, v] of Object.entries(sr.monthly_gross as Record<string, number>)) {
+          if (uploadedMonthsSet.has(month)) serverTotalGross += v;
+        }
+      }
+
+      let serverTotalReturns = 0;
+      for (const sp of storeProductRecords) {
+        for (const [month, v] of Object.entries(sp.monthly_returns)) {
+          if (uploadedMonthsSet.has(month)) serverTotalReturns += v;
+        }
+      }
+
+      const clientTotalReturns = stats.totalReturnsQty ?? 0;
+      const clientTotalGross   = stats.totalGrossQty   ?? 0;
+
+      const returnsDiff = Math.abs(serverTotalReturns - clientTotalReturns);
+      const grossDiff   = Math.abs(serverTotalGross   - clientTotalGross);
+
+      // > 0.5% discrepancy is flagged as a warning
+      const returnsWarning = clientTotalReturns > 0 && returnsDiff / clientTotalReturns > 0.005;
+      const grossWarning   = clientTotalGross   > 0 && grossDiff   / clientTotalGross   > 0.005;
+
+      const rejectedRows = (stats.storeProductsCount ?? 0) - validatedStoreProducts.length;
 
       // ============================================
       // 7. UPDATE METADATA (both data and metrics periods)
@@ -444,6 +479,7 @@ export async function POST(request: NextRequest) {
         stats: {
           stores: storeRecords.length,
           products: productRecords.length,
+          store_products_upserted: storeProductsUpserted,
           processingTimeMs,
           newMonthsAdded: newMonthsCount,
           totalMonths: allMonthsList.length,
@@ -451,8 +487,24 @@ export async function POST(request: NextRequest) {
           stores_updated: storesUpdated,
           products_inserted: productsInserted,
           products_updated: productsUpdated,
-          store_products_upserted: storeProductsUpserted,
           months_detected: monthsDetected,
+          // Totals computed server-side (for validation display)
+          totalGrossQty:    serverTotalGross,
+          totalReturnsQty:  serverTotalReturns,
+          // Client-reported totals (for comparison in UI)
+          clientTotalGrossQty:   clientTotalGross,
+          clientTotalReturnsQty: clientTotalReturns,
+          clientRowsCount:       stats.rowsCount,
+          rejectedRows,
+          // Validation summary
+          validation: {
+            status: (returnsWarning || grossWarning || rejectedRows > 0) ? "warning" : "ok",
+            returnsMatch:  !returnsWarning,
+            grossMatch:    !grossWarning,
+            returnsDiff,
+            grossDiff,
+            rejectedRows,
+          },
         },
       });
     } catch (error) {
