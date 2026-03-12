@@ -39,23 +39,31 @@ interface UploadState {
   } | null;
 }
 
-// Chunk target ≤3.5MB to stay safely under Vercel's 4.5MB hard limit
-const CHUNK_MAX_BYTES = 3.5 * 1024 * 1024;
+// Target 2MB per chunk (actual UTF-8 bytes), safely under Vercel's 4.5MB limit.
+// Hebrew chars are 2 bytes in UTF-8 but count as 1 in JS string.length —
+// so we measure with TextEncoder to get the real byte count.
+const CHUNK_MAX_BYTES = 2 * 1024 * 1024;
+const encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
+
+function utf8ByteSize(s: string): number {
+  if (encoder) return encoder.encode(s).length;
+  return s.length * 3; // safe fallback: worst-case UTF-8
+}
 
 function buildChunks(records: AggregatedWeeklyRecord[]): AggregatedWeeklyRecord[][] {
   const chunks: AggregatedWeeklyRecord[][] = [];
   let current: AggregatedWeeklyRecord[] = [];
-  let currentSize = 2; // opening/closing brackets
+  let currentBytes = 2; // opening/closing brackets of JSON array
 
   for (const record of records) {
-    const recordSize = JSON.stringify(record).length + 1; // +1 for comma
-    if (current.length > 0 && currentSize + recordSize > CHUNK_MAX_BYTES) {
+    const recordBytes = utf8ByteSize(JSON.stringify(record)) + 1; // +1 for comma
+    if (current.length > 0 && currentBytes + recordBytes > CHUNK_MAX_BYTES) {
       chunks.push(current);
       current = [];
-      currentSize = 2;
+      currentBytes = 2;
     }
     current.push(record);
-    currentSize += recordSize;
+    currentBytes += recordBytes;
   }
 
   if (current.length > 0) chunks.push(current);

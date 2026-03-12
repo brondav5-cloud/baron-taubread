@@ -20,7 +20,7 @@ import {
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 
-const MAX_BODY_BYTES = 4 * 1024 * 1024; // 4MB per chunk (Vercel hard limit ~4.5MB)
+const MAX_BODY_BYTES = 3 * 1024 * 1024; // 3MB per chunk (client targets 2MB, safety margin)
 const MAX_PROCESSING_MS = 55_000;
 
 const PAYLOAD_TOO_LARGE_MSG = {
