@@ -5,7 +5,7 @@
 
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -33,6 +33,7 @@ export interface ProductWeekComparison {
   lastWeekQty:           number | null;
   avgLast3WeeksQty:      number | null;
   lastYearQty:           number | null;
+  isIrregular:           boolean;
 }
 
 export interface StoreWeekComparison {
@@ -46,15 +47,17 @@ export interface StoreWeekComparison {
 }
 
 export interface WeeklyComparisonData {
-  selectedWeek:    string;         // "YYYY-MM-DD"
-  availableWeeks:  string[];
-  stores:          StoreWeekComparison[];
-  isLoading:       boolean;
-  error:           string | null;
-  showExcluded:    boolean;
-  setShowExcluded: (v: boolean) => void;
-  selectWeek:      (w: string) => void;
-  refetch:         () => void;
+  selectedWeek:     string;         // "YYYY-MM-DD"
+  availableWeeks:   string[];
+  stores:           StoreWeekComparison[];
+  isLoading:        boolean;
+  error:            string | null;
+  showExcluded:     boolean;
+  setShowExcluded:  (v: boolean) => void;
+  selectWeek:       (w: string) => void;
+  refetch:          () => void;
+  toggleIrregular:  (productNameNormalized: string) => Promise<void>;
+  irregularNames:   Set<string>;
 }
 
 // ============================================================
@@ -112,14 +115,15 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   const auth      = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
 
-  const [rawData,        setRawData]        = useState<RawWeekRow[]>([]);
-  const [availableWeeks, setAvailableWeeks] = useState<string[]>([]);
-  const [selectedWeek,   setSelectedWeek]   = useState<string>("");
-  const [showExcluded,   setShowExcluded]   = useState(false);
-  const [excludedNames,  setExcludedNames]  = useState<Set<string>>(new Set());
-  const [isLoading,      setIsLoading]      = useState(false);
-  const [error,          setError]          = useState<string | null>(null);
-  const [fetchKey,       setFetchKey]       = useState(0);
+  const [rawData,         setRawData]         = useState<RawWeekRow[]>([]);
+  const [availableWeeks,  setAvailableWeeks]  = useState<string[]>([]);
+  const [selectedWeek,    setSelectedWeek]    = useState<string>("");
+  const [showExcluded,    setShowExcluded]    = useState(false);
+  const [excludedNames,   setExcludedNames]   = useState<Set<string>>(new Set());
+  const [irregularNames,  setIrregularNames]  = useState<Set<string>>(new Set());
+  const [isLoading,       setIsLoading]       = useState(false);
+  const [error,           setError]           = useState<string | null>(null);
+  const [fetchKey,        setFetchKey]        = useState(0);
 
   const refetch = useCallback(() => setFetchKey((k) => k + 1), []);
 
@@ -140,6 +144,42 @@ export function useWeeklyComparison(): WeeklyComparisonData {
         }
       });
   }, [companyId]);
+
+  // Fetch irregular product names
+  useEffect(() => {
+    if (!companyId) return;
+    const supabase = createClient();
+    supabase
+      .from("irregular_products")
+      .select("product_name_normalized")
+      .eq("company_id", companyId)
+      .then(({ data }) => {
+        if (data) {
+          setIrregularNames(
+            new Set(data.map((p: { product_name_normalized: string }) => p.product_name_normalized)),
+          );
+        }
+      });
+  }, [companyId]);
+
+  // Toggle irregular state for a product
+  const toggleIrregular = useCallback(async (productNameNormalized: string) => {
+    if (!companyId) return;
+    const supabase = createClient();
+    if (irregularNames.has(productNameNormalized)) {
+      await supabase
+        .from("irregular_products")
+        .delete()
+        .eq("company_id", companyId)
+        .eq("product_name_normalized", productNameNormalized);
+      setIrregularNames((prev) => { const n = new Set(prev); n.delete(productNameNormalized); return n; });
+    } else {
+      await supabase
+        .from("irregular_products")
+        .insert({ company_id: companyId, product_name_normalized: productNameNormalized });
+      setIrregularNames((prev) => new Set(Array.from(prev).concat(productNameNormalized)));
+    }
+  }, [companyId, irregularNames]);
 
   // Step 1: Fetch available weeks (no date cutoff — all historical weeks)
   useEffect(() => {
@@ -208,7 +248,10 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   }, [companyId, selectedWeek, fetchKey]);
 
   // Compute comparison data for the selected week
-  const stores = computeComparison(rawData, selectedWeek, excludedNames, showExcluded);
+  const stores = useMemo(
+    () => computeComparison(rawData, selectedWeek, excludedNames, irregularNames, showExcluded),
+    [rawData, selectedWeek, excludedNames, irregularNames, showExcluded],
+  );
 
   return {
     selectedWeek,
@@ -220,6 +263,8 @@ export function useWeeklyComparison(): WeeklyComparisonData {
     setShowExcluded,
     selectWeek: setSelectedWeek,
     refetch,
+    toggleIrregular,
+    irregularNames,
   };
 }
 
@@ -228,10 +273,11 @@ export function useWeeklyComparison(): WeeklyComparisonData {
 // ============================================================
 
 function computeComparison(
-  rawData:      RawWeekRow[],
-  selectedWeek: string,
-  excludedNames: Set<string>,
-  showExcluded: boolean,
+  rawData:        RawWeekRow[],
+  selectedWeek:   string,
+  excludedNames:  Set<string>,
+  irregularNames: Set<string>,
+  showExcluded:   boolean,
 ): StoreWeekComparison[] {
   if (!selectedWeek || rawData.length === 0) return [];
 
@@ -340,6 +386,7 @@ function computeComparison(
         lastWeekQty:           lw1,
         avgLast3WeeksQty:      avg3w,
         lastYearQty,
+        isIrregular:           irregularNames.has(row.product_name_normalized),
       });
     });
 
@@ -349,17 +396,20 @@ function computeComparison(
     const totalReturnsQty = products.reduce((s, p) => s + p.returnsQty, 0);
     const totalDeliveries = products.reduce((s, p) => s + p.deliveryCount, 0);
 
-    // Store-level trend: compare total gross qty vs last week
-    const lastWeekStoreTotal =
-      prevWeek1
-        ? rawData
-            .filter(
-              (r) =>
-                r.store_external_id === storeId &&
-                r.week_start_date === prevWeek1,
-            )
-            .reduce((s, r) => s + r.gross_qty, 0)
-        : null;
+    // Store-level trend: exclude irregular products so they don't skew the overall direction
+    const regularProducts    = products.filter((p) => !p.isIrregular);
+    const trendProducts      = regularProducts.length > 0 ? regularProducts : products;
+    const trendGrossQty      = trendProducts.reduce((s, p) => s + p.grossQty, 0);
+    const trendLastWeekTotal = prevWeek1
+      ? rawData
+          .filter(
+            (r) =>
+              r.store_external_id === storeId &&
+              r.week_start_date   === prevWeek1 &&
+              !irregularNames.has(r.product_name_normalized),
+          )
+          .reduce((s, r) => s + r.gross_qty, 0)
+      : null;
 
     result.push({
       storeExternalId: storeId,
@@ -368,7 +418,7 @@ function computeComparison(
       totalGrossQty,
       totalReturnsQty,
       totalDeliveries,
-      overallTrend:    computeTrend(totalGrossQty, lastWeekStoreTotal || null),
+      overallTrend:    computeTrend(trendGrossQty, trendLastWeekTotal || null),
     });
   });
 

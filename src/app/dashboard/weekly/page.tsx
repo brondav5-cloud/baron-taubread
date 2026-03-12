@@ -15,6 +15,7 @@ import {
 import { clsx } from "clsx";
 import { useWeeklyComparison } from "@/hooks/useWeeklyComparison";
 import { StoreRow } from "@/components/weekly/WeeklyStoreRow";
+import { OrderModeTable } from "@/components/weekly/OrderModeTable";
 import Link from "next/link";
 
 export default function WeeklyPage() {
@@ -22,6 +23,7 @@ export default function WeeklyPage() {
   const [expandedStores, setExpandedStores] = useState<Set<number>>(new Set());
   const [searchQuery,    setSearchQuery]    = useState("");
   const [filterTrend,    setFilterTrend]    = useState<"all" | "down" | "up" | "stable">("all");
+  const [orderMode,      setOrderMode]      = useState(false);
 
   const toggleStore  = (id: number) =>
     setExpandedStores((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -37,10 +39,11 @@ export default function WeeklyPage() {
   [weekly.stores, searchQuery, filterTrend]);
 
   const summary = useMemo(() => ({
-    total:  weekly.stores.length,
-    up:     weekly.stores.filter((s) => s.overallTrend.direction === "up").length,
-    down:   weekly.stores.filter((s) => s.overallTrend.direction === "down").length,
-    stable: weekly.stores.filter((s) => s.overallTrend.direction === "stable").length,
+    total:      weekly.stores.length,
+    up:         weekly.stores.filter((s) => s.overallTrend.direction === "up").length,
+    down:       weekly.stores.filter((s) => s.overallTrend.direction === "down").length,
+    stable:     weekly.stores.filter((s) => s.overallTrend.direction === "stable").length,
+    totalUnits: weekly.stores.reduce((sum, s) => sum + s.totalGrossQty, 0),
   }), [weekly.stores]);
 
   const fmtDate = (d: string) => { const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; };
@@ -137,6 +140,19 @@ export default function WeeklyPage() {
           <button onClick={collapseAll} className="text-xs text-purple-600 hover:text-purple-800 underline">סגור הכל</button>
         </div>
 
+        <button
+          onClick={() => setOrderMode((v) => !v)}
+          className={clsx(
+            "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+            orderMode
+              ? "bg-blue-600 text-white hover:bg-blue-700"
+              : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200",
+          )}
+        >
+          <span className="text-base leading-none">🛒</span>
+          {orderMode ? "✕ סגור מצב הזמנה" : "מצב הזמנה"}
+        </button>
+
         <Link
           href={`/dashboard/weekly/product?week=${weekly.selectedWeek}`}
           className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 font-medium"
@@ -146,11 +162,12 @@ export default function WeeklyPage() {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-4 gap-3">
-        <SummaryCard label="סה״כ חנויות" value={summary.total}  color="gray" />
-        <SummaryCard label="בעלייה"       value={summary.up}     color="green"  icon="up" />
-        <SummaryCard label="ביציבות"      value={summary.stable} color="yellow" icon="stable" />
-        <SummaryCard label="בירידה"       value={summary.down}   color="red"    icon="down" />
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <SummaryCard label="סה״כ יחידות"  value={summary.totalUnits.toLocaleString("he-IL")} color="purple" />
+        <SummaryCard label="סה״כ חנויות"  value={summary.total}  color="gray" />
+        <SummaryCard label="בעלייה"        value={summary.up}     color="green"  icon="up" />
+        <SummaryCard label="ביציבות"       value={summary.stable} color="yellow" icon="stable" />
+        <SummaryCard label="בירידה"        value={summary.down}   color="red"    icon="down" />
       </div>
 
       {/* Legend */}
@@ -170,22 +187,27 @@ export default function WeeklyPage() {
         </div>
       )}
 
-      {/* Stores */}
-      <div className="space-y-2">
-        {filteredStores.length === 0 ? (
-          <div className="text-center py-12 text-gray-400">לא נמצאו חנויות התואמות את הסינון</div>
-        ) : (
-          filteredStores.map((store) => (
-            <StoreRow
-              key={store.storeExternalId}
-              store={store}
-              isExpanded={expandedStores.has(store.storeExternalId)}
-              onToggle={() => toggleStore(store.storeExternalId)}
-              selectedWeek={weekly.selectedWeek}
-            />
-          ))
-        )}
-      </div>
+      {/* Order Mode or Normal Stores view */}
+      {orderMode ? (
+        <OrderModeTable stores={weekly.stores} selectedWeek={weekly.selectedWeek} />
+      ) : (
+        <div className="space-y-2">
+          {filteredStores.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">לא נמצאו חנויות התואמות את הסינון</div>
+          ) : (
+            filteredStores.map((store) => (
+              <StoreRow
+                key={store.storeExternalId}
+                store={store}
+                isExpanded={expandedStores.has(store.storeExternalId)}
+                onToggle={() => toggleStore(store.storeExternalId)}
+                selectedWeek={weekly.selectedWeek}
+                onToggleIrregular={weekly.toggleIrregular}
+              />
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -205,12 +227,12 @@ function PageHeader() {
 }
 
 function SummaryCard({ label, value, color, icon }: {
-  label: string; value: number;
-  color: "gray" | "green" | "yellow" | "red";
+  label: string; value: number | string;
+  color: "gray" | "green" | "yellow" | "red" | "purple";
   icon?: "up" | "stable" | "down";
 }) {
-  const bg   = { gray: "bg-gray-50", green: "bg-green-50", yellow: "bg-yellow-50", red: "bg-red-50" }[color];
-  const text = { gray: "text-gray-900", green: "text-green-700", yellow: "text-yellow-700", red: "text-red-700" }[color];
+  const bg   = { gray: "bg-gray-50", green: "bg-green-50", yellow: "bg-yellow-50", red: "bg-red-50", purple: "bg-purple-50" }[color];
+  const text = { gray: "text-gray-900", green: "text-green-700", yellow: "text-yellow-700", red: "text-red-700", purple: "text-purple-700" }[color];
   return (
     <div className={`${bg} rounded-xl p-3 text-center border border-gray-100`}>
       <p className={`text-2xl font-bold ${text}`}>{value}</p>

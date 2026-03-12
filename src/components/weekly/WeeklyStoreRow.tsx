@@ -13,11 +13,13 @@ export function StoreRow({
   isExpanded,
   onToggle,
   selectedWeek,
+  onToggleIrregular,
 }: {
   store: StoreWeekComparison;
   isExpanded: boolean;
   onToggle: () => void;
   selectedWeek?: string;
+  onToggleIrregular?: (productNameNormalized: string) => Promise<void>;
 }) {
   const trendBg =
     store.overallTrend.direction === "down"
@@ -71,9 +73,15 @@ export function StoreRow({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {store.products.map((product) => (
-                <ProductRow key={product.productNameNormalized} product={product} selectedWeek={selectedWeek} />
+                <ProductRow
+                  key={product.productNameNormalized}
+                  product={product}
+                  selectedWeek={selectedWeek}
+                  onToggleIrregular={onToggleIrregular}
+                />
               ))}
             </tbody>
+            <StoreTotalsRow products={store.products} totalGrossQty={store.totalGrossQty} totalReturnsQty={store.totalReturnsQty} />
           </table>
         </div>
       )}
@@ -82,10 +90,67 @@ export function StoreRow({
 }
 
 // ============================================================
+// STORE TOTALS ROW (tfoot)
+// ============================================================
+
+function StoreTotalsRow({
+  products,
+  totalGrossQty,
+  totalReturnsQty,
+}: {
+  products: ProductWeekComparison[];
+  totalGrossQty: number;
+  totalReturnsQty: number;
+}) {
+  const hasLastWeek  = products.some((p) => p.lastWeekQty !== null);
+  const hasAvg3w     = products.some((p) => p.avgLast3WeeksQty !== null);
+  const hasLastYear  = products.some((p) => p.lastYearQty !== null);
+
+  const sumLastWeek  = hasLastWeek  ? products.reduce((s, p) => s + (p.lastWeekQty     ?? 0), 0) : null;
+  const sumAvg3w     = hasAvg3w     ? products.reduce((s, p) => s + (p.avgLast3WeeksQty ?? 0), 0) : null;
+  const sumLastYear  = hasLastYear  ? products.reduce((s, p) => s + (p.lastYearQty     ?? 0), 0) : null;
+  const returnsRate  = totalGrossQty > 0 ? (totalReturnsQty / totalGrossQty) * 100 : 0;
+
+  const fmtNum = (v: number | null) =>
+    v !== null ? Math.round(v).toLocaleString("he-IL") : <span className="text-gray-300">—</span>;
+
+  return (
+    <tfoot>
+      <tr className="border-t-2 border-gray-300 bg-gray-100/70 text-xs font-semibold text-gray-700">
+        <td className="px-4 py-2">סה״כ</td>
+        <td className="px-3 py-2 text-center">{totalGrossQty.toLocaleString("he-IL")}</td>
+        <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumLastWeek)}</td>
+        <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumAvg3w)}</td>
+        <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumLastYear)}</td>
+        <td className="px-3 py-2 text-center text-gray-300">—</td>
+        <td className="px-3 py-2 text-center">
+          {totalReturnsQty > 0 ? (
+            <span className="text-red-600">
+              {totalReturnsQty.toLocaleString("he-IL")}
+              {" "}({returnsRate.toFixed(0)}%)
+            </span>
+          ) : (
+            <span className="text-gray-300">—</span>
+          )}
+        </td>
+      </tr>
+    </tfoot>
+  );
+}
+
+// ============================================================
 // PRODUCT ROW
 // ============================================================
 
-function ProductRow({ product, selectedWeek }: { product: ProductWeekComparison; selectedWeek?: string }) {
+function ProductRow({
+  product,
+  selectedWeek,
+  onToggleIrregular,
+}: {
+  product: ProductWeekComparison;
+  selectedWeek?: string;
+  onToggleIrregular?: (productNameNormalized: string) => Promise<void>;
+}) {
   const isBelowBenchmark =
     product.vsBenchmark.direction === "down" &&
     product.top10Benchmark !== null &&
@@ -96,20 +161,44 @@ function ProductRow({ product, selectedWeek }: { product: ProductWeekComparison;
     : null;
 
   return (
-    <tr className={clsx("hover:bg-gray-50", isBelowBenchmark && "bg-orange-50/50")}>
+    <tr className={clsx(
+      "hover:bg-gray-50",
+      isBelowBenchmark && !product.isIrregular && "bg-orange-50/50",
+      product.isIrregular && "opacity-60 bg-gray-50/60",
+    )}>
       <td className="px-4 py-2 text-gray-800">
         <div className="flex items-center gap-1.5">
-          {isBelowBenchmark && (
+          {isBelowBenchmark && !product.isIrregular && (
             <span title="מתחת לממוצע Top-10">
               <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
             </span>
           )}
+          {product.isIrregular && (
+            <span title="מוצר לא-סדיר — לא נכנס לחישוב מגמת החנות" className="text-purple-400 text-sm flex-shrink-0">
+              ⊘
+            </span>
+          )}
           {productUrl ? (
-            <a href={productUrl} className="hover:text-purple-700 hover:underline">
+            <a
+              href={productUrl}
+              className={clsx("hover:text-purple-700 hover:underline", product.isIrregular && "italic text-gray-500")}
+            >
               {product.productName}
             </a>
           ) : (
-            <span>{product.productName}</span>
+            <span className={clsx(product.isIrregular && "italic text-gray-500")}>{product.productName}</span>
+          )}
+          {onToggleIrregular && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleIrregular(product.productNameNormalized); }}
+              title={product.isIrregular ? "הסר מסימון לא-סדיר" : "סמן כמוצר לא-סדיר"}
+              className={clsx(
+                "mr-1 px-0.5 rounded hover:bg-gray-200 transition-colors text-sm leading-none",
+                product.isIrregular ? "text-purple-500" : "text-gray-300 hover:text-gray-500",
+              )}
+            >
+              ⊘
+            </button>
           )}
         </div>
       </td>
