@@ -10,24 +10,34 @@ export interface StoreProductRow {
   product_category: string | null;
   monthly_qty: Record<string, number>;
   monthly_sales: Record<string, number>;
+  monthly_returns: Record<string, number>;
   total_qty: number;
   total_sales: number;
 }
 
+export interface StoreProductMergeLite {
+  store_external_id: number;
+  product_external_id: number;
+  monthly_qty: Record<string, number>;
+  monthly_sales: Record<string, number>;
+  monthly_returns: Record<string, number>;
+}
+
 /**
- * Get all store products for a company (for merge logic). Always filters by company_id.
+ * Get only the columns needed for merge logic — avoids fetching product_name,
+ * product_category, total_qty, total_sales which are re-computed on every upload.
  */
 export async function getStoreProductsByCompany(
   supabase: SupabaseClient,
   companyId: string,
-) {
+): Promise<StoreProductMergeLite[]> {
   const { data, error } = await supabase
     .from("store_products")
-    .select("*")
+    .select("store_external_id, product_external_id, monthly_qty, monthly_sales, monthly_returns")
     .eq("company_id", companyId);
 
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []) as StoreProductMergeLite[];
 }
 
 /**

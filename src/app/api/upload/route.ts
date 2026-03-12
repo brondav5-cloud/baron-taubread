@@ -167,50 +167,54 @@ export async function POST(request: NextRequest) {
 
     try {
       // ============================================
-      // 2. FETCH EXISTING DATA (for merging)
+      // 2. FETCH EXISTING DATA (for merging) — parallel
       // ============================================
 
-      const { data: existingStores } = await supabaseAdmin
-        .from("stores")
-        .select("*")
-        .eq("company_id", companyId);
-
-      const { data: existingProducts } = await supabaseAdmin
-        .from("products")
-        .select("*")
-        .eq("company_id", companyId);
-
-      const { data: existingMetadata } = await supabaseAdmin
-        .from("data_metadata")
-        .select("*")
-        .eq("company_id", companyId)
-        .single();
+      const [
+        { data: existingStores },
+        { data: existingProducts },
+        { data: existingMetadata },
+        existingStoreProducts,
+      ] = await Promise.all([
+        supabaseAdmin
+          .from("stores")
+          .select("external_id, monthly_qty, monthly_sales, monthly_gross, monthly_returns")
+          .eq("company_id", companyId),
+        supabaseAdmin
+          .from("products")
+          .select("external_id, monthly_qty, monthly_sales")
+          .eq("company_id", companyId),
+        supabaseAdmin
+          .from("data_metadata")
+          .select("months_list")
+          .eq("company_id", companyId)
+          .single(),
+        getStoreProductsByCompany(supabaseAdmin, companyId),
+      ]);
 
       // Create maps for quick lookup
-      const existingStoresMap = new Map<number, DbStore>();
+      type StoreLite = Pick<DbStore, "external_id" | "monthly_qty" | "monthly_sales" | "monthly_gross" | "monthly_returns">;
+      const existingStoresMap = new Map<number, StoreLite>();
       (existingStores || []).forEach((s) =>
-        existingStoresMap.set(s.external_id, s),
+        existingStoresMap.set(s.external_id, s as StoreLite),
       );
 
-      const existingProductsMap = new Map<number, DbProduct>();
+      type ProductLite = Pick<DbProduct, "external_id" | "monthly_qty" | "monthly_sales">;
+      const existingProductsMap = new Map<number, ProductLite>();
       (existingProducts || []).forEach((p) =>
-        existingProductsMap.set(p.external_id, p),
-      );
-
-      const existingStoreProducts = await getStoreProductsByCompany(
-        supabaseAdmin,
-        companyId,
+        existingProductsMap.set(p.external_id, p as ProductLite),
       );
 
       const existingStoreProductsMap = new Map<
         string,
-        { monthly_qty: MonthlyData; monthly_sales: MonthlyData }
+        { monthly_qty: MonthlyData; monthly_sales: MonthlyData; monthly_returns: MonthlyData }
       >();
       existingStoreProducts.forEach((sp) => {
         const key = `${sp.store_external_id}_${sp.product_external_id}`;
         existingStoreProductsMap.set(key, {
           monthly_qty: (sp.monthly_qty as MonthlyData) || {},
           monthly_sales: (sp.monthly_sales as MonthlyData) || {},
+          monthly_returns: (sp.monthly_returns as MonthlyData) || {},
         });
       });
 

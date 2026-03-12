@@ -1,4 +1,4 @@
-import type { MonthlyData, DbStore, DbProduct } from "@/types/supabase";
+import type { MonthlyData } from "@/types/supabase";
 import {
   calculateStoreMetrics,
   calculateProductMetrics,
@@ -47,9 +47,23 @@ interface MetricsContext {
   previousYear: number;
 }
 
+interface ExistingStoreLite {
+  external_id: number;
+  monthly_qty: MonthlyData;
+  monthly_sales: MonthlyData;
+  monthly_gross: MonthlyData;
+  monthly_returns: MonthlyData;
+}
+
+interface ExistingProductLite {
+  external_id: number;
+  monthly_qty: MonthlyData;
+  monthly_sales: MonthlyData;
+}
+
 export function prepareStoreRecords(
   stores: StoreInput[],
-  existingStoresMap: Map<number, DbStore>,
+  existingStoresMap: Map<number, ExistingStoreLite>,
   companyId: string,
   ctx: MetricsContext,
 ) {
@@ -105,7 +119,7 @@ export function prepareStoreRecords(
 
 export function prepareProductRecords(
   products: ProductInput[],
-  existingProductsMap: Map<number, DbProduct>,
+  existingProductsMap: Map<number, ExistingProductLite>,
   companyId: string,
   ctx: MetricsContext,
 ) {
