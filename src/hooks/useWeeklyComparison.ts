@@ -34,6 +34,8 @@ export interface ProductWeekComparison {
   lastYearQty:           number | null;
   isIrregular:           boolean;
   streak:                number; // +N = N weeks up in a row, -N = N weeks down, 0 = stable/nodata
+  isAnomaly:             boolean;
+  anomalyZScore:         number | null;
 }
 
 export interface StoreWeekComparison {
@@ -62,6 +64,8 @@ export interface WeeklyComparisonData {
   refetch:          () => void;
   toggleIrregular:  (productNameNormalized: string) => Promise<void>;
   irregularNames:   Set<string>;
+  holidayWeeks:     Map<string, string>;           // week_date → holiday_name
+  toggleHoliday:    (weekDate: string) => Promise<void>;
 }
 
 // ============================================================
@@ -140,6 +144,7 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   const [weeksCount,      setWeeksCount]      = useState(1);
   const [excludedNames,   setExcludedNames]   = useState<Set<string>>(new Set());
   const [irregularNames,  setIrregularNames]  = useState<Set<string>>(new Set());
+  const [holidayWeeks,    setHolidayWeeks]    = useState<Map<string, string>>(new Map());
   const [isLoading,       setIsLoading]       = useState(false);
   const [error,           setError]           = useState<string | null>(null);
   const [fetchKey,        setFetchKey]        = useState(0);
@@ -165,6 +170,37 @@ export function useWeeklyComparison(): WeeklyComparisonData {
         if (data) setIrregularNames(new Set(data.map((p: { product_name_normalized: string }) => p.product_name_normalized)));
       });
   }, [companyId]);
+
+  // Fetch holiday weeks
+  useEffect(() => {
+    if (!companyId) return;
+    createClient()
+      .from("holiday_weeks").select("week_start_date,holiday_name")
+      .eq("company_id", companyId)
+      .then(({ data }) => {
+        if (data) {
+          const m = new Map<string, string>();
+          data.forEach((r: { week_start_date: string; holiday_name: string }) =>
+            m.set(r.week_start_date, r.holiday_name || "חג"),
+          );
+          setHolidayWeeks(m);
+        }
+      });
+  }, [companyId]);
+
+  const toggleHoliday = useCallback(async (weekDate: string) => {
+    if (!companyId) return;
+    const supabase = createClient();
+    if (holidayWeeks.has(weekDate)) {
+      await supabase.from("holiday_weeks").delete()
+        .eq("company_id", companyId).eq("week_start_date", weekDate);
+      setHolidayWeeks((prev) => { const m = new Map(Array.from(prev.entries())); m.delete(weekDate); return m; });
+    } else {
+      const name = "חג";
+      await supabase.from("holiday_weeks").insert({ company_id: companyId, week_start_date: weekDate, holiday_name: name });
+      setHolidayWeeks((prev) => new Map(Array.from(prev.entries()).concat([[weekDate, name]])));
+    }
+  }, [companyId, holidayWeeks]);
 
   const toggleIrregular = useCallback(async (productNameNormalized: string) => {
     if (!companyId) return;
@@ -230,6 +266,7 @@ export function useWeeklyComparison(): WeeklyComparisonData {
     weeksCount,    setWeeksCount,
     selectWeek: setSelectedWeek,
     refetch, toggleIrregular, irregularNames,
+    holidayWeeks, toggleHoliday,
   };
 }
 
@@ -386,6 +423,26 @@ function computeComparison(
         ? computeStreak(weekMap, allWeeks, selectedIdx, vsLastWeekTrend.direction)
         : 0;
 
+      // ── Anomaly detection (Z-score, single-week mode only) ──────────────
+      let isAnomaly    = false;
+      let anomalyZScore: number | null = null;
+      if (weeksCount === 1) {
+        const historyQtys = allWeeks
+          .slice(selectedIdx + 1, selectedIdx + 11)
+          .map((w) => weekMap.get(w)?.gross_qty ?? null)
+          .filter((v): v is number => v !== null);
+        if (historyQtys.length >= 4) {
+          const mean     = historyQtys.reduce((s, v) => s + v, 0) / historyQtys.length;
+          const variance = historyQtys.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / historyQtys.length;
+          const stdDev   = Math.sqrt(variance);
+          if (stdDev >= 3 && Math.abs(grossQty - mean) >= 5) {
+            const z = (grossQty - mean) / stdDev;
+            anomalyZScore = Math.round(z * 10) / 10;
+            if (Math.abs(z) >= 2.5) isAnomaly = true;
+          }
+        }
+      }
+
       products.push({
         productName:           agg.product_name,
         productNameNormalized: agg.product_name_normalized,
@@ -403,6 +460,8 @@ function computeComparison(
         lastYearQty:           lastYearQty !== null ? Math.round(lastYearQty) : null,
         isIrregular,
         streak,
+        isAnomaly,
+        anomalyZScore,
       });
     });
 

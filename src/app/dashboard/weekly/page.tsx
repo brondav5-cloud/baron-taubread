@@ -16,6 +16,7 @@ import { clsx } from "clsx";
 import { useWeeklyComparison } from "@/hooks/useWeeklyComparison";
 import { StoreRow } from "@/components/weekly/WeeklyStoreRow";
 import { OrderModeTable } from "@/components/weekly/OrderModeTable";
+import { WeeklyHeatmap } from "@/components/weekly/WeeklyHeatmap";
 import Link from "next/link";
 
 export default function WeeklyPage() {
@@ -24,6 +25,7 @@ export default function WeeklyPage() {
   const [searchQuery,    setSearchQuery]    = useState("");
   const [filterTrend,    setFilterTrend]    = useState<"all" | "down" | "up" | "stable">("all");
   const [orderMode,      setOrderMode]      = useState(false);
+  const [heatmapMode,    setHeatmapMode]    = useState(false);
 
   const toggleStore = (id: number) =>
     setExpandedStores((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -47,6 +49,25 @@ export default function WeeklyPage() {
     stable:     weekly.stores.filter((s) => s.overallTrend.direction === "stable").length,
     totalUnits: weekly.stores.reduce((sum, s) => sum + s.totalGrossQty, 0),
   }), [weekly.stores]);
+
+  // Collect anomalies across all stores
+  const anomalies = useMemo(() => {
+    const list: { storeName: string; productName: string; qty: number; zScore: number; dir: string }[] = [];
+    for (const store of weekly.stores) {
+      for (const p of store.products) {
+        if (p.isAnomaly && p.anomalyZScore !== null) {
+          list.push({
+            storeName:   store.storeName,
+            productName: p.productName,
+            qty:         p.grossQty,
+            zScore:      p.anomalyZScore,
+            dir:         p.vsLastWeek.direction,
+          });
+        }
+      }
+    }
+    return list.sort((a, b) => Math.abs(b.zScore) - Math.abs(a.zScore));
+  }, [weekly.stores]);
 
   const fmtDate = (d: string) => { const [y, m, day] = d.split("-"); return `${day}/${m}/${y}`; };
 
@@ -91,7 +112,7 @@ export default function WeeklyPage() {
         {/* Row 1: week selector + weeksCount + search + trend filters */}
         <div className="flex flex-wrap gap-3 items-center">
 
-          {/* Week dropdown */}
+          {/* Week dropdown + holiday toggle */}
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">שבוע:</label>
             <select
@@ -100,9 +121,25 @@ export default function WeeklyPage() {
               className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
             >
               {weekly.availableWeeks.map((w) => (
-                <option key={w} value={w}>{fmtDate(w)}</option>
+                <option key={w} value={w}>
+                  {weekly.holidayWeeks.has(w) ? `🎉 ` : ""}{fmtDate(w)}
+                  {weekly.holidayWeeks.has(w) ? ` — ${weekly.holidayWeeks.get(w)}` : ""}
+                </option>
               ))}
             </select>
+            {/* Mark/unmark current week as holiday */}
+            <button
+              onClick={() => weekly.selectedWeek && weekly.toggleHoliday(weekly.selectedWeek)}
+              title={weekly.holidayWeeks.has(weekly.selectedWeek) ? "הסר סימון חג" : "סמן שבוע זה כחג"}
+              className={clsx(
+                "text-base px-2 py-1 rounded-lg border transition-colors",
+                weekly.holidayWeeks.has(weekly.selectedWeek)
+                  ? "border-amber-400 bg-amber-50 text-amber-600 hover:bg-amber-100"
+                  : "border-gray-200 bg-gray-50 text-gray-400 hover:bg-amber-50 hover:text-amber-500 hover:border-amber-300",
+              )}
+            >
+              🎉
+            </button>
           </div>
 
           {/* Weeks count selector */}
@@ -203,7 +240,7 @@ export default function WeeklyPage() {
 
           {/* Order mode toggle */}
           <button
-            onClick={() => setOrderMode((v) => !v)}
+            onClick={() => { setOrderMode((v) => !v); setHeatmapMode(false); }}
             className={clsx(
               "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
               orderMode
@@ -213,6 +250,20 @@ export default function WeeklyPage() {
           >
             <span className="text-base leading-none">🛒</span>
             {orderMode ? "✕ סגור מצב הזמנה" : "מצב הזמנה"}
+          </button>
+
+          {/* Heatmap toggle */}
+          <button
+            onClick={() => { setHeatmapMode((v) => !v); setOrderMode(false); }}
+            className={clsx(
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+              heatmapMode
+                ? "bg-indigo-600 text-white hover:bg-indigo-700"
+                : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200",
+            )}
+          >
+            <span className="text-sm leading-none font-bold">⊞</span>
+            {heatmapMode ? "✕ סגור Heatmap" : "Heatmap"}
           </button>
 
           {/* Product analysis link */}
@@ -272,6 +323,22 @@ export default function WeeklyPage() {
         </div>
       )}
 
+      {/* ─── Holiday banner ─── */}
+      {weekly.holidayWeeks.has(weekly.selectedWeek) && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-amber-800 text-sm">
+          <span className="text-lg">🎉</span>
+          <span>
+            <strong>שבוע חג — {weekly.holidayWeeks.get(weekly.selectedWeek)}</strong>
+            {" "}· נתוני שבוע זה עשויים לשקף ביקוש חריג. ניתן להחריג מהחישוב על-ידי הסרת הסימון.
+          </span>
+        </div>
+      )}
+
+      {/* ─── Anomaly Banner ─── */}
+      {anomalies.length > 0 && weekly.weeksCount === 1 && (
+        <AnomalyBanner anomalies={anomalies} />
+      )}
+
       {/* ─── Main content ─── */}
       {orderMode ? (
         <OrderModeTable
@@ -279,6 +346,8 @@ export default function WeeklyPage() {
           selectedWeek={weekly.selectedWeek}
           weeksCount={weekly.weeksCount}
         />
+      ) : heatmapMode ? (
+        <WeeklyHeatmap stores={filteredStores} weeksCount={weekly.weeksCount} />
       ) : (
         <div className="space-y-2">
           {filteredStores.length === 0 ? (
@@ -296,6 +365,64 @@ export default function WeeklyPage() {
               />
             ))
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Anomaly Banner ───────────────────────────────────────────────────────────
+
+function AnomalyBanner({ anomalies }: {
+  anomalies: { storeName: string; productName: string; qty: number; zScore: number; dir: string }[];
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const spikes = anomalies.filter((a) => a.zScore > 0);
+  const drops  = anomalies.filter((a) => a.zScore < 0);
+
+  return (
+    <div className="bg-yellow-50 border border-yellow-300 rounded-xl overflow-hidden">
+      <button
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full px-4 py-3 flex items-center gap-3 text-sm text-yellow-800 hover:bg-yellow-100 transition-colors"
+      >
+        <AlertTriangle className="w-4 h-4 flex-shrink-0 text-yellow-600" />
+        <span className="font-semibold">
+          {anomalies.length} חריגות סטטיסטיות זוהו
+        </span>
+        <span className="text-yellow-600 font-normal">
+          {spikes.length > 0 && `${spikes.length} עליות חדות`}
+          {spikes.length > 0 && drops.length > 0 && " · "}
+          {drops.length > 0  && `${drops.length} ירידות חדות`}
+        </span>
+        <span className="mr-auto text-yellow-500 text-xs">{expanded ? "▲ סגור" : "▼ פרט"}</span>
+      </button>
+
+      {expanded && (
+        <div className="px-4 pb-3 border-t border-yellow-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 mt-2">
+            {anomalies.map((a, i) => (
+              <div
+                key={i}
+                className={clsx(
+                  "flex items-center gap-2 text-xs rounded-lg px-3 py-1.5",
+                  a.zScore > 0 ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800",
+                )}
+              >
+                <span className="font-bold text-sm">{a.zScore > 0 ? "↑" : "↓"}</span>
+                <span className="font-medium">{a.storeName}</span>
+                <span className="text-gray-400">·</span>
+                <span>{a.productName}</span>
+                <span className="mr-auto font-semibold">{a.qty} יח׳</span>
+                <span className={clsx("text-xs", a.zScore > 0 ? "text-green-600" : "text-red-600")}>
+                  z={a.zScore > 0 ? "+" : ""}{a.zScore}
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-yellow-600 mt-2">
+            * חריגה = Z-score ≥ 2.5 ביחס ל-10 השבועות הקודמים. ייתכן שגיאת נתונים, אירוע מיוחד, או שינוי אמיתי.
+          </p>
         </div>
       )}
     </div>
