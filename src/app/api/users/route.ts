@@ -236,3 +236,102 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/**
+ * PATCH /api/users — update an existing user (bypasses RLS using service role).
+ * Body: { userId, updates: { name?, phone?, role?, position?, department?, avatar?, permissions? } }
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabaseAuth = createServerSupabaseClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAuth.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: "נדרשת התחברות" }, { status: 401 });
+    }
+
+    const { companyId: selectedCompanyId, role: myRole } =
+      await resolveSelectedCompanyId(supabaseAuth, user.id);
+
+    if (!selectedCompanyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 403 });
+    }
+
+    const allowedRoles = ["admin", "super_admin"];
+    if (!myRole || !allowedRoles.includes(myRole)) {
+      return NextResponse.json(
+        { error: "רק מנהל יכול לעדכן משתמשים" },
+        { status: 403 },
+      );
+    }
+
+    const body = await request.json();
+    const { userId, updates } = body as {
+      userId: string;
+      updates: Record<string, unknown>;
+    };
+
+    if (!userId) {
+      return NextResponse.json({ error: "חסר userId" }, { status: 400 });
+    }
+
+    const admin = getSupabaseAdmin();
+
+    // Verify the target user belongs to the same company
+    const { data: membership } = await admin
+      .from("user_companies")
+      .select("user_id")
+      .eq("user_id", userId)
+      .eq("company_id", selectedCompanyId)
+      .maybeSingle();
+
+    if (!membership && myRole !== "super_admin") {
+      return NextResponse.json(
+        { error: "המשתמש לא שייך לחברה זו" },
+        { status: 403 },
+      );
+    }
+
+    // Handle role update in user_companies separately
+    if (updates.role !== undefined) {
+      await admin
+        .from("user_companies")
+        .update({ role: updates.role })
+        .eq("user_id", userId)
+        .eq("company_id", selectedCompanyId);
+    }
+
+    // Build safe update object for public.users
+    const allowedFields = [
+      "name", "phone", "role", "position", "department", "avatar", "permissions",
+    ];
+    const dbUpdates: Record<string, unknown> = { updated_at: new Date().toISOString() };
+    for (const field of allowedFields) {
+      if (updates[field] !== undefined) {
+        dbUpdates[field] = updates[field];
+      }
+    }
+
+    const { error: updateErr } = await admin
+      .from("users")
+      .update(dbUpdates)
+      .eq("id", userId);
+
+    if (updateErr) {
+      return NextResponse.json(
+        { error: updateErr.message || "שגיאה בעדכון משתמש" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    logError("users-patch", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "שגיאה לא צפויה" },
+      { status: 500 },
+    );
+  }
+}

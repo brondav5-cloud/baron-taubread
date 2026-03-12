@@ -242,21 +242,30 @@ export function UsersProvider({ children }: UsersProviderProps) {
   const updateUser = useCallback(
     async (id: string, updates: Partial<AppUser>) => {
       const dbUpdates: Record<string, unknown> = {};
-      if (updates.name !== undefined) dbUpdates.name = updates.name;
-      if (updates.email !== undefined) dbUpdates.email = updates.email;
-      if (updates.phone !== undefined) dbUpdates.phone = updates.phone;
-      if (updates.department !== undefined)
-        dbUpdates.department = updates.department;
-      if (updates.avatar !== undefined) dbUpdates.avatar = updates.avatar;
-      if (updates.position !== undefined) dbUpdates.position = updates.position;
-      if (updates.role !== undefined) dbUpdates.role = updates.role;
-      if (updates.permissions !== undefined)
-        dbUpdates.permissions = updates.permissions;
+      if (updates.name       !== undefined) dbUpdates.name       = updates.name;
+      if (updates.email      !== undefined) dbUpdates.email      = updates.email;
+      if (updates.phone      !== undefined) dbUpdates.phone      = updates.phone;
+      if (updates.department !== undefined) dbUpdates.department = updates.department;
+      if (updates.avatar     !== undefined) dbUpdates.avatar     = updates.avatar;
+      if (updates.position   !== undefined) dbUpdates.position   = updates.position;
+      if (updates.role       !== undefined) dbUpdates.role       = updates.role;
+      if (updates.permissions !== undefined) dbUpdates.permissions = updates.permissions;
 
-      await updateUserInDb(id, dbUpdates, companyId ?? undefined);
+      // Use API route (service role) to bypass RLS restrictions on users table
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: id, updates: dbUpdates }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("Error updating user:", err);
+      }
+
       await fetchAll();
     },
-    [companyId, fetchAll],
+    [fetchAll],
   );
 
   const removeUser = useCallback(
