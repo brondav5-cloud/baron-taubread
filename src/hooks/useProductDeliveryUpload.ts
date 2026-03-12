@@ -11,6 +11,7 @@ import type {
   ProductDeliveryProcessingResult,
   ProductDeliveryUploadPayload,
   AggregatedWeeklyRecord,
+  StoreDeliveryAggregate,
 } from "@/types/productDeliveries";
 
 export type ProductDeliveryUploadStatus =
@@ -129,10 +130,11 @@ export function useProductDeliveryUpload() {
         const isLast = i === totalChunks - 1;
 
         const payload: ProductDeliveryUploadPayload = {
-          filename:    file.name,
-          records:     chunks[i]!,
-          stats:       result.stats,
-          chunkIndex:  i,
+          filename:        file.name,
+          records:         chunks[i]!,
+          storeDeliveries: isLast ? (result.storeDeliveries as StoreDeliveryAggregate[]) : undefined,
+          stats:           result.stats,
+          chunkIndex:      i,
           totalChunks,
         };
 

@@ -10,7 +10,9 @@ import {
   upsertWeeklyRecords,
   createProductDeliveryUpload,
 } from "@/lib/db/productDeliveries.repo";
+import { upsertDeliveries } from "@/lib/db/deliveries.repo";
 import type { ProductDeliveryUploadPayload } from "@/types/productDeliveries";
+import type { AggregatedDelivery } from "@/types/deliveries";
 import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
 import {
   checkRateLimit,
@@ -139,6 +141,21 @@ export async function POST(request: NextRequest) {
     const chunkIndex  = payload.chunkIndex  ?? 0;
     const totalChunks = payload.totalChunks ?? 1;
     const isLastChunk = chunkIndex === totalChunks - 1;
+
+    // On the last chunk: also upsert store-level delivery aggregates → store_deliveries
+    if (isLastChunk && payload.storeDeliveries?.length) {
+      const deliveries: AggregatedDelivery[] = payload.storeDeliveries.map((sd) => ({
+        storeExternalId: sd.storeExternalId,
+        storeName: sd.storeName,
+        year: sd.year,
+        month: sd.month,
+        week: sd.week,
+        deliveriesCount: sd.deliveriesCount,
+        totalValue: sd.totalValue,
+        totalQuantity: sd.totalQuantity,
+      }));
+      await upsertDeliveries(supabaseAdmin, companyId, deliveries);
+    }
 
     // Log upload record only on the last chunk
     if (isLastChunk) {

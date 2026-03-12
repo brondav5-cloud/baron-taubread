@@ -3,6 +3,18 @@
 // סוגי נתונים לקובץ פירוט מוצרים (שבועי לפי חנות+מוצר)
 // ============================================================
 
+// Aggregated delivery data per store × week/month (for store_deliveries table)
+export interface StoreDeliveryAggregate {
+  storeExternalId: number;
+  storeName: string;
+  year: number;
+  month: number;
+  week: number | null; // ISO week number, null = monthly total
+  deliveriesCount: number;
+  totalValue: number;
+  totalQuantity: number;
+}
+
 // One aggregated record per store × product × week
 export interface AggregatedWeeklyRecord {
   storeExternalId: number;
@@ -21,6 +33,7 @@ export interface AggregatedWeeklyRecord {
 export interface ProductDeliveryProcessingResult {
   success: boolean;
   records: AggregatedWeeklyRecord[];
+  storeDeliveries: StoreDeliveryAggregate[];
   stats: {
     rowsProcessed: number;
     rowsSkipped: number;
@@ -39,6 +52,7 @@ export interface ProductDeliveryProcessingResult {
 export interface ProductDeliveryUploadPayload {
   filename: string;
   records: AggregatedWeeklyRecord[];
+  storeDeliveries?: StoreDeliveryAggregate[]; // sent only on last chunk
   stats: ProductDeliveryProcessingResult["stats"];
   chunkIndex: number;
   totalChunks: number;

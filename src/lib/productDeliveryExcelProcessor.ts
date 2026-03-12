@@ -28,8 +28,18 @@
 import { loadXlsx } from "./loadXlsx";
 import type {
   AggregatedWeeklyRecord,
+  StoreDeliveryAggregate,
   ProductDeliveryProcessingResult,
 } from "@/types/productDeliveries";
+
+// Compute ISO week number (1-53) from a Date
+function getISOWeek(date: Date): number {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+}
 
 // ============================================================
 // REQUIRED COLUMN NAMES
@@ -231,6 +241,16 @@ interface AggData {
   uniqueDates:   Set<string>; // for delivery_count
 }
 
+interface StoreWeekData {
+  storeExternalId: number;
+  storeName: string;
+  year: number;
+  month: number;
+  weekStartDate: string;
+  uniqueDates: Set<string>;
+  totalNetQty: number;
+}
+
 function aggregateRecords(
   rawRows: unknown[][],
   headerRowIndex: number,
@@ -238,9 +258,11 @@ function aggregateRecords(
   XLSX?: { SSF?: { parse_date_code?: (n: number) => unknown } },
 ): {
   records: AggregatedWeeklyRecord[];
+  storeDeliveries: StoreDeliveryAggregate[];
   stats: Omit<ProductDeliveryProcessingResult["stats"], "processingTimeMs">;
 } {
   const map = new Map<string, { key: AggKey; data: AggData }>();
+  const storeWeekMap = new Map<string, StoreWeekData>();
 
   let rowsProcessed = 0;
   let rowsSkipped   = 0;
@@ -303,6 +325,26 @@ function aggregateRecords(
 
     if (weekInfo.weekStartDate < minDate) minDate = weekInfo.weekStartDate;
     if (weekInfo.weekStartDate > maxDate) maxDate = weekInfo.weekStartDate;
+
+    // Store-level aggregation for store_deliveries
+    const storeWeekKey = `${storeId}|${weekInfo.weekStartDate}`;
+    const existingSW = storeWeekMap.get(storeWeekKey);
+    if (existingSW) {
+      if (deliveryDateRaw) existingSW.uniqueDates.add(deliveryDateRaw);
+      existingSW.totalNetQty += netQty;
+    } else {
+      const dates = new Set<string>();
+      if (deliveryDateRaw) dates.add(deliveryDateRaw);
+      storeWeekMap.set(storeWeekKey, {
+        storeExternalId: storeId,
+        storeName,
+        year: weekInfo.year,
+        month: weekInfo.month,
+        weekStartDate: weekInfo.weekStartDate,
+        uniqueDates: dates,
+        totalNetQty: netQty,
+      });
+    }
   }
 
   // Build output records
@@ -326,8 +368,60 @@ function aggregateRecords(
   const uniqueProducts = new Set(records.map((r) => r.productNameNormalized));
   const uniqueWeeks    = new Set(records.map((r) => r.weekStartDate));
 
+  // Weekly store_deliveries records
+  const weeklyDeliveries: StoreDeliveryAggregate[] = Array.from(storeWeekMap.values()).map((sw) => ({
+    storeExternalId: sw.storeExternalId,
+    storeName: sw.storeName,
+    year: sw.year,
+    month: sw.month,
+    week: getISOWeek(new Date(sw.weekStartDate)),
+    deliveriesCount: sw.uniqueDates.size,
+    totalValue: 0,
+    totalQuantity: sw.totalNetQty,
+  }));
+
+  // Monthly store_deliveries records (aggregate weekly per store+month)
+  const storeMonthMap = new Map<string, {
+    storeExternalId: number;
+    storeName: string;
+    year: number;
+    month: number;
+    allDates: Set<string>;
+    totalNetQty: number;
+  }>();
+  Array.from(storeWeekMap.values()).forEach((sw) => {
+    const monthKey = `${sw.storeExternalId}|${sw.year}|${sw.month}`;
+    const existing = storeMonthMap.get(monthKey);
+    if (existing) {
+      sw.uniqueDates.forEach((d) => existing.allDates.add(d));
+      existing.totalNetQty += sw.totalNetQty;
+    } else {
+      storeMonthMap.set(monthKey, {
+        storeExternalId: sw.storeExternalId,
+        storeName: sw.storeName,
+        year: sw.year,
+        month: sw.month,
+        allDates: new Set(sw.uniqueDates),
+        totalNetQty: sw.totalNetQty,
+      });
+    }
+  });
+  const monthlyDeliveries: StoreDeliveryAggregate[] = Array.from(storeMonthMap.values()).map((sm) => ({
+    storeExternalId: sm.storeExternalId,
+    storeName: sm.storeName,
+    year: sm.year,
+    month: sm.month,
+    week: null,
+    deliveriesCount: sm.allDates.size,
+    totalValue: 0,
+    totalQuantity: sm.totalNetQty,
+  }));
+
+  const storeDeliveries = [...weeklyDeliveries, ...monthlyDeliveries];
+
   return {
     records,
+    storeDeliveries,
     stats: {
       rowsProcessed,
       rowsSkipped,
@@ -383,7 +477,7 @@ export async function processProductDeliveryExcel(
     }
 
     const { headerRowIndex, colMap } = headerResult;
-    const { records, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX);
+    const { records, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX);
 
     if (records.length === 0) {
       return failure("לא נמצאו שורות תקינות בקובץ");
@@ -392,6 +486,7 @@ export async function processProductDeliveryExcel(
     return {
       success: true,
       records,
+      storeDeliveries,
       stats: { ...stats, processingTimeMs: Math.round(performance.now() - startTime) },
     };
   } catch (err) {
@@ -406,6 +501,7 @@ function failure(error: string): ProductDeliveryProcessingResult {
   return {
     success: false,
     records: [],
+    storeDeliveries: [],
     stats: {
       rowsProcessed: 0,
       rowsSkipped:   0,
