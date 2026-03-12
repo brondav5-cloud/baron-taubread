@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/accounting/revenue-groups — list
  * POST /api/accounting/revenue-groups — body: { group_code } add

@@ -173,33 +173,63 @@ export default function WeeklyPage() {
         {/* Row 1: week selector + weeksCount + search + trend filters */}
         <div className="flex flex-wrap gap-3 items-center">
 
-          {/* Week dropdown + holiday toggle */}
+          {/* Week dropdown + nav arrows + holiday toggle */}
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">שבוע:</label>
-            <div className="flex flex-col gap-0.5">
-              <select
-                value={weekly.selectedWeek}
-                onChange={(e) => weekly.selectWeek(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
-              >
-                {weekly.availableWeeks.map((w) => (
-                  <option key={w} value={w}>
-                    {weekly.holidayWeeks.has(w) ? `🎉 ` : ""}{fmtDate(w)}
-                    {weekly.holidayWeeks.has(w) ? ` — ${weekly.holidayWeeks.get(w)}` : ""}
-                  </option>
-                ))}
-              </select>
-              {/* Show selected range when weeksCount > 1 */}
-              {weekly.weeksCount > 1 && (() => {
-                const idx   = weekly.availableWeeks.indexOf(weekly.selectedWeek);
-                const endW  = weekly.availableWeeks[idx + weekly.weeksCount - 1];
-                return endW ? (
-                  <span className="text-[10px] text-purple-600 font-medium text-center">
-                    {fmtDate(endW)} – {fmtDate(weekly.selectedWeek)}
-                  </span>
-                ) : null;
-              })()}
-            </div>
+            {/* Prev/Next navigation arrows */}
+            {(() => {
+              const idx      = weekly.availableWeeks.indexOf(weekly.selectedWeek);
+              const canNext  = idx > 0;                                         // newer week
+              const canPrev  = idx < weekly.availableWeeks.length - 1;         // older week
+              const navBtn   = "px-2 py-1.5 rounded-lg border border-gray-300 text-gray-500 text-sm transition-colors";
+              const active   = "hover:bg-purple-50 hover:text-purple-600 hover:border-purple-300";
+              const disabled = "opacity-30 cursor-not-allowed";
+              return (
+                <>
+                  {/* ← newer (lower index in desc-sorted array) */}
+                  <button
+                    onClick={() => canNext && weekly.selectWeek(weekly.availableWeeks[idx - 1]!)}
+                    disabled={!canNext}
+                    title="שבוע קדימה (חדש יותר)"
+                    className={clsx(navBtn, canNext ? active : disabled)}
+                  >
+                    ‹
+                  </button>
+                  <div className="flex flex-col gap-0.5">
+                    <select
+                      value={weekly.selectedWeek}
+                      onChange={(e) => weekly.selectWeek(e.target.value)}
+                      className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
+                    >
+                      {weekly.availableWeeks.map((w) => (
+                        <option key={w} value={w}>
+                          {weekly.holidayWeeks.has(w) ? `🎉 ` : ""}{fmtDate(w)}
+                          {weekly.holidayWeeks.has(w) ? ` — ${weekly.holidayWeeks.get(w)}` : ""}
+                        </option>
+                      ))}
+                    </select>
+                    {/* Show selected range when weeksCount > 1 */}
+                    {weekly.weeksCount > 1 && (() => {
+                      const endW = weekly.availableWeeks[idx + weekly.weeksCount - 1];
+                      return endW ? (
+                        <span className="text-[10px] text-purple-600 font-medium text-center">
+                          {fmtDate(endW)} – {fmtDate(weekly.selectedWeek)}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
+                  {/* → older (higher index) */}
+                  <button
+                    onClick={() => canPrev && weekly.selectWeek(weekly.availableWeeks[idx + 1]!)}
+                    disabled={!canPrev}
+                    title="שבוע אחורה (ישן יותר)"
+                    className={clsx(navBtn, canPrev ? active : disabled)}
+                  >
+                    ›
+                  </button>
+                </>
+              );
+            })()}
             {/* Mark/unmark current week as holiday */}
             <button
               onClick={() => weekly.selectedWeek && weekly.toggleHoliday(weekly.selectedWeek)}
@@ -219,7 +249,7 @@ export default function WeeklyPage() {
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-gray-500 font-medium">טווח:</span>
             <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
-              {([1, 2, 3, 4] as const).map((n) => (
+              {([1, 2, 3, 4, 8] as const).map((n) => (
                 <button
                   key={n}
                   onClick={() => weekly.setWeeksCount(n)}

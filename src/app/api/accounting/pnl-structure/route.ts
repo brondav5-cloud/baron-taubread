@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * GET  /api/accounting/pnl-structure
  *   → { groupLabels: Record<string,string>, customSections: PnlCustomSection[] }

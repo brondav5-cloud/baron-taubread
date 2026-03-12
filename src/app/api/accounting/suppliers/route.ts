@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 /**
  * GET /api/accounting/suppliers
  * Returns suppliers with names and classifications for the selected company.
