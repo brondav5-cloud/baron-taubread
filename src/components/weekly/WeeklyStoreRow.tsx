@@ -14,12 +14,14 @@ export function StoreRow({
   onToggle,
   selectedWeek,
   onToggleIrregular,
+  weeksCount = 1,
 }: {
   store: StoreWeekComparison;
   isExpanded: boolean;
   onToggle: () => void;
   selectedWeek?: string;
   onToggleIrregular?: (productNameNormalized: string) => Promise<void>;
+  weeksCount?: number;
 }) {
   const trendBg =
     store.overallTrend.direction === "down"
@@ -63,9 +65,15 @@ export function StoreRow({
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="text-right px-4 py-2 font-medium">מוצר</th>
-                <th className="text-center px-3 py-2 font-medium">כמות</th>
-                <th className="text-center px-3 py-2 font-medium">שב׳ קודם</th>
-                <th className="text-center px-3 py-2 font-medium">ממוצע 3</th>
+                <th className="text-center px-3 py-2 font-medium">
+                  {weeksCount > 1 ? `ממוצע/${weeksCount}שב׳` : "כמות"}
+                </th>
+                <th className="text-center px-3 py-2 font-medium">
+                  {weeksCount > 1 ? "תקופה קודמת" : "שב׳ קודם"}
+                </th>
+                <th className="text-center px-3 py-2 font-medium">
+                  {weeksCount > 1 ? "3 תקופות" : "ממוצע 3"}
+                </th>
                 <th className="text-center px-3 py-2 font-medium">שנה שעב׳</th>
                 <th className="text-center px-3 py-2 font-medium">Top-10</th>
                 <th className="text-center px-3 py-2 font-medium">החזרות</th>
@@ -81,7 +89,12 @@ export function StoreRow({
                 />
               ))}
             </tbody>
-            <StoreTotalsRow products={store.products} totalGrossQty={store.totalGrossQty} totalReturnsQty={store.totalReturnsQty} />
+            <StoreTotalsRow
+              products={store.products}
+              totalGrossQty={store.totalGrossQty}
+              totalReturnsQty={store.totalReturnsQty}
+              weeksCount={weeksCount}
+            />
           </table>
         </div>
       )}
@@ -97,10 +110,12 @@ function StoreTotalsRow({
   products,
   totalGrossQty,
   totalReturnsQty,
+  weeksCount = 1,
 }: {
   products: ProductWeekComparison[];
   totalGrossQty: number;
   totalReturnsQty: number;
+  weeksCount?: number;
 }) {
   const hasLastWeek  = products.some((p) => p.lastWeekQty !== null);
   const hasAvg3w     = products.some((p) => p.avgLast3WeeksQty !== null);
@@ -117,7 +132,9 @@ function StoreTotalsRow({
   return (
     <tfoot>
       <tr className="border-t-2 border-gray-300 bg-gray-100/70 text-xs font-semibold text-gray-700">
-        <td className="px-4 py-2">סה״כ</td>
+        <td className="px-4 py-2">
+          {weeksCount > 1 ? `סה״כ (ממוצע/${weeksCount}שב׳)` : "סה״כ"}
+        </td>
         <td className="px-3 py-2 text-center">{totalGrossQty.toLocaleString("he-IL")}</td>
         <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumLastWeek)}</td>
         <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumAvg3w)}</td>
@@ -187,6 +204,17 @@ function ProductRow({
             </a>
           ) : (
             <span className={clsx(product.isIrregular && "italic text-gray-500")}>{product.productName}</span>
+          )}
+          {Math.abs(product.streak) >= 2 && (
+            <span
+              title={`${Math.abs(product.streak)} שבועות ברצף ${product.streak > 0 ? "בעלייה" : "בירידה"}`}
+              className={clsx(
+                "text-xs font-bold px-1 py-0.5 rounded flex-shrink-0",
+                product.streak > 0 ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700",
+              )}
+            >
+              {product.streak > 0 ? "↑" : "↓"}{Math.abs(product.streak)}
+            </span>
           )}
           {onToggleIrregular && (
             <button

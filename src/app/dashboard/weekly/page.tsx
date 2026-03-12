@@ -25,18 +25,20 @@ export default function WeeklyPage() {
   const [filterTrend,    setFilterTrend]    = useState<"all" | "down" | "up" | "stable">("all");
   const [orderMode,      setOrderMode]      = useState(false);
 
-  const toggleStore  = (id: number) =>
+  const toggleStore = (id: number) =>
     setExpandedStores((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const expandAll    = () => setExpandedStores(new Set(weekly.stores.map((s) => s.storeExternalId)));
-  const collapseAll  = () => setExpandedStores(new Set());
+  const expandAll   = () => setExpandedStores(new Set(weekly.stores.map((s) => s.storeExternalId)));
+  const collapseAll = () => setExpandedStores(new Set());
 
-  const filteredStores = useMemo(() =>
-    weekly.stores.filter((s) => {
-      if (searchQuery && !s.storeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-      if (filterTrend !== "all" && s.overallTrend.direction !== filterTrend) return false;
-      return true;
-    }),
-  [weekly.stores, searchQuery, filterTrend]);
+  const filteredStores = useMemo(
+    () =>
+      weekly.stores.filter((s) => {
+        if (searchQuery && !s.storeName.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+        if (filterTrend !== "all" && s.overallTrend.direction !== filterTrend) return false;
+        return true;
+      }),
+    [weekly.stores, searchQuery, filterTrend],
+  );
 
   const summary = useMemo(() => ({
     total:      weekly.stores.length,
@@ -83,103 +85,186 @@ export default function WeeklyPage() {
     <div className="space-y-4" dir="rtl">
       <PageHeader />
 
-      {/* Controls */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 flex flex-wrap gap-4 items-center justify-between">
-        <div className="flex items-center gap-3">
-          <label className="text-sm font-medium text-gray-700">שבוע:</label>
-          <select
-            value={weekly.selectedWeek}
-            onChange={(e) => weekly.selectWeek(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
-          >
-            {weekly.availableWeeks.map((w) => <option key={w} value={w}>{fmtDate(w)}</option>)}
-          </select>
-        </div>
+      {/* ─── Controls ─── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
 
-        <div className="relative flex-1 max-w-xs">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="חיפוש חנות..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-3 pr-9 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
-          />
-        </div>
+        {/* Row 1: week selector + weeksCount + search + trend filters */}
+        <div className="flex flex-wrap gap-3 items-center">
 
-        <div className="flex gap-1">
-          {(["all", "down", "up", "stable"] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setFilterTrend(t)}
-              className={clsx(
-                "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                filterTrend === t
-                  ? t === "down" ? "bg-red-100 text-red-700 ring-1 ring-red-300"
-                  : t === "up"  ? "bg-green-100 text-green-700 ring-1 ring-green-300"
-                  :               "bg-gray-200 text-gray-700 ring-1 ring-gray-400"
-                  : "bg-gray-50 text-gray-500 hover:bg-gray-100",
-              )}
+          {/* Week dropdown */}
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">שבוע:</label>
+            <select
+              value={weekly.selectedWeek}
+              onChange={(e) => weekly.selectWeek(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
             >
-              {t === "all" ? "הכל" : t === "down" ? "↓ ירידה" : t === "up" ? "↑ עלייה" : "→ יציב"}
-            </button>
-          ))}
+              {weekly.availableWeeks.map((w) => (
+                <option key={w} value={w}>{fmtDate(w)}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Weeks count selector */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500 font-medium">טווח:</span>
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+              {([1, 2, 3, 4] as const).map((n) => (
+                <button
+                  key={n}
+                  onClick={() => weekly.setWeeksCount(n)}
+                  title={n === 1 ? "שבוע יחיד" : `ממוצע ${n} שבועות`}
+                  className={clsx(
+                    "px-2.5 py-1.5 font-medium transition-colors",
+                    weekly.weeksCount === n
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50",
+                  )}
+                >
+                  {n}שב׳
+                </button>
+              ))}
+            </div>
+            {weekly.weeksCount > 1 && (
+              <span className="text-xs text-purple-600 font-medium">
+                ממוצע לשבוע ({weekly.weeksCount} שבועות)
+              </span>
+            )}
+          </div>
+
+          {/* Store search */}
+          <div className="relative flex-1 min-w-[160px] max-w-xs">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="חיפוש חנות..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-3 pr-9 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+            />
+          </div>
+
+          {/* Trend filter */}
+          <div className="flex gap-1">
+            {(["all", "down", "up", "stable"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setFilterTrend(t)}
+                className={clsx(
+                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  filterTrend === t
+                    ? t === "down" ? "bg-red-100 text-red-700 ring-1 ring-red-300"
+                    : t === "up"   ? "bg-green-100 text-green-700 ring-1 ring-green-300"
+                    :                "bg-gray-200 text-gray-700 ring-1 ring-gray-400"
+                    : "bg-gray-50 text-gray-500 hover:bg-gray-100",
+                )}
+              >
+                {t === "all" ? "הכל" : t === "down" ? "↓ ירידה" : t === "up" ? "↑ עלייה" : "→ יציב"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        <button
-          onClick={() => weekly.setShowExcluded(!weekly.showExcluded)}
-          className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
-        >
-          {weekly.showExcluded ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-          {weekly.showExcluded ? "הסתר מוחרגים" : "הצג מוחרגים"}
-        </button>
+        {/* Row 2: visibility toggles + expand/collapse + order mode + product analysis */}
+        <div className="flex flex-wrap gap-3 items-center">
 
-        <div className="flex gap-2">
-          <button onClick={expandAll}   className="text-xs text-purple-600 hover:text-purple-800 underline">פתח הכל</button>
-          <span className="text-gray-300">|</span>
-          <button onClick={collapseAll} className="text-xs text-purple-600 hover:text-purple-800 underline">סגור הכל</button>
-        </div>
+          {/* Show excluded */}
+          <button
+            onClick={() => weekly.setShowExcluded(!weekly.showExcluded)}
+            className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700"
+          >
+            {weekly.showExcluded ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+            {weekly.showExcluded ? "הסתר מוחרגים" : "הצג מוחרגים"}
+          </button>
 
-        <button
-          onClick={() => setOrderMode((v) => !v)}
-          className={clsx(
-            "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
-            orderMode
-              ? "bg-blue-600 text-white hover:bg-blue-700"
-              : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200",
+          {/* Show irregular */}
+          <button
+            onClick={() => weekly.setShowIrregular(!weekly.showIrregular)}
+            className={clsx(
+              "flex items-center gap-1.5 text-xs transition-colors",
+              weekly.showIrregular ? "text-purple-600 hover:text-purple-800" : "text-gray-400 hover:text-gray-600",
+            )}
+          >
+            <span className="text-sm leading-none">⊘</span>
+            {weekly.showIrregular ? "הסתר לא-סדירים" : "הצג לא-סדירים"}
+          </button>
+
+          <span className="text-gray-200">|</span>
+
+          {/* Expand / collapse */}
+          {!orderMode && (
+            <>
+              <button onClick={expandAll}   className="text-xs text-purple-600 hover:text-purple-800 underline">פתח הכל</button>
+              <span className="text-gray-300">|</span>
+              <button onClick={collapseAll} className="text-xs text-purple-600 hover:text-purple-800 underline">סגור הכל</button>
+              <span className="text-gray-200">|</span>
+            </>
           )}
-        >
-          <span className="text-base leading-none">🛒</span>
-          {orderMode ? "✕ סגור מצב הזמנה" : "מצב הזמנה"}
-        </button>
 
-        <Link
-          href={`/dashboard/weekly/product?week=${weekly.selectedWeek}`}
-          className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 font-medium"
-        >
-          ניתוח לפי מוצר →
-        </Link>
+          {/* Order mode toggle */}
+          <button
+            onClick={() => setOrderMode((v) => !v)}
+            className={clsx(
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+              orderMode
+                ? "bg-blue-600 text-white hover:bg-blue-700"
+                : "bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200",
+            )}
+          >
+            <span className="text-base leading-none">🛒</span>
+            {orderMode ? "✕ סגור מצב הזמנה" : "מצב הזמנה"}
+          </button>
+
+          {/* Product analysis link */}
+          <Link
+            href={`/dashboard/weekly/product?week=${weekly.selectedWeek}`}
+            className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 font-medium"
+          >
+            ניתוח לפי מוצר →
+          </Link>
+
+          {/* Active filters summary */}
+          {(searchQuery || filterTrend !== "all") && (
+            <span className="text-xs text-gray-400">
+              מציג {filteredStores.length} מתוך {weekly.stores.length} חנויות
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Summary */}
+      {/* ─── Summary Cards ─── */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        <SummaryCard label="סה״כ יחידות"  value={summary.totalUnits.toLocaleString("he-IL")} color="purple" />
-        <SummaryCard label="סה״כ חנויות"  value={summary.total}  color="gray" />
-        <SummaryCard label="בעלייה"        value={summary.up}     color="green"  icon="up" />
-        <SummaryCard label="ביציבות"       value={summary.stable} color="yellow" icon="stable" />
-        <SummaryCard label="בירידה"        value={summary.down}   color="red"    icon="down" />
+        <SummaryCard
+          label={weekly.weeksCount > 1 ? `יחידות (ממוצע/${weekly.weeksCount}שב׳)` : "סה״כ יחידות"}
+          value={summary.totalUnits.toLocaleString("he-IL")}
+          color="purple"
+        />
+        <SummaryCard label="סה״כ חנויות" value={summary.total}  color="gray" />
+        <SummaryCard label="בעלייה"       value={summary.up}     color="green"  icon="up" />
+        <SummaryCard label="ביציבות"      value={summary.stable} color="yellow" icon="stable" />
+        <SummaryCard label="בירידה"       value={summary.down}   color="red"    icon="down" />
       </div>
 
-      {/* Legend */}
+      {/* ─── Legend ─── */}
       <div className="bg-gray-50 rounded-lg px-4 py-2 text-xs text-gray-500 flex flex-wrap gap-4">
         <span className="font-medium text-gray-700">מדדים:</span>
-        <span><span className="font-mono text-gray-700">שב׳ קודם</span> — לעומת שבוע שעבר</span>
-        <span><span className="font-mono text-gray-700">ממוצע 3</span> — ממוצע 3 שבועות אחרונים</span>
-        <span><span className="font-mono text-gray-700">שנה שעב׳</span> — אותו שבוע שנה שעברה</span>
-        <span><span className="font-mono text-gray-700">Top-10</span> — ממוצע 10 האספקות הגדולות (12 חודש)</span>
+        {weekly.weeksCount > 1 ? (
+          <>
+            <span>ממוצע לשבוע על פני {weekly.weeksCount} שבועות אחרונים</span>
+            <span>כל מדדי ההשוואה מחושבים לפי תקופות באותו אורך</span>
+          </>
+        ) : (
+          <>
+            <span><span className="font-mono text-gray-700">שב׳ קודם</span> — לעומת שבוע שעבר</span>
+            <span><span className="font-mono text-gray-700">ממוצע 3</span> — ממוצע 3 שבועות אחרונים</span>
+            <span><span className="font-mono text-gray-700">שנה שעב׳</span> — אותו שבוע שנה שעברה</span>
+            <span><span className="font-mono text-gray-700">Top-10</span> — ממוצע 10 האספקות הגדולות (12 חודש)</span>
+          </>
+        )}
+        <span><span className="font-mono text-gray-700">N↑/N↓</span> — שבועות ברצף באותו כיוון (streak)</span>
       </div>
 
-      {/* Error */}
+      {/* ─── Error ─── */}
       {weekly.error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3 text-red-700">
           <AlertTriangle className="w-5 h-5 flex-shrink-0" />
@@ -187,9 +272,13 @@ export default function WeeklyPage() {
         </div>
       )}
 
-      {/* Order Mode or Normal Stores view */}
+      {/* ─── Main content ─── */}
       {orderMode ? (
-        <OrderModeTable stores={weekly.stores} selectedWeek={weekly.selectedWeek} />
+        <OrderModeTable
+          stores={filteredStores}
+          selectedWeek={weekly.selectedWeek}
+          weeksCount={weekly.weeksCount}
+        />
       ) : (
         <div className="space-y-2">
           {filteredStores.length === 0 ? (
@@ -203,6 +292,7 @@ export default function WeeklyPage() {
                 onToggle={() => toggleStore(store.storeExternalId)}
                 selectedWeek={weekly.selectedWeek}
                 onToggleIrregular={weekly.toggleIrregular}
+                weeksCount={weekly.weeksCount}
               />
             ))
           )}
@@ -220,7 +310,7 @@ function PageHeader() {
         השוואה שבועית
       </h1>
       <p className="text-gray-500 mt-1">
-        מגמות אספקה לפי חנות ומוצר — ביחס לשבוע קודם, ממוצע 3 שבועות, שנה שעברה ו-Top-10
+        מגמות אספקה לפי חנות ומוצר — ביחס לתקופה קודמת, ממוצע 3 תקופות, שנה שעברה ו-Top-10
       </p>
     </div>
   );
