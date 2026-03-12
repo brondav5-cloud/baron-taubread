@@ -11,7 +11,6 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import {
   getCompanyUsersMulti,
-  updateUser as updateUserInDb,
   deactivateUser as deactivateUserInDb,
 } from "@/lib/supabase/users.queries";
 import {
