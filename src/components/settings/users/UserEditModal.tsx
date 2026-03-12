@@ -45,6 +45,9 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
   const { addUser, updateUser } = useUsers();
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const selectedCompanyId = auth.status === "authed" ? (auth.user.selectedCompanyId ?? auth.user.company_id) : null;
+  const companies = auth.status === "authed" ? auth.user.companies : [];
+  const selectedCompanyName = companies.find((c) => c.id === selectedCompanyId)?.name ?? selectedCompanyId ?? "";
   const { allPositions, custom, addPosition, removePosition } =
     useCompanyPositions(companyId ?? null);
   const [showPositionManager, setShowPositionManager] = useState(false);
@@ -163,6 +166,13 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
+          {isNew && selectedCompanyName && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+              <span className="text-base">🏢</span>
+              <span>המשתמש יתווסף לחברה: <strong>{selectedCompanyName}</strong></span>
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               שם *
