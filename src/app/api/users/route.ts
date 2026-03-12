@@ -221,11 +221,21 @@ export async function POST(request: NextRequest) {
     }
 
     // Add membership to user_companies
-    await admin.from("user_companies").insert({
+    const { error: ucInsertErr } = await admin.from("user_companies").insert({
       user_id: newUserId,
       company_id: selectedCompanyId,
       role: newUserRole,
     });
+
+    if (ucInsertErr) {
+      // Rollback: delete auth user and public.users row to avoid orphaned state
+      await admin.auth.admin.deleteUser(newUserId);
+      await admin.from("users").delete().eq("id", newUserId);
+      return NextResponse.json(
+        { error: ucInsertErr.message || "שגיאה בהוספת משתמש לחברה" },
+        { status: 500 },
+      );
+    }
 
     return NextResponse.json(inserted);
   } catch (err) {
