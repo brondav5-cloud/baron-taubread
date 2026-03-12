@@ -168,6 +168,8 @@ export async function getAvailableWeeks(
     .limit(limit * 50); // fetch extra to deduplicate
 
   if (!data) return [];
-  const unique = [...new Set(data.map((r) => r.week_start_date as string))];
+  const uniqueSet = new Set<string>();
+  data.forEach((r) => uniqueSet.add(r.week_start_date as string));
+  const unique = Array.from(uniqueSet);
   return unique.slice(0, limit);
 }

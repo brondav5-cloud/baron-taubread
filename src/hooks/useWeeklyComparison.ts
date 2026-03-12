@@ -172,9 +172,9 @@ export function useWeeklyComparison(): WeeklyComparisonData {
         setRawData(rows);
 
         // Build sorted unique week list
-        const weeks = [...new Set(rows.map((r) => r.week_start_date))].sort(
-          (a, b) => (a > b ? -1 : 1),
-        );
+        const weekSet = new Set<string>();
+        rows.forEach((r) => weekSet.add(r.week_start_date));
+        const weeks = Array.from(weekSet).sort((a, b) => (a > b ? -1 : 1));
         setAvailableWeeks(weeks);
 
         // Auto-select most recent week
@@ -225,7 +225,9 @@ function computeComparison(
   }
 
   // Get unique weeks sorted desc for "last week" lookup
-  const allWeeks = [...new Set(rawData.map((r) => r.week_start_date))].sort(
+  const wkSet = new Set<string>();
+  rawData.forEach((r) => wkSet.add(r.week_start_date));
+  const allWeeks = Array.from(wkSet).sort(
     (a, b) => (a > b ? -1 : 1),
   );
   const selectedIdx = allWeeks.indexOf(selectedWeek);
@@ -255,13 +257,14 @@ function computeComparison(
 
   const result: StoreWeekComparison[] = [];
 
-  for (const [storeId, storeRows] of byStore) {
+  Array.from(byStore.keys()).forEach((storeId) => {
+    const storeRows = byStore.get(storeId)!;
     const storeName = storeRows[0]!.store_name;
     const products: ProductWeekComparison[] = [];
 
-    for (const row of storeRows) {
+    storeRows.forEach((row) => {
       const isExcluded = excludedNames.has(row.product_name_normalized);
-      if (isExcluded && !showExcluded) continue;
+      if (isExcluded && !showExcluded) return;
 
       const spKey   = `${storeId}|${row.product_name_normalized}`;
       const weekMap = index.get(spKey) ?? new Map();
@@ -316,9 +319,9 @@ function computeComparison(
         avgLast3WeeksQty:      avg3w,
         lastYearQty,
       });
-    }
+    });
 
-    if (products.length === 0) continue;
+    if (products.length === 0) return;
 
     const totalGrossQty   = products.reduce((s, p) => s + p.grossQty,   0);
     const totalReturnsQty = products.reduce((s, p) => s + p.returnsQty, 0);
@@ -345,7 +348,7 @@ function computeComparison(
       totalDeliveries,
       overallTrend:    computeTrend(totalGrossQty, lastWeekStoreTotal || null),
     });
-  }
+  });
 
   // Sort stores by name
   return result.sort((a, b) => a.storeName.localeCompare("he", b.storeName));

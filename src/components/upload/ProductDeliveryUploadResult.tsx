@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle, Package, Store, CalendarDays, TrendingUp, TrendingDown } from "lucide-react";
+import { CheckCircle, Package, Store, Calendar, TrendingUp, TrendingDown } from "lucide-react";
 
 interface UploadResponse {
   recordsUpserted:  number;
@@ -63,7 +63,7 @@ export function ProductDeliveryUploadResult({ response }: Props) {
           bg="bg-blue-50"
         />
         <StatCard
-          icon={<CalendarDays className="w-4 h-4 text-indigo-600" />}
+          icon={<Calendar className="w-4 h-4 text-indigo-600" />}
           label="שבועות"
           value={response.weeksCount.toLocaleString("he-IL")}
           bg="bg-indigo-50"

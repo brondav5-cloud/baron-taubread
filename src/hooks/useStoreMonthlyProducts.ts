@@ -60,9 +60,9 @@ export function useStoreMonthlyProducts(
         const fetched = (data ?? []) as MonthlyProductRow[];
         setRows(fetched);
 
-        const months = [...new Set(fetched.map((r) => r.month_key))].sort(
-          (a, b) => (a > b ? -1 : 1),
-        );
+        const seen = new Set<string>();
+        fetched.forEach((r) => seen.add(r.month_key));
+        const months = Array.from(seen).sort((a, b) => (a > b ? -1 : 1));
         setAvailableMonths(months);
       });
   }, [companyId, storeExternalId]);
