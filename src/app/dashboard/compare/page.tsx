@@ -29,12 +29,12 @@ export default function ComparePage() {
 
     // State
     selectedCity,
-    setSelectedCity,
-    selectedCriteriaType,
-    setSelectedCriteriaType,
+    setSelectedCity: _setSelectedCity,
+    selectedCriteriaType: _selectedCriteriaType,
+    setSelectedCriteriaType: _setSelectedCriteriaType,
     selectedCriteriaValue,
-    setSelectedCriteriaValue,
-    criteriaValueOptions,
+    setSelectedCriteriaValue: _setSelectedCriteriaValue,
+    criteriaValueOptions: _criteriaValueOptions,
     criteriaStores,
     criteriaStats,
     criteriaListTitle,
