@@ -47,12 +47,21 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
   const selectedCompanyId = auth.status === "authed" ? (auth.user.selectedCompanyId ?? auth.user.company_id) : null;
   const companies = auth.status === "authed" ? auth.user.companies : [];
-  const selectedCompanyName = companies.find((c) => c.id === selectedCompanyId)?.name ?? selectedCompanyId ?? "";
   const { allPositions, custom, addPosition, removePosition } =
     useCompanyPositions(companyId ?? null);
   const [showPositionManager, setShowPositionManager] = useState(false);
   const [newPositionLabel, setNewPositionLabel] = useState("");
   const isNew = !user;
+
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<string[]>(() =>
+    selectedCompanyId ? [selectedCompanyId] : [],
+  );
+
+  const toggleCompany = (id: string) => {
+    setSelectedCompanyIds((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id],
+    );
+  };
 
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
@@ -92,6 +101,11 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
       return;
     }
 
+    if (isNew && selectedCompanyIds.length === 0) {
+      toast.error("יש לבחור לפחות חברה אחת");
+      return;
+    }
+
     setSaving(true);
     try {
       if (isNew) {
@@ -99,6 +113,7 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
         PERMISSION_MODULES.forEach(({ key }) => {
           perms[key] = permissions[key] !== false;
         });
+        const extraCompanyIds = selectedCompanyIds.filter((id) => id !== selectedCompanyId);
         const result = await addUser({
           name: name.trim(),
           email: email.trim(),
@@ -108,6 +123,7 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
           department: department.trim(),
           avatar,
           permissions: perms,
+          extraCompanyIds: extraCompanyIds.length > 0 ? extraCompanyIds : undefined,
         });
         if (result) {
           toast.success(
@@ -166,10 +182,25 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
         </div>
 
         <div className="p-5 space-y-4 overflow-y-auto flex-1 min-h-0">
-          {isNew && selectedCompanyName && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
-              <span className="text-base">🏢</span>
-              <span>המשתמש יתווסף לחברה: <strong>{selectedCompanyName}</strong></span>
+          {isNew && companies.length > 0 && (
+            <div className="px-3 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm font-medium text-blue-800 mb-2">🏢 הוסף לחברות:</p>
+              <div className="space-y-1.5">
+                {companies.map((c) => (
+                  <label key={c.id} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCompanyIds.includes(c.id)}
+                      onChange={() => toggleCompany(c.id)}
+                      className="w-4 h-4 accent-primary-600"
+                    />
+                    <span className="text-sm text-blue-900">{c.name}</span>
+                  </label>
+                ))}
+              </div>
+              {selectedCompanyIds.length === 0 && (
+                <p className="text-xs text-red-500 mt-1">יש לבחור לפחות חברה אחת</p>
+              )}
             </div>
           )}
 

@@ -37,6 +37,7 @@ export interface AddUserInput {
   avatar: string;
   role?: string;
   permissions?: UserPermissions | null;
+  extraCompanyIds?: string[];
 }
 
 export interface AppUser {
@@ -228,6 +229,7 @@ export function UsersProvider({ children }: UsersProviderProps) {
             department: data.department,
             avatar: data.avatar,
             permissions: data.permissions ?? null,
+            extraCompanyIds: data.extraCompanyIds ?? [],
           }),
         });
         if (!res.ok) {

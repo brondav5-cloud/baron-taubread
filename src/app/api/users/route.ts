@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const isSuperAdmin = myRole === "super_admin";
     const allowedRoles = ["admin", "super_admin"];
     if (!myRole || !allowedRoles.includes(myRole)) {
       return NextResponse.json(
@@ -64,7 +65,19 @@ export async function POST(request: NextRequest) {
       avatar,
       permissions,
       password,
+      extraCompanyIds = [],
     } = body;
+
+    // Validate extra company IDs — admin must be a member of each
+    const { data: adminMemberships } = await admin
+      .from("user_companies")
+      .select("company_id")
+      .eq("user_id", user.id);
+    const adminCompanyIds = new Set((adminMemberships ?? []).map((m: { company_id: string }) => m.company_id));
+    // super_admin can add to any company they can see; for regular admins, filter to their companies
+    const validatedExtraIds: string[] = isSuperAdmin
+      ? (extraCompanyIds as string[])
+      : (extraCompanyIds as string[]).filter((id: string) => adminCompanyIds.has(id));
     if (!name?.trim()) {
       return NextResponse.json({ error: "חובה למלא שם" }, { status: 400 });
     }
@@ -151,6 +164,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      // Add to extra companies (ignore errors — best effort)
+      for (const extraId of validatedExtraIds.filter((id) => id !== selectedCompanyId)) {
+        await admin.from("user_companies").upsert(
+          { user_id: existingUserId, company_id: extraId, role: newUserRole },
+          { onConflict: "user_id,company_id" },
+        );
+      }
+
       const { data: userRow } = await admin
         .from("users")
         .select("*")
@@ -234,6 +255,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: ucInsertErr.message || "שגיאה בהוספת משתמש לחברה" },
         { status: 500 },
+      );
+    }
+
+    // Add to extra companies (best effort)
+    for (const extraId of validatedExtraIds.filter((id) => id !== selectedCompanyId)) {
+      await admin.from("user_companies").upsert(
+        { user_id: newUserId, company_id: extraId, role: newUserRole },
+        { onConflict: "user_id,company_id" },
       );
     }
 
