@@ -75,16 +75,26 @@ export default function RowBlock({
         )}
         {readonly && <span className="text-base flex-shrink-0">{cfg.icon}</span>}
 
-        <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-          {row.assigneeName ? row.assigneeName.charAt(0) : "?"}
-        </span>
+        <div className="flex -space-x-1 flex-shrink-0">
+          {(row.assigneeNames.length > 0 ? row.assigneeNames : ["?"]).slice(0, 3).map((name, i) => (
+            <span
+              key={i}
+              title={name}
+              className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center border-2 border-white"
+            >
+              {name.charAt(0)}
+            </span>
+          ))}
+        </div>
 
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-medium truncate ${cfg.text}`}>
             {row.content || <span className="text-gray-400 italic">לא הוזן תיאור</span>}
           </p>
           <p className="text-xs text-gray-500">
-            {row.assigneeName || "לא שויך"}
+            {row.assigneeNames.length > 0
+              ? row.assigneeNames.join(", ")
+              : "לא שויך"}
             {row.dueDate && (
               <span className={`mr-2 ${isOverdue ? "text-red-500 font-semibold" : ""}`}>
                 {isOverdue ? "⚠️ " : ""}עד{" "}

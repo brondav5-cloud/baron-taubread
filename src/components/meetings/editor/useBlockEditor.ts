@@ -17,8 +17,8 @@ function emptyRow(type: RowType): ContentRow {
       id: uid(),
       type: "task",
       content: "",
-      assigneeId: "",
-      assigneeName: "",
+      assigneeIds: [],
+      assigneeNames: [],
       dueDate: defaultDue(),
       priority: "normal" as MeetingTaskPriority,
     };
@@ -141,8 +141,8 @@ export function useBlockEditor(setTopics: SetTopics) {
                   id: r.id,
                   type: "task",
                   content: r.content,
-                  assigneeId: "",
-                  assigneeName: "",
+                  assigneeIds: [],
+                  assigneeNames: [],
                   dueDate: defaultDue(),
                   priority: "normal",
                 };

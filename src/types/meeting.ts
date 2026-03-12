@@ -19,8 +19,8 @@ export interface MeetingTaskMention {
   id: string; // local UUID before saving
   agendaItemIndex: number;
   taskId?: string; // set after task is created in tasks table
-  assigneeUserId: string;
-  assigneeName: string;
+  assigneeUserIds: string[];
+  assigneeNames: string[];
   taskTitle: string;
   dueDate: string;
   priority: MeetingTaskPriority;
@@ -65,8 +65,8 @@ export interface MeetingTaskRecord {
   meetingId: string;
   agendaItemIndex?: number;
   taskId: string;
-  assigneeUserId: string;
-  assigneeName: string;
+  assigneeUserIds: string[];
+  assigneeNames: string[];
   taskTitle: string;
   dueDate?: string;
   priority: MeetingTaskPriority;

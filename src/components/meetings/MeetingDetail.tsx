@@ -220,8 +220,8 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
   // Convert meeting task records to ParsedTask for display
   const displayTasks: ParsedTask[] = taskRecords.map((t) => ({
     id: t.id,
-    userId: t.assigneeUserId,
-    userName: t.assigneeName,
+    userIds: t.assigneeUserIds,
+    userNames: t.assigneeNames,
     title: t.taskTitle,
     dueDate: t.dueDate ?? "",
     priority: t.priority,
@@ -403,12 +403,20 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
                     key={t.id}
                     className="flex items-center gap-3 bg-white rounded-xl px-3 py-2 border border-orange-100"
                   >
-                    <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                      {t.userName.charAt(0)}
-                    </span>
+                    <div className="flex -space-x-1 flex-shrink-0">
+                      {t.userNames.slice(0, 3).map((name, i) => (
+                        <span
+                          key={i}
+                          title={name}
+                          className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center border-2 border-white"
+                        >
+                          {name.charAt(0)}
+                        </span>
+                      ))}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-800 truncate">{t.title}</p>
-                      <p className="text-xs text-gray-500">@{t.userName}</p>
+                      <p className="text-xs text-gray-500">{t.userNames.map((n) => `@${n}`).join(", ")}</p>
                     </div>
                     <div className="flex items-center gap-2 text-xs flex-shrink-0">
                       {t.dueDate && (

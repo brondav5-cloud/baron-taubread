@@ -11,8 +11,8 @@ export interface ParsedDecision {
 
 export interface ParsedTask {
   id: string;
-  userId: string;
-  userName: string;
+  userIds: string[];
+  userNames: string[];
   title: string;
   dueDate: string;
   priority: "urgent" | "normal" | "low";
@@ -82,8 +82,8 @@ function extractTaskFromMention(
 
   return {
     id: `task_${lineIndex}_${user.id}`,
-    userId: user.id,
-    userName: user.name,
+    userIds: [user.id],
+    userNames: [user.name],
     title,
     dueDate,
     priority,

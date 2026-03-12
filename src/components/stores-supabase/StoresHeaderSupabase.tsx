@@ -7,6 +7,7 @@ import {
   FileSpreadsheet,
   GitCompare,
   RefreshCw,
+  EyeOff,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { SmartPeriodSelector } from "@/components/common";
@@ -32,6 +33,7 @@ export function StoresHeaderSupabase({ hook }: StoresHeaderSupabaseProps) {
     goToComparePage,
     isLoading,
     refetch,
+    excludedCount,
   } = hook;
 
   return (
@@ -61,6 +63,13 @@ export function StoresHeaderSupabase({ hook }: StoresHeaderSupabaseProps) {
           >
             <RefreshCw className="w-5 h-5" />
           </button>
+          {/* Excluded badge */}
+          {excludedCount > 0 && (
+            <span className="flex items-center gap-1 px-2.5 py-1 bg-orange-100 text-orange-700 text-xs font-medium rounded-full">
+              <EyeOff className="w-3 h-3" />
+              {excludedCount} מוחרגות
+            </span>
+          )}
         </div>
         {periodLabel && (
           <p className="text-gray-500 text-sm mt-0.5">{periodLabel}</p>

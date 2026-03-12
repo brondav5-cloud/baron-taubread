@@ -5,4 +5,5 @@ export {
   StoresFiltersPanel,
   StoresPagination,
   StoresTotalsBar,
+  StoresExclusionBar,
 } from "./StoresComponents";

@@ -30,6 +30,8 @@ export interface DbMeetingTask {
   task_id: string;
   assignee_user_id: string;
   assignee_name: string;
+  assignee_user_ids: string[] | null;
+  assignee_names: string[] | null;
   task_title: string;
   due_date: string | null;
   priority: string;
@@ -63,6 +65,8 @@ export interface MeetingTaskInsert {
   task_id: string;
   assignee_user_id: string;
   assignee_name: string;
+  assignee_user_ids: string[];
+  assignee_names: string[];
   task_title: string;
   due_date?: string | null;
   priority?: string;

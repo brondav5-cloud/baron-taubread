@@ -87,8 +87,8 @@ function parseLine(
           id: `task_${lineIdx}_${uid()}`,
           type: "task",
           content,
-          assigneeId: user.id,
-          assigneeName: user.name,
+          assigneeIds: [user.id],
+          assigneeNames: [user.name],
           dueDate,
           priority,
         };
@@ -176,7 +176,7 @@ export function blocksToText(topics: TopicBlock[]): string {
       } else if (row.type === "decision") {
         if (row.content.trim()) lines.push(`החלטה: ${row.content}`);
       } else if (row.type === "task") {
-        if (row.assigneeId && row.content.trim()) {
+        if (row.assigneeIds.length > 0 && row.content.trim()) {
           const datePart = row.dueDate
             ? ` עד ${formatDateForText(row.dueDate)}`
             : "";
@@ -186,8 +186,11 @@ export function blocksToText(topics: TopicBlock[]): string {
               : row.priority === "low"
                 ? " נמוך"
                 : "";
+          const mentionPart = row.assigneeNames
+            .map((n) => `@${n}`)
+            .join(" ");
           lines.push(
-            `@${row.assigneeName} ${row.content}${datePart}${priorityPart}`,
+            `${mentionPart} ${row.content}${datePart}${priorityPart}`,
           );
         }
       }

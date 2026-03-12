@@ -8,6 +8,7 @@ import { usePeriodSelector } from "./usePeriodSelector";
 import { generateMetricsPeriodLabels } from "@/lib/periodUtils";
 import { useStoresDeliveries } from "./useStoresDeliveries";
 import { useStoresPageFilters } from "./useStoresPageFilters";
+import { useExcludedStores } from "./useExcludedStores";
 import { useStoresPageSort } from "./useStoresPageSort";
 import type { MonthlyData } from "@/types/supabase";
 
@@ -101,7 +102,19 @@ export function useStoresPageSupabase() {
       periodSelector.compare.months,
     );
 
-  const filterResult = useStoresPageFilters(allStores, dbFilters, driverToGroup);
+  const excluded = useExcludedStores(companyId);
+
+  const excludedStores = useMemo(
+    () => allStores.filter((s) => excluded.excludedIds.has(s.external_id)),
+    [allStores, excluded.excludedIds],
+  );
+
+  const filterResult = useStoresPageFilters(
+    allStores,
+    dbFilters,
+    driverToGroup,
+    excluded.excludedIds,
+  );
 
   // ============================================
   // STORE DATA WITH PERIOD CALCULATIONS
@@ -302,6 +315,13 @@ export function useStoresPageSupabase() {
     clearStoreSelection,
     goToComparePage,
     changePageSize: sortResult.changePageSize,
+    allStores,
+    excludedIds: excluded.excludedIds,
+    excludedCount: excluded.excludedCount,
+    excludedStores,
+    toggleExclude: excluded.toggleExclude,
+    removeExclusion: excluded.removeExclusion,
+    clearExclusions: excluded.clearExclusions,
   };
 }
 

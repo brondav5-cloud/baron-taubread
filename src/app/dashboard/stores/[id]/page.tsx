@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,20 +45,37 @@ function periodToMonthKey(period: string): string {
 }
 
 export default function StoreDetailPage() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<StoreTabType>("overview");
   const [jumpToMonth, setJumpToMonth] = useState<string | undefined>();
 
   useEffect(() => {
-    const tab = searchParams.get("tab");
-    if (tab && VALID_TABS.includes(tab as StoreTabType)) {
-      setActiveTab(tab as StoreTabType);
+    const tab = searchParams.get("tab") as StoreTabType | null;
+    if (tab && VALID_TABS.includes(tab)) {
+      setActiveTab(tab);
+    } else if (!tab) {
+      setActiveTab("overview");
     }
   }, [searchParams]);
 
+  const handleTabChange = useCallback(
+    (tab: StoreTabType) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (tab === "overview") {
+        params.delete("tab");
+      } else {
+        params.set("tab", tab);
+      }
+      const query = params.toString();
+      router.push(`?${query}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+
   const handleMonthClick = (period: string) => {
     setJumpToMonth(periodToMonthKey(period));
-    setActiveTab("products");
+    handleTabChange("products");
   };
 
   // Main store data
@@ -120,7 +137,7 @@ export default function StoreDetailPage() {
   return (
     <div className="space-y-6">
       <StoreDetailHeader store={store} />
-      <StoreTabs activeTab={activeTab} onTabChange={setActiveTab} />
+      <StoreTabs activeTab={activeTab} onTabChange={handleTabChange} />
 
       {activeTab === "overview" && (
         <>

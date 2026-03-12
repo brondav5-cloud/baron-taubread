@@ -4,6 +4,8 @@ import { useMemo, useState, useEffect } from "react";
 import { useSupabaseData } from "./useSupabaseData";
 import { useDashboardMonthly } from "./useDashboardMonthly";
 import { useDashboardStoreStats } from "./useDashboardStoreStats";
+import { useAuth } from "./useAuth";
+import { useExcludedStores } from "./useExcludedStores";
 
 // ============================================
 // CONSTANTS
@@ -102,8 +104,17 @@ export interface TopStore {
 // ============================================
 
 export function useDashboardSupabase() {
-  const { stores, products, metadata, periodLabel, isLoading, error } =
+  const { stores: allStores, products, metadata, periodLabel, isLoading, error } =
     useSupabaseData();
+
+  const auth = useAuth();
+  const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const { excludedIds } = useExcludedStores(companyId);
+
+  const stores = useMemo(
+    () => allStores.filter((s) => !excludedIds.has(s.external_id)),
+    [allStores, excludedIds],
+  );
 
   const currentYear = metadata?.current_year || new Date().getFullYear();
   const previousYear = metadata?.previous_year || currentYear - 1;

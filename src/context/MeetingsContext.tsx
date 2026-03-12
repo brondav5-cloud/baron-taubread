@@ -262,39 +262,41 @@ async function _createPendingTasks(
   );
 
   const newTasks = pendingTasks.filter(
-    (pt) => !alreadyCreated.has(`${pt.assigneeUserId}::${pt.taskTitle}`),
+    (pt) =>
+      !alreadyCreated.has(`${pt.assigneeUserIds[0] ?? ""}::${pt.taskTitle}`),
   );
 
   if (!newTasks.length) return;
 
-  // Send one notification per task — SMS includes task title (≤200 chars total)
   const trunc = (s: string, max: number) =>
     s.length > max ? s.slice(0, max - 1) + "…" : s;
 
+  // Send notifications to ALL assignees
   await Promise.all(
-    newTasks
-      .filter((pt) => Boolean(pt.assigneeUserId))
-      .map((pt) => {
-        const taskTitle = trunc(pt.taskTitle, 50);
-        const meetingShort = trunc(meetingTitle, 25);
-        const dueDateStr = pt.dueDate
-          ? `\nעד: ${new Date(pt.dueDate + "T00:00:00").toLocaleDateString("he-IL")}`
-          : "";
-        return sendNotificationAsync({
-          recipientUserIds: [pt.assigneeUserId],
-          type: "task_assigned",
-          title: `📌 ${taskTitle}`,
-          body: `מישיבת: ${meetingShort}${dueDateStr}`,
-          url: `/dashboard/meetings/${meetingId}`,
-          referenceId: meetingId,
-          referenceType: "task",
-          sendEmail: true,
-          sendSms: true,
-        });
-      }),
+    newTasks.flatMap((pt) => {
+      const taskTitle = trunc(pt.taskTitle, 50);
+      const meetingShort = trunc(meetingTitle, 25);
+      const dueDateStr = pt.dueDate
+        ? `\nעד: ${new Date(pt.dueDate + "T00:00:00").toLocaleDateString("he-IL")}`
+        : "";
+      return pt.assigneeUserIds
+        .filter(Boolean)
+        .map((uid) =>
+          sendNotificationAsync({
+            recipientUserIds: [uid],
+            type: "task_assigned",
+            title: `📌 ${taskTitle}`,
+            body: `מישיבת: ${meetingShort}${dueDateStr}`,
+            url: `/dashboard/meetings/${meetingId}`,
+            referenceId: meetingId,
+            referenceType: "task",
+            sendEmail: true,
+            sendSms: true,
+          }),
+        );
+    }),
   );
 
-  // Create tasks in parallel (faster than sequential)
   const now = new Date().toISOString();
   await Promise.all(
     newTasks.map(async (pt) => {
@@ -307,14 +309,12 @@ async function _createPendingTasks(
         createdByName,
         createdAt: now,
         updatedAt: now,
-        assignees: [
-          {
-            userId: pt.assigneeUserId,
-            userName: pt.assigneeName,
-            role: "primary",
-            status: "new",
-          },
-        ],
+        assignees: pt.assigneeUserIds.map((uid, i) => ({
+          userId: uid,
+          userName: pt.assigneeNames[i] ?? uid,
+          role: i === 0 ? ("primary" as const) : ("secondary" as const),
+          status: "new" as const,
+        })),
         categoryId: "meeting",
         categoryName: "ישיבה",
         categoryIcon: "📋",
@@ -352,8 +352,10 @@ async function _createPendingTasks(
         meeting_id: meetingId,
         agenda_item_index: pt.agendaItemIndex ?? null,
         task_id: createdTask.id,
-        assignee_user_id: pt.assigneeUserId,
-        assignee_name: pt.assigneeName,
+        assignee_user_id: pt.assigneeUserIds[0] ?? "",
+        assignee_name: pt.assigneeNames[0] ?? "",
+        assignee_user_ids: pt.assigneeUserIds,
+        assignee_names: pt.assigneeNames,
         task_title: pt.taskTitle,
         due_date: dueDate,
         priority: pt.priority,

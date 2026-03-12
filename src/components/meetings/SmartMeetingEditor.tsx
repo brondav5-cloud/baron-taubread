@@ -90,11 +90,11 @@ export default function SmartMeetingEditor({
       for (const row of topic.rows) {
         if (row.type === "decision" && row.content.trim()) {
           decisions.push({ id: `dec_${row.id}`, text: row.content, lineIndex: idx });
-        } else if (row.type === "task" && row.assigneeId) {
+        } else if (row.type === "task" && row.assigneeIds.length > 0) {
           tasks.push({
             id: row.id,
-            userId: row.assigneeId,
-            userName: row.assigneeName,
+            userIds: row.assigneeIds,
+            userNames: row.assigneeNames,
             title: row.content,
             dueDate: row.dueDate,
             priority: row.priority,
@@ -123,12 +123,9 @@ export default function SmartMeetingEditor({
       if (!taskSheet) return;
       const { topicId, rowId } = taskSheet;
       if (rowId) {
-        // Editing existing task row
         editor.updateRow(topicId, rowId, data as Partial<ContentRow>);
       } else {
-        // Adding new task row
         editor.addRow(topicId, "task");
-        // Update the just-added row (last one)
         setTopicsRaw((prev) =>
           prev.map((t) => {
             if (t.id !== topicId) return t;
@@ -167,8 +164,8 @@ export default function SmartMeetingEditor({
         editor.insertRowAfter(topicId, rowId, {
           type: "task",
           content: result.content,
-          assigneeId: result.taskData.assigneeId,
-          assigneeName: result.taskData.assigneeName,
+          assigneeIds: result.taskData.assigneeIds,
+          assigneeNames: result.taskData.assigneeNames,
           dueDate: result.taskData.dueDate,
           priority: result.taskData.priority,
         } as Omit<ContentRow, "id">);
@@ -339,12 +336,20 @@ export function TasksPanel({ tasks, onPriorityChange, onDueDateChange }: TasksPa
               key={t.id}
               className="flex items-center gap-3 bg-white rounded-xl px-3 py-2 border border-orange-100"
             >
-              <span className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                {t.userName.charAt(0)}
-              </span>
+              <div className="flex -space-x-1 flex-shrink-0">
+                {t.userNames.slice(0, 3).map((name, i) => (
+                  <span
+                    key={i}
+                    title={name}
+                    className="w-7 h-7 rounded-full bg-orange-100 text-orange-700 text-xs font-bold flex items-center justify-center border-2 border-white"
+                  >
+                    {name.charAt(0)}
+                  </span>
+                ))}
+              </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-800 truncate">{t.title}</p>
-                <p className="text-xs text-gray-500">@{t.userName}</p>
+                <p className="text-xs text-gray-500">{t.userNames.map((n) => `@${n}`).join(", ")}</p>
               </div>
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 {onDueDateChange ? (
@@ -394,11 +399,11 @@ export function parsedTaskToMention(t: ParsedTask): MeetingTaskMention {
   return {
     id: t.id,
     agendaItemIndex: 0,
-    assigneeUserId: t.userId,
-    assigneeName: t.userName,
+    assigneeUserIds: t.userIds,
+    assigneeNames: t.userNames,
     taskTitle: t.title,
     dueDate: t.dueDate,
     priority: t.priority,
-    mentionLabel: t.userName,
+    mentionLabel: t.userNames.join(", "),
   };
 }

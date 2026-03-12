@@ -50,6 +50,7 @@ export function useStoresPageFilters(
   allStores: DbStore[],
   dbFilters: DbFilters | null | undefined,
   driverToGroup: Map<string, string>,
+  excludedIds: Set<number> = new Set(),
 ) {
   const [search, setSearch] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -78,6 +79,8 @@ export function useStoresPageFilters(
 
   const filteredStores = useMemo(() => {
     return allStores.filter((store) => {
+      if (excludedIds.has(store.external_id)) return false;
+
       if (search) {
         const s = search.toLowerCase();
         const matchesName = store.name.toLowerCase().includes(s);
@@ -128,7 +131,7 @@ export function useStoresPageFilters(
 
       return true;
     });
-  }, [allStores, filters, search, driverToGroup]);
+  }, [allStores, filters, search, driverToGroup, excludedIds]);
 
   const activeFiltersCount = useMemo(() => {
     return Object.entries(filters).filter(([k, v]) =>

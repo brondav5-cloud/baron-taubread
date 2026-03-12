@@ -189,8 +189,8 @@ export default function MeetingEditor({
     const task: MeetingTaskMention = {
       id: `mt_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
       agendaItemIndex,
-      assigneeUserId: taskForm.userId,
-      assigneeName: taskForm.userName,
+      assigneeUserIds: [taskForm.userId],
+      assigneeNames: [taskForm.userName],
       taskTitle: taskForm.taskTitle.trim(),
       dueDate: taskForm.dueDate,
       priority: taskForm.priority,

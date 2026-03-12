@@ -8,6 +8,7 @@ import {
   StoresFiltersPanel,
   StoresPagination,
   StoresTotalsBar,
+  StoresExclusionBar,
 } from "@/components/stores-supabase";
 import { LoadingState } from "@/components/common";
 
@@ -33,6 +34,12 @@ export default function StoresPage() {
     pageSize,
     changePageSize,
     filteredCount,
+    allStores,
+    excludedStores,
+    excludedCount,
+    toggleExclude,
+    removeExclusion,
+    clearExclusions,
   } = hook;
 
   // Loading state
@@ -80,6 +87,16 @@ export default function StoresPage() {
 
       {/* Search Bar */}
       <StoresSearchBar value={search} onChange={setSearch} />
+
+      {/* Exclusion Bar */}
+      <StoresExclusionBar
+        allStores={allStores}
+        excludedStores={excludedStores}
+        excludedCount={excludedCount ?? 0}
+        toggleExclude={toggleExclude}
+        removeExclusion={removeExclusion}
+        clearExclusions={clearExclusions}
+      />
 
       {/* Totals Bar */}
       <StoresTotalsBar

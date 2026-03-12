@@ -30,8 +30,14 @@ export function dbMeetingTaskToRecord(db: DbMeetingTask): MeetingTaskRecord {
     meetingId: db.meeting_id,
     agendaItemIndex: db.agenda_item_index ?? undefined,
     taskId: db.task_id,
-    assigneeUserId: db.assignee_user_id,
-    assigneeName: db.assignee_name,
+    assigneeUserIds:
+      db.assignee_user_ids?.length
+        ? db.assignee_user_ids
+        : [db.assignee_user_id],
+    assigneeNames:
+      db.assignee_names?.length
+        ? db.assignee_names
+        : [db.assignee_name],
     taskTitle: db.task_title,
     dueDate: db.due_date ?? undefined,
     priority: db.priority as MeetingTaskRecord["priority"],

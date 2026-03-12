@@ -21,8 +21,8 @@ export interface TaskRow {
   id: string;
   type: "task";
   content: string;
-  assigneeId: string;
-  assigneeName: string;
+  assigneeIds: string[];
+  assigneeNames: string[];
   dueDate: string;
   priority: MeetingTaskPriority;
 }

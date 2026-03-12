@@ -8,8 +8,8 @@ import { defaultDue } from "./blockSerializer";
 
 export interface TaskSheetData {
   content: string;
-  assigneeId: string;
-  assigneeName: string;
+  assigneeIds: string[];
+  assigneeNames: string[];
   dueDate: string;
   priority: MeetingTaskPriority;
 }
@@ -30,30 +30,35 @@ export default function TaskSheet({
   onClose,
 }: TaskSheetProps) {
   const [content, setContent] = useState("");
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState(defaultDue());
   const [priority, setPriority] = useState<MeetingTaskPriority>("normal");
 
   useEffect(() => {
     if (open) {
       setContent(task?.content ?? "");
-      setAssigneeId(task?.assigneeId ?? "");
+      setAssigneeIds(task?.assigneeIds ?? []);
       setDueDate(task?.dueDate ?? defaultDue());
       setPriority(task?.priority ?? "normal");
     }
   }, [open, task]);
 
-  const isEdit = Boolean(task?.assigneeId);
-  const canConfirm = assigneeId && content.trim();
+  const isEdit = Boolean(task?.assigneeIds?.length);
+  const canConfirm = assigneeIds.length > 0 && content.trim();
+
+  const toggleAssignee = (id: string) => {
+    setAssigneeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
 
   const handleConfirm = () => {
     if (!canConfirm) return;
-    const user = users.find((u) => u.id === assigneeId);
-    if (!user) return;
+    const selectedUsers = users.filter((u) => assigneeIds.includes(u.id));
     onConfirm({
       content: content.trim(),
-      assigneeId,
-      assigneeName: user.name,
+      assigneeIds,
+      assigneeNames: selectedUsers.map((u) => u.name),
       dueDate,
       priority,
     });
@@ -78,30 +83,39 @@ export default function TaskSheet({
             📌 {isEdit ? "עריכת משימה" : "משימה חדשה"}
           </h3>
 
-          {/* Assignee — compact chips */}
+          {/* Assignees — multi-select chips */}
           <div className="mb-3">
             <p className="text-[10px] font-semibold text-gray-400 mb-1.5 uppercase tracking-wide">
-              למי?
+              למי? <span className="normal-case font-normal text-gray-300">(ניתן לבחור מספר אנשים)</span>
             </p>
             <div className="flex flex-wrap gap-1.5">
-              {users.map((u) => (
-                <button
-                  key={u.id}
-                  type="button"
-                  onClick={() => setAssigneeId(u.id)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                    assigneeId === u.id
-                      ? "bg-orange-100 border-orange-400 text-orange-800 shadow-sm"
-                      : "bg-white border-gray-200 text-gray-700"
-                  }`}
-                >
-                  <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                    {u.name.charAt(0)}
-                  </span>
-                  {u.name}
-                </button>
-              ))}
+              {users.map((u) => {
+                const selected = assigneeIds.includes(u.id);
+                return (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => toggleAssignee(u.id)}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                      selected
+                        ? "bg-orange-100 border-orange-400 text-orange-800 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-700"
+                    }`}
+                  >
+                    <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                      {u.name.charAt(0)}
+                    </span>
+                    {u.name}
+                    {selected && <span className="text-orange-500 text-[10px]">✓</span>}
+                  </button>
+                );
+              })}
             </div>
+            {assigneeIds.length > 1 && (
+              <p className="text-[10px] text-orange-600 mt-1">
+                {assigneeIds.length} נבחרו — תיווצר משימה לכל אחד
+              </p>
+            )}
           </div>
 
           {/* Content */}

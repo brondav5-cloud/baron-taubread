@@ -1,6 +1,7 @@
 "use client";
 
-import { Search, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Search, X, EyeOff } from "lucide-react";
 import { clsx } from "clsx";
 import type {
   UseStoresPageSupabaseReturn,
@@ -34,6 +35,145 @@ export function StoresSearchBar({ value, onChange }: SearchBarProps) {
         >
           <X className="w-5 h-5" />
         </button>
+      )}
+    </div>
+  );
+}
+
+// ============================================
+// EXCLUSION BAR
+// ============================================
+
+interface ExclusionBarProps {
+  allStores: UseStoresPageSupabaseReturn["allStores"];
+  excludedStores: UseStoresPageSupabaseReturn["excludedStores"];
+  excludedCount: number;
+  toggleExclude: UseStoresPageSupabaseReturn["toggleExclude"];
+  removeExclusion: UseStoresPageSupabaseReturn["removeExclusion"];
+  clearExclusions: UseStoresPageSupabaseReturn["clearExclusions"];
+}
+
+export function StoresExclusionBar({
+  allStores,
+  excludedStores,
+  excludedCount,
+  toggleExclude,
+  removeExclusion,
+  clearExclusions,
+}: ExclusionBarProps) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const excludedIds = new Set(excludedStores?.map((s) => s.external_id) ?? []);
+
+  const suggestions = query.trim().length >= 1
+    ? (allStores ?? [])
+        .filter(
+          (s) =>
+            !excludedIds.has(s.external_id) &&
+            s.name.toLowerCase().includes(query.toLowerCase()),
+        )
+        .slice(0, 10)
+    : [];
+
+  const handleSelect = (storeId: number) => {
+    toggleExclude?.(storeId);
+    setQuery("");
+    setOpen(false);
+  };
+
+  return (
+    <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
+      <div className="flex items-center gap-2">
+        <EyeOff className="w-4 h-4 text-orange-500 shrink-0" />
+        <span className="text-sm font-medium text-orange-800">
+          החרגת חנויות מחישובים
+        </span>
+        {excludedCount > 0 && (
+          <button
+            onClick={() => clearExclusions?.()}
+            className="mr-auto text-xs text-orange-500 hover:text-orange-700 underline"
+          >
+            נקה הכל ({excludedCount})
+          </button>
+        )}
+      </div>
+
+      {/* Search input + dropdown */}
+      <div ref={wrapperRef} className="relative">
+        <div className="relative">
+          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="חפש חנות להחרגה..."
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setOpen(true);
+            }}
+            onFocus={() => query.length >= 1 && setOpen(true)}
+            className="w-full pr-9 pl-4 py-2 bg-white border border-orange-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-400 focus:border-orange-400"
+          />
+          {query && (
+            <button
+              onClick={() => { setQuery(""); setOpen(false); }}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+
+        {open && suggestions.length > 0 && (
+          <ul className="absolute z-50 mt-1 w-full bg-white border border-orange-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+            {suggestions.map((store) => (
+              <li key={store.external_id}>
+                <button
+                  onMouseDown={() => handleSelect(store.external_id)}
+                  className="w-full text-right px-4 py-2 text-sm hover:bg-orange-50 flex items-center justify-between gap-2"
+                >
+                  <span className="text-gray-500 text-xs">{store.city}</span>
+                  <span className="font-medium text-gray-800">{store.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Excluded tags */}
+      {excludedCount > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {excludedStores?.map((store) => (
+            <span
+              key={store.external_id}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-orange-100 border border-orange-300 text-orange-800 text-xs rounded-full font-medium"
+            >
+              {store.name}
+              {store.city && (
+                <span className="text-orange-500">· {store.city}</span>
+              )}
+              <button
+                onClick={() => removeExclusion?.(store.external_id)}
+                className="hover:text-orange-900 mr-0.5"
+                title="שחזר חנות זו"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
       )}
     </div>
   );

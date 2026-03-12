@@ -33,7 +33,7 @@ export default function ConvertDialog({
   onClose,
 }: ConvertDialogProps) {
   const [content, setContent] = useState(originalText);
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState(defaultDue());
   const [priority, setPriority] = useState<MeetingTaskPriority>("normal");
   const titleRef = useRef<HTMLTextAreaElement>(null);
@@ -42,7 +42,7 @@ export default function ConvertDialog({
   useEffect(() => {
     if (open) {
       setContent(originalText);
-      setAssigneeId("");
+      setAssigneeIds([]);
       setDueDate(defaultDue());
       setPriority("normal");
     }
@@ -66,19 +66,24 @@ export default function ConvertDialog({
   const canConfirm =
     trimmed.length > 0 &&
     !overLimit &&
-    (initialType === "decision" || Boolean(assigneeId));
+    (initialType === "decision" || assigneeIds.length > 0);
 
   const handleConfirm = () => {
     if (!canConfirm) return;
     if (!isTask) {
       onConfirm({ type: "decision", content: trimmed });
     } else {
-      const user = users.find((u) => u.id === assigneeId);
-      if (!user) return;
+      const selectedUsers = users.filter((u) => assigneeIds.includes(u.id));
+      if (!selectedUsers.length) return;
       onConfirm({
         type: "task",
         content: trimmed,
-        taskData: { assigneeId, assigneeName: user.name, dueDate, priority },
+        taskData: {
+          assigneeIds,
+          assigneeNames: selectedUsers.map((u) => u.name),
+          dueDate,
+          priority,
+        },
       });
     }
   };
@@ -163,30 +168,50 @@ export default function ConvertDialog({
           {/* Task-only fields */}
           {isTask && (
             <>
-              {/* Assignee */}
+              {/* Assignees — multi-select */}
               <div>
                 <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                  למי?
+                  למי?{" "}
+                  <span className="normal-case font-normal text-gray-300">
+                    (ניתן לבחור כמה)
+                  </span>
                 </p>
                 <div className="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto">
-                  {users.map((u) => (
-                    <button
-                      key={u.id}
-                      type="button"
-                      onClick={() => setAssigneeId(u.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
-                        assigneeId === u.id
-                          ? "bg-orange-100 border-orange-400 text-orange-800 shadow-sm"
-                          : "bg-white border-gray-200 text-gray-700 hover:border-orange-300"
-                      }`}
-                    >
-                      <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
-                        {u.name.charAt(0)}
-                      </span>
-                      {u.name}
-                    </button>
-                  ))}
+                  {users.map((u) => {
+                    const selected = assigneeIds.includes(u.id);
+                    return (
+                      <button
+                        key={u.id}
+                        type="button"
+                        onClick={() =>
+                          setAssigneeIds((prev) =>
+                            prev.includes(u.id)
+                              ? prev.filter((x) => x !== u.id)
+                              : [...prev, u.id],
+                          )
+                        }
+                        className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-medium transition-all ${
+                          selected
+                            ? "bg-orange-100 border-orange-400 text-orange-800 shadow-sm"
+                            : "bg-white border-gray-200 text-gray-700 hover:border-orange-300"
+                        }`}
+                      >
+                        <span className="w-5 h-5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-bold flex items-center justify-center flex-shrink-0">
+                          {u.name.charAt(0)}
+                        </span>
+                        {u.name}
+                        {selected && (
+                          <span className="text-orange-500 text-[10px]">✓</span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
+                {assigneeIds.length > 1 && (
+                  <p className="text-[10px] text-orange-600 mt-1">
+                    {assigneeIds.length} נבחרו
+                  </p>
+                )}
               </div>
 
               {/* Date + Priority */}
