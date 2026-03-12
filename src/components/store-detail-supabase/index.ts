@@ -7,4 +7,5 @@ export { StoreTabs, TabPlaceholder } from "./StoreTabs";
 export { StoreCityComparison } from "./StoreCityComparison";
 export { CityRankingCards } from "./CityRankingCards";
 export { StoreProductsTab } from "./StoreProductsTab";
+export { StoreWeeklyTab } from "./StoreWeeklyTab";
 export type { StoreTabType } from "./StoreTabs";

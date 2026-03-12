@@ -19,6 +19,7 @@ import {
   TabPlaceholder,
   StoreCityComparison,
   StoreProductsTab,
+  StoreWeeklyTab,
 } from "@/components/store-detail-supabase";
 
 const StoreSalesChart = dynamic(
@@ -32,6 +33,7 @@ import type { StoreTabType } from "@/components/store-detail-supabase";
 const VALID_TABS: StoreTabType[] = [
   "overview",
   "products",
+  "weekly",
   "pricing",
   "competitors",
 ];
@@ -175,6 +177,10 @@ export default function StoreDetailPage() {
           storeExternalId={store?.external_id ?? null}
           initialMonthlyMonth={jumpToMonth}
         />
+      )}
+
+      {activeTab === "weekly" && store && (
+        <StoreWeeklyTab storeExternalId={store.external_id} />
       )}
 
       {activeTab === "pricing" && store && (
