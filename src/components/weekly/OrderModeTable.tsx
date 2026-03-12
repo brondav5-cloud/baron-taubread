@@ -122,35 +122,60 @@ export function OrderModeTable({
 
   const periodLabel = weeksCount > 1 ? `ממוצע/${weeksCount}שב׳` : "שבוע זה";
 
+  const suggestionStats = useMemo(() => {
+    const bySource = { T10: 0, avg3: 0, "שב׳": 0, כמות: 0 };
+    allFlatRows.forEach((row) => {
+      const { source } = getSuggestion(row, suggestMode);
+      bySource[source]++;
+    });
+    return bySource;
+  }, [allFlatRows, suggestMode]);
+
   return (
     <div className="space-y-3">
       {/* Order-mode specific controls */}
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex flex-wrap gap-3 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-blue-700 font-medium">מוצע להזמין לפי:</span>
-          <div className="flex rounded-lg border border-blue-200 overflow-hidden text-xs bg-white">
-            <button
-              onClick={() => setSuggestMode("avg3")}
-              className={clsx(
-                "px-3 py-1.5 font-medium transition-colors",
-                suggestMode === "avg3" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              ממוצע 3
-            </button>
-            <button
-              onClick={() => setSuggestMode("top10")}
-              className={clsx(
-                "px-3 py-1.5 font-medium transition-colors border-r border-blue-200",
-                suggestMode === "top10" ? "bg-blue-600 text-white" : "text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              Top-10
-            </button>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-blue-700 font-medium">מוצע להזמין לפי:</span>
+            <div className="flex rounded-lg border-2 border-blue-300 overflow-hidden text-xs bg-white shadow-sm">
+              <button
+                onClick={() => setSuggestMode("avg3")}
+                className={clsx(
+                  "px-4 py-2 font-semibold transition-all",
+                  suggestMode === "avg3"
+                    ? "bg-blue-600 text-white ring-2 ring-blue-400"
+                    : "text-gray-600 hover:bg-blue-100",
+                )}
+              >
+                ממוצע 3
+              </button>
+              <button
+                onClick={() => setSuggestMode("top10")}
+                className={clsx(
+                  "px-4 py-2 font-semibold transition-all border-r-2 border-blue-200",
+                  suggestMode === "top10"
+                    ? "bg-blue-600 text-white ring-2 ring-blue-400"
+                    : "text-gray-600 hover:bg-blue-100",
+                )}
+              >
+                Top-10
+              </button>
+            </div>
           </div>
-          <span className="text-xs text-blue-500">
-            (כשאין נתון, נפול ל-{suggestMode === "top10" ? "avg3 → שב׳ קודם" : "שב׳ קודם → כמות נוכחית"})
-          </span>
+          <div className="flex items-center gap-3 text-xs text-blue-600">
+            <span>
+              {suggestMode === "top10" ? "T10" : "avg3"}:
+              <strong className="text-blue-800 mr-1"> {suggestionStats[suggestMode === "top10" ? "T10" : "avg3"]}</strong>
+              שורות
+            </span>
+            {suggestMode === "top10" && suggestionStats.T10 < allFlatRows.length && (
+              <span className="text-amber-600">
+                · {allFlatRows.length - suggestionStats.T10} ללא Top-10 (ממוצע 3 / שב׳)
+              </span>
+            )}
+            <span className="text-blue-400">| fallback: שב׳ קודם → כמות</span>
+          </div>
         </div>
 
         <button

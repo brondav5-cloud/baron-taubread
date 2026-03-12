@@ -332,10 +332,14 @@ function computeComparison(
     delivery_count:          number;
   }
 
-  const aggMap = new Map<string, AggRow>();
+  const aggMap      = new Map<string, AggRow>();
+  const weeksPerSp  = new Map<string, Set<string>>();
   for (const row of rawData) {
     if (!currentPeriodSet.has(row.week_start_date)) continue;
-    const spKey   = `${row.store_external_id}|${row.product_name_normalized}`;
+    const spKey = `${row.store_external_id}|${row.product_name_normalized}`;
+    if (!weeksPerSp.has(spKey)) weeksPerSp.set(spKey, new Set());
+    weeksPerSp.get(spKey)!.add(row.week_start_date);
+
     const existing = aggMap.get(spKey);
     if (existing) {
       existing.gross_qty      += row.gross_qty;
@@ -353,11 +357,13 @@ function computeComparison(
       });
     }
   }
-  // Normalise to per-week averages
+  // Normalise to per-week average: divide by actual weeks with data (fix: was /weeksCount)
   Array.from(aggMap.values()).forEach((agg) => {
-    agg.gross_qty      = agg.gross_qty      / weeksCount;
-    agg.returns_qty    = agg.returns_qty    / weeksCount;
-    agg.delivery_count = agg.delivery_count / weeksCount;
+    const spKey = `${agg.store_external_id}|${agg.product_name_normalized}`;
+    const actualWeeks = Math.max(1, weeksPerSp.get(spKey)?.size ?? 1);
+    agg.gross_qty      = agg.gross_qty      / actualWeeks;
+    agg.returns_qty    = agg.returns_qty    / actualWeeks;
+    agg.delivery_count = agg.delivery_count / actualWeeks;
   });
 
   // Group by store
@@ -371,7 +377,8 @@ function computeComparison(
   const periodAvg = (weekMap: WeekMap, weeks: string[]): number | null => {
     const found = weeks.filter((w) => weekMap.has(w));
     if (found.length === 0) return null;
-    return found.reduce((s, w) => s + weekMap.get(w)!.gross_qty, 0) / weeksCount;
+    const sum = found.reduce((s, w) => s + weekMap.get(w)!.gross_qty, 0);
+    return sum / found.length; // divide by actual weeks with data
   };
 
   const result: StoreWeekComparison[] = [];
@@ -400,8 +407,11 @@ function computeComparison(
         ? nonNullPrev.reduce((s, v) => s + v, 0) / nonNullPrev.length
         : null;
 
-      const lastYearQty = lastYearWeeks.length > 0
-        ? lastYearWeeks.reduce((s, w) => s + (weekMap.get(w)?.gross_qty ?? 0), 0) / weeksCount
+      const lastYearVals = lastYearWeeks
+        .map((w) => weekMap.get(w)?.gross_qty)
+        .filter((v): v is number => v != null);
+      const lastYearQty = lastYearVals.length > 0
+        ? lastYearVals.reduce((s, v) => s + v, 0) / lastYearVals.length
         : null;
 
       // Top-10 benchmark from individual historical weeks
@@ -476,14 +486,15 @@ function computeComparison(
     const trendGrossQty   = trendProducts.reduce((s, p) => s + p.grossQty, 0);
 
     const refSet1 = new Set(refWeeks1);
-    const trendLastPeriod = refWeeks1.length > 0
-      ? rawData
-          .filter((r) =>
-            r.store_external_id === storeId &&
-            refSet1.has(r.week_start_date) &&
-            !irregularNames.has(r.product_name_normalized),
-          )
-          .reduce((s, r) => s + r.gross_qty, 0) / weeksCount
+    const trendLastRows = rawData.filter(
+      (r) =>
+        r.store_external_id === storeId &&
+        refSet1.has(r.week_start_date) &&
+        !irregularNames.has(r.product_name_normalized),
+    );
+    const trendLastWeeks = new Set(trendLastRows.map((r) => r.week_start_date)).size;
+    const trendLastPeriod = trendLastWeeks > 0
+      ? trendLastRows.reduce((s, r) => s + r.gross_qty, 0) / trendLastWeeks
       : null;
 
     result.push({
