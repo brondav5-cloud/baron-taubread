@@ -12,10 +12,12 @@ export function StoreRow({
   store,
   isExpanded,
   onToggle,
+  selectedWeek,
 }: {
   store: StoreWeekComparison;
   isExpanded: boolean;
   onToggle: () => void;
+  selectedWeek?: string;
 }) {
   const trendBg =
     store.overallTrend.direction === "down"
@@ -69,7 +71,7 @@ export function StoreRow({
             </thead>
             <tbody className="divide-y divide-gray-100">
               {store.products.map((product) => (
-                <ProductRow key={product.productNameNormalized} product={product} />
+                <ProductRow key={product.productNameNormalized} product={product} selectedWeek={selectedWeek} />
               ))}
             </tbody>
           </table>
@@ -83,11 +85,15 @@ export function StoreRow({
 // PRODUCT ROW
 // ============================================================
 
-function ProductRow({ product }: { product: ProductWeekComparison }) {
+function ProductRow({ product, selectedWeek }: { product: ProductWeekComparison; selectedWeek?: string }) {
   const isBelowBenchmark =
     product.vsBenchmark.direction === "down" &&
     product.top10Benchmark !== null &&
     (product.vsBenchmark.pctChange ?? 0) < -10;
+
+  const productUrl = selectedWeek
+    ? `/dashboard/weekly/product?name=${encodeURIComponent(product.productName)}&week=${selectedWeek}&normalized=${encodeURIComponent(product.productNameNormalized)}`
+    : null;
 
   return (
     <tr className={clsx("hover:bg-gray-50", isBelowBenchmark && "bg-orange-50/50")}>
@@ -98,7 +104,13 @@ function ProductRow({ product }: { product: ProductWeekComparison }) {
               <AlertTriangle className="w-3.5 h-3.5 text-orange-500 flex-shrink-0" />
             </span>
           )}
-          <span>{product.productName}</span>
+          {productUrl ? (
+            <a href={productUrl} className="hover:text-purple-700 hover:underline">
+              {product.productName}
+            </a>
+          ) : (
+            <span>{product.productName}</span>
+          )}
         </div>
       </td>
       <td className="px-3 py-2 text-center font-medium text-gray-900">

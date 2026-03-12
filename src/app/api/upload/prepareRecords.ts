@@ -37,6 +37,7 @@ interface ValidatedSP {
   product_category: string | null;
   monthly_qty: Record<string, number>;
   monthly_sales: Record<string, number>;
+  monthly_returns?: Record<string, number>;
 }
 
 interface MetricsContext {
@@ -135,14 +136,15 @@ export function prepareProductRecords(
 
 export function prepareStoreProductRecords(
   validatedStoreProducts: ValidatedSP[],
-  existingStoreProductsMap: Map<string, { monthly_qty: MonthlyData; monthly_sales: MonthlyData }>,
-): { records: Array<ValidatedSP & { total_qty: number; total_sales: number }>; errors: string[] } {
-  const records: Array<ValidatedSP & { total_qty: number; total_sales: number }> = [];
+  existingStoreProductsMap: Map<string, { monthly_qty: MonthlyData; monthly_sales: MonthlyData; monthly_returns?: MonthlyData }>,
+): { records: Array<ValidatedSP & { total_qty: number; total_sales: number; monthly_returns: Record<string, number> }>; errors: string[] } {
+  const records: Array<ValidatedSP & { total_qty: number; total_sales: number; monthly_returns: Record<string, number> }> = [];
   const errors: string[] = [];
 
   for (const validated of validatedStoreProducts) {
     const key = `${validated.store_external_id}_${validated.product_external_id}`;
     const existing = existingStoreProductsMap.get(key);
+
     const mergedMonthlyQty = mergeMonthlyData(
       (existing?.monthly_qty as Record<string, number>) ?? null,
       validated.monthly_qty,
@@ -151,22 +153,33 @@ export function prepareStoreProductRecords(
       (existing?.monthly_sales as Record<string, number>) ?? null,
       validated.monthly_sales,
     );
+    const mergedMonthlyReturns = mergeMonthlyData(
+      (existing?.monthly_returns as Record<string, number>) ?? null,
+      validated.monthly_returns ?? {},
+    );
 
-    const qtyRes = validateMonthlyMap(mergedMonthlyQty, "monthly_qty");
-    const salesRes = validateMonthlyMap(mergedMonthlySales, "monthly_sales");
-    if (!qtyRes.ok || !salesRes.ok) {
-      errors.push(...(qtyRes.ok ? [] : qtyRes.errors), ...(salesRes.ok ? [] : salesRes.errors));
+    const qtyRes     = validateMonthlyMap(mergedMonthlyQty,     "monthly_qty");
+    const salesRes   = validateMonthlyMap(mergedMonthlySales,   "monthly_sales");
+    const returnsRes = validateMonthlyMap(mergedMonthlyReturns, "monthly_returns");
+
+    if (!qtyRes.ok || !salesRes.ok || !returnsRes.ok) {
+      errors.push(
+        ...(qtyRes.ok     ? [] : qtyRes.errors),
+        ...(salesRes.ok   ? [] : salesRes.errors),
+        ...(returnsRes.ok ? [] : returnsRes.errors),
+      );
       continue;
     }
 
     const { total_qty, total_sales } = computeTotals(qtyRes.value, salesRes.value);
     records.push({
-      store_external_id: validated.store_external_id,
+      store_external_id:   validated.store_external_id,
       product_external_id: validated.product_external_id,
-      product_name: validated.product_name,
-      product_category: validated.product_category,
-      monthly_qty: qtyRes.value,
-      monthly_sales: salesRes.value,
+      product_name:        validated.product_name,
+      product_category:    validated.product_category,
+      monthly_qty:         qtyRes.value,
+      monthly_sales:       salesRes.value,
+      monthly_returns:     returnsRes.value,
       total_qty,
       total_sales,
     });

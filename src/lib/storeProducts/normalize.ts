@@ -129,6 +129,7 @@ export function normalizeAndValidateStoreProductRow(
     product_category?: unknown;
     monthly_qty?: unknown;
     monthly_sales?: unknown;
+    monthly_returns?: unknown;
     total_qty?: unknown;
     total_sales?: unknown;
   },
@@ -156,37 +157,31 @@ export function normalizeAndValidateStoreProductRow(
     errors.push(`${rowPrefix}product_external_id must be non-negative integer`);
   }
 
-  const qtyResult = validateMonthlyMap(row.monthly_qty ?? {}, "monthly_qty");
-  const salesResult = validateMonthlyMap(
-    row.monthly_sales ?? {},
-    "monthly_sales",
-  );
+  const qtyResult     = validateMonthlyMap(row.monthly_qty     ?? {}, "monthly_qty");
+  const salesResult   = validateMonthlyMap(row.monthly_sales   ?? {}, "monthly_sales");
+  const returnsResult = validateMonthlyMap(row.monthly_returns ?? {}, "monthly_returns");
 
-  if (!qtyResult.ok) {
-    errors.push(...qtyResult.errors.map((e) => `${rowPrefix}${e}`));
-  }
-  if (!salesResult.ok) {
-    errors.push(...salesResult.errors.map((e) => `${rowPrefix}${e}`));
-  }
+  if (!qtyResult.ok)     errors.push(...qtyResult.errors.map((e)     => `${rowPrefix}${e}`));
+  if (!salesResult.ok)   errors.push(...salesResult.errors.map((e)   => `${rowPrefix}${e}`));
+  if (!returnsResult.ok) errors.push(...returnsResult.errors.map((e) => `${rowPrefix}${e}`));
 
-  if (errors.length > 0) {
-    return { ok: false, errors };
-  }
+  if (errors.length > 0) return { ok: false, errors };
 
-  const monthly_qty = qtyResult.ok ? qtyResult.value : {};
-  const monthly_sales = salesResult.ok ? salesResult.value : {};
+  const monthly_qty     = qtyResult.ok     ? qtyResult.value     : {};
+  const monthly_sales   = salesResult.ok   ? salesResult.value   : {};
+  const monthly_returns = returnsResult.ok ? returnsResult.value : {};
   const { total_qty, total_sales } = computeTotals(monthly_qty, monthly_sales);
 
   return {
     ok: true,
     row: {
-      store_external_id: typeof storeId === "number" ? storeId : 0,
+      store_external_id:   typeof storeId   === "number" ? storeId   : 0,
       product_external_id: typeof productId === "number" ? productId : 0,
-      product_name: String(row.product_name ?? ""),
-      product_category:
-        row.product_category != null ? String(row.product_category) : null,
+      product_name:        String(row.product_name ?? ""),
+      product_category:    row.product_category != null ? String(row.product_category) : null,
       monthly_qty,
       monthly_sales,
+      monthly_returns,
       total_qty,
       total_sales,
     },

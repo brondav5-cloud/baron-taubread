@@ -65,7 +65,7 @@ const TREND_THRESHOLD = 3; // < 3% change = "stable"
 const TOP_N_BENCHMARK = 10;
 const HISTORY_WEEKS   = 56; // ~13 months for comparison
 
-function computeTrend(current: number, reference: number | null): TrendResult {
+export function computeTrend(current: number, reference: number | null): TrendResult {
   if (reference === null || reference === undefined) {
     return { pctChange: null, direction: "nodata" };
   }

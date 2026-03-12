@@ -57,7 +57,7 @@ export function StoreMonthlyBreakdown({
   }, [compareRows]);
 
   // How many columns (for colSpan calculations)
-  const baseCols    = 3; // מוצר + כמות + מכירות
+  const baseCols    = 4; // מוצר + כמות + חזרות + מכירות
   const compareCols = showCompare && prevMonth ? 2 : 0;
   const totalCols   = baseCols + compareCols;
 
@@ -150,13 +150,14 @@ export function StoreMonthlyBreakdown({
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
                 <th className="px-4 py-2 text-right font-medium">מוצר</th>
-                <th className="px-3 py-2 text-center font-medium">כמות</th>
+                <th className="px-3 py-2 text-center font-medium">כמות נטו</th>
                 {showCompare && prevMonth && (
                   <th className="px-3 py-2 text-center font-medium">{formatMonthLabel(prevMonth)}</th>
                 )}
                 {showCompare && prevMonth && (
                   <th className="px-3 py-2 text-center font-medium">שינוי</th>
                 )}
+                <th className="px-3 py-2 text-center font-medium">חזרות</th>
                 <th className="px-3 py-2 text-center font-medium">מכירות ₪</th>
               </tr>
             </thead>
@@ -177,7 +178,15 @@ export function StoreMonthlyBreakdown({
                     : null;
                   return (
                     <tr key={row.product_external_id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2 font-medium text-gray-800">{row.product_name}</td>
+                      <td className="px-4 py-2 font-medium text-gray-800">
+                        <a
+                          href={`/dashboard/weekly/product?name=${encodeURIComponent(row.product_name)}`}
+                          className="hover:text-purple-700 hover:underline"
+                          title="ראה מוצר זה בכל החנויות"
+                        >
+                          {row.product_name}
+                        </a>
+                      </td>
                       <td className="px-3 py-2 text-center font-semibold text-gray-900">
                         {formatNumber(row.qty)}
                       </td>
@@ -201,6 +210,16 @@ export function StoreMonthlyBreakdown({
                           )}
                         </td>
                       )}
+                      <td className="px-3 py-2 text-center">
+                        {row.returns_qty > 0 ? (
+                          <span className="text-red-600 text-xs">
+                            {formatNumber(row.returns_qty)}
+                            <span className="text-gray-400 mr-1">({row.returns_pct.toFixed(1)}%)</span>
+                          </span>
+                        ) : (
+                          <span className="text-gray-300 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="px-3 py-2 text-center text-gray-600">
                         ₪{formatNumber(Math.round(row.sales))}
                       </td>
@@ -224,6 +243,9 @@ export function StoreMonthlyBreakdown({
                     </td>
                   )}
                   {showCompare && prevMonth && <td />}
+                  <td className="px-3 py-2 text-center text-red-600 text-xs">
+                    {formatNumber(currentRows.reduce((s, r) => s + r.returns_qty, 0))}
+                  </td>
                   <td className="px-3 py-2 text-center text-gray-700">
                     ₪{formatNumber(Math.round(currentRows.reduce((s, r) => s + r.sales, 0)))}
                   </td>

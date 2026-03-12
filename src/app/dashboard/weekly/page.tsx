@@ -15,6 +15,7 @@ import {
 import { clsx } from "clsx";
 import { useWeeklyComparison } from "@/hooks/useWeeklyComparison";
 import { StoreRow } from "@/components/weekly/WeeklyStoreRow";
+import Link from "next/link";
 
 export default function WeeklyPage() {
   const weekly = useWeeklyComparison();
@@ -135,6 +136,13 @@ export default function WeeklyPage() {
           <span className="text-gray-300">|</span>
           <button onClick={collapseAll} className="text-xs text-purple-600 hover:text-purple-800 underline">סגור הכל</button>
         </div>
+
+        <Link
+          href={`/dashboard/weekly/product?week=${weekly.selectedWeek}`}
+          className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 font-medium"
+        >
+          ניתוח לפי מוצר →
+        </Link>
       </div>
 
       {/* Summary */}
@@ -173,6 +181,7 @@ export default function WeeklyPage() {
               store={store}
               isExpanded={expandedStores.has(store.storeExternalId)}
               onToggle={() => toggleStore(store.storeExternalId)}
+              selectedWeek={weekly.selectedWeek}
             />
           ))
         )}

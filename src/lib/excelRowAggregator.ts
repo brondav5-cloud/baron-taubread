@@ -133,12 +133,13 @@ export function aggregateRows(
         product_category: category,
         monthly_qty: {},
         monthly_sales: {},
+        monthly_returns: {},
       });
     }
     const sp = storeProductsMap.get(spKey)!;
-    sp.monthly_qty[period.key] = (sp.monthly_qty[period.key] || 0) + qtyNet;
-    sp.monthly_sales[period.key] =
-      (sp.monthly_sales[period.key] || 0) + sales;
+    sp.monthly_qty[period.key]     = (sp.monthly_qty[period.key]     || 0) + qtyNet;
+    sp.monthly_sales[period.key]   = (sp.monthly_sales[period.key]   || 0) + sales;
+    sp.monthly_returns[period.key] = (sp.monthly_returns[period.key] || 0) + returnsVal;
   }
 
   return {

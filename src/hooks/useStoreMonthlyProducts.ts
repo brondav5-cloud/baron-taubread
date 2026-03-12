@@ -16,8 +16,8 @@ export interface MonthlyProductRow {
   month:               number;
   qty:                 number;
   sales:               number;
-  returns_qty:         number; // 0 — not available at product level from this table
-  returns_pct:         number; // 0 — not available at product level from this table
+  returns_qty:         number;
+  returns_pct:         number; // returns_qty / (qty + returns_qty) * 100
 }
 
 interface UseStoreMonthlyProductsResult {
@@ -46,7 +46,7 @@ export function useStoreMonthlyProducts(
     supabase
       .from("store_products")
       .select(
-        "product_external_id, product_name, monthly_qty, monthly_sales",
+        "product_external_id, product_name, monthly_qty, monthly_sales, monthly_returns",
       )
       .eq("company_id", companyId)
       .eq("store_external_id", storeExternalId)
@@ -59,13 +59,14 @@ export function useStoreMonthlyProducts(
           return;
         }
 
-        // Expand JSONB monthly_qty / monthly_sales into flat per-month rows
+        // Expand JSONB monthly_qty / monthly_sales / monthly_returns into flat per-month rows
         const expanded: MonthlyProductRow[] = [];
         const monthSet = new Set<string>();
 
         (data ?? []).forEach((sp) => {
-          const monthlyQty   = (sp.monthly_qty   ?? {}) as Record<string, number>;
-          const monthlySales = (sp.monthly_sales ?? {}) as Record<string, number>;
+          const monthlyQty     = (sp.monthly_qty     ?? {}) as Record<string, number>;
+          const monthlySales   = (sp.monthly_sales   ?? {}) as Record<string, number>;
+          const monthlyReturns = (sp.monthly_returns ?? {}) as Record<string, number>;
 
           Object.entries(monthlyQty).forEach(([monthKey, qty]) => {
             if (!qty || qty === 0) return;
@@ -76,6 +77,10 @@ export function useStoreMonthlyProducts(
             if (!year || !month) return;
 
             monthSet.add(monthKey);
+            const returns_qty = monthlyReturns[monthKey] ?? 0;
+            const gross       = qty + returns_qty;
+            const returns_pct = gross > 0 ? Math.round((returns_qty / gross) * 1000) / 10 : 0;
+
             expanded.push({
               product_external_id: sp.product_external_id,
               product_name:        sp.product_name,
@@ -84,8 +89,8 @@ export function useStoreMonthlyProducts(
               month,
               qty,
               sales:       monthlySales[monthKey] ?? 0,
-              returns_qty: 0,
-              returns_pct: 0,
+              returns_qty,
+              returns_pct,
             });
           });
         });

@@ -67,6 +67,7 @@ export interface AggregatedStoreProduct {
   product_category: string;
   monthly_qty: MonthlyData;
   monthly_sales: MonthlyData;
+  monthly_returns: MonthlyData;
 }
 
 export interface ProcessingResult {
