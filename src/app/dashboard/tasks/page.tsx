@@ -38,6 +38,18 @@ export default function TasksPage() {
   const { currentUser } = useUsers();
   const { tasks } = useTasks();
   const { createWorkflow, workflows } = useWorkflow();
+
+  // Count only tasks/workflows that involve the current user
+  const myTasksCount = tasks.filter(
+    (t) =>
+      t.createdBy === currentUser.id ||
+      t.assignees.some((a) => a.userId === currentUser.id),
+  ).length;
+  const myWorkflowsCount = workflows.filter(
+    (w) =>
+      w.createdBy === currentUser.id ||
+      w.steps.some((s) => s.assignees.some((a) => a.userId === currentUser.id)),
+  ).length;
   const { stores: storesFromSupabase } = useVisits();
 
   const stores = storesFromSupabase.map((s) => ({
@@ -107,7 +119,7 @@ export default function TasksPage() {
             <div>
               <h1 className="text-2xl font-bold text-gray-900">משימות</h1>
               <p className="text-sm text-gray-500">
-                סה״כ {tasks.length + workflows.length} משימות
+                סה״כ {myTasksCount + myWorkflowsCount} משימות
               </p>
             </div>
           </div>

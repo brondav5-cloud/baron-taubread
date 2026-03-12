@@ -164,8 +164,16 @@ export function UsersProvider({ children }: UsersProviderProps) {
       ? auth.user.companies.map((c) => c.id)
       : [];
 
+  // Use first available company ID (allCompanyIds preferred, fallback to companyId)
+  const effectiveCompanyId =
+    allCompanyIds.length > 0 ? allCompanyIds[0] : (companyId ?? "");
+
   const fetchAll = useCallback(async () => {
-    if (!companyId || !userId) {
+    const companyList = allCompanyIds.length > 0
+      ? allCompanyIds
+      : companyId ? [companyId] : [];
+
+    if (!companyList.length || !userId) {
       setUsers([]);
       setCategories([]);
       setCurrentUser(FALLBACK_USER);
@@ -176,8 +184,8 @@ export function UsersProvider({ children }: UsersProviderProps) {
     try {
       setIsLoading(true);
       const [dbUsers, dbCategories] = await Promise.all([
-        getCompanyUsersMulti(allCompanyIds.length ? allCompanyIds : [companyId]),
-        getTaskCategories(companyId),
+        getCompanyUsersMulti(companyList),
+        getTaskCategories(effectiveCompanyId || companyList[0]!),
       ]);
 
       const appUsers = dbUsers.map(dbUserToAppUser);
@@ -193,7 +201,7 @@ export function UsersProvider({ children }: UsersProviderProps) {
       setIsLoading(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, userId, allCompanyIds.join(",")]);
+  }, [companyId, userId, allCompanyIds.join(","), effectiveCompanyId]);
 
   useEffect(() => {
     if (auth.status !== "loading") {
