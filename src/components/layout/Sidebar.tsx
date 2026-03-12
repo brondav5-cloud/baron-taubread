@@ -156,6 +156,14 @@ const navigation: NavSection[] = [
     title: "ניתוחים",
     items: [
       {
+        label: "השוואה שבועית",
+        href: "/dashboard/weekly",
+        icon: BarChart3,
+        module: "compare",
+        badge: "חדש",
+        badgeColor: "bg-purple-100 text-purple-700",
+      },
+      {
         label: "רווחיות",
         href: "/dashboard/profitability",
         icon: TrendingUp,

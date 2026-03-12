@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { Users } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
 import { useStoreDetailSupabase } from "@/hooks/useStoreDetailSupabase";
 import { useStoreCityComparison } from "@/hooks/useStoreCityComparison";
 import { useStoreProducts } from "@/hooks/useStoreProducts";
@@ -61,6 +62,9 @@ export default function StoreDetailPage() {
     goToStoresList,
     metricsPeriodInfo,
   } = useStoreDetailSupabase();
+
+  const auth = useAuth();
+  const companyId = auth.status === "authed" ? auth.user.company_id : null;
 
   // City comparison (loads when store is ready)
   const city = useStoreCityComparison(store);
@@ -154,6 +158,8 @@ export default function StoreDetailPage() {
           missingSearch={products.missingSearch}
           onProductSearchChange={products.setProductSearch}
           onMissingSearchChange={products.setMissingSearch}
+          companyId={companyId}
+          storeExternalId={store?.external_id ?? null}
         />
       )}
 

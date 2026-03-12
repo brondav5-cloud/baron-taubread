@@ -20,12 +20,16 @@ interface UploadProgressProps {
   status: UploadStatus;
   progress: number;
   error: string | null;
-  accentColor?: "blue" | "green";
+  accentColor?: "blue" | "green" | "purple";
 }
 
-function getStatusConfig(accentColor: "blue" | "green") {
+function getStatusConfig(accentColor: "blue" | "green" | "purple") {
   const activeColor =
-    accentColor === "green" ? "text-green-500" : "text-blue-500";
+    accentColor === "green"
+      ? "text-green-500"
+      : accentColor === "purple"
+        ? "text-purple-500"
+        : "text-blue-500";
   return {
     idle: { icon: Upload, text: "ממתין להעלאה", color: "text-gray-400" },
     reading: {
@@ -54,7 +58,12 @@ export function UploadProgress({
   const config = statusConfig[status];
   const Icon = config.icon;
   const isLoading = ["reading", "processing", "uploading"].includes(status);
-  const barColor = accentColor === "green" ? "bg-green-500" : "bg-blue-500";
+  const barColor =
+    accentColor === "green"
+      ? "bg-green-500"
+      : accentColor === "purple"
+        ? "bg-purple-500"
+        : "bg-blue-500";
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-6">
@@ -124,12 +133,20 @@ function Step({
   label: string;
   isActive: boolean;
   isDone: boolean;
-  accentColor?: "blue" | "green";
+  accentColor?: "blue" | "green" | "purple";
 }) {
   const activeTextColor =
-    accentColor === "green" ? "text-green-600" : "text-blue-600";
+    accentColor === "green"
+      ? "text-green-600"
+      : accentColor === "purple"
+        ? "text-purple-600"
+        : "text-blue-600";
   const activeBgColor =
-    accentColor === "green" ? "bg-green-500" : "bg-blue-500";
+    accentColor === "green"
+      ? "bg-green-500"
+      : accentColor === "purple"
+        ? "bg-purple-500"
+        : "bg-blue-500";
 
   return (
     <div

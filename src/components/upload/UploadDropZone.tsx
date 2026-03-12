@@ -6,7 +6,7 @@ import { Upload, FileSpreadsheet, X } from "lucide-react";
 interface UploadDropZoneProps {
   onFileSelect: (file: File) => void;
   disabled?: boolean;
-  accentColor?: "blue" | "green";
+  accentColor?: "blue" | "green" | "purple";
 }
 
 export function UploadDropZone({
@@ -32,6 +32,13 @@ export function UploadDropZone({
       border: "border-green-500",
       bgLight: "bg-green-50",
       hoverBorder: "hover:border-green-400",
+    },
+    purple: {
+      bg: "bg-purple-100",
+      text: "text-purple-600",
+      border: "border-purple-500",
+      bgLight: "bg-purple-50",
+      hoverBorder: "hover:border-purple-400",
     },
   };
   const c = colors[accentColor];
