@@ -373,5 +373,5 @@ function computeComparison(
   });
 
   // Sort stores by name
-  return result.sort((a, b) => a.storeName.localeCompare("he", b.storeName));
+  return result.sort((a, b) => a.storeName.localeCompare(b.storeName, "he"));
 }
