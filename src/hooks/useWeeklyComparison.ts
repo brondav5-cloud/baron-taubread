@@ -56,8 +56,8 @@ export interface WeeklyComparisonData {
   error:            string | null;
   excludedFilter:     "hide" | "show" | "only";
   setExcludedFilter:  (v: "hide" | "show" | "only") => void;
-  showIrregular:    boolean;
-  setShowIrregular: (v: boolean) => void;
+  irregularFilter:    "hide" | "show" | "only";
+  setIrregularFilter: (v: "hide" | "show" | "only") => void;
   weeksCount:       number;
   setWeeksCount:    (n: number) => void;
   selectWeek:       (w: string) => void;
@@ -140,7 +140,7 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   const [availableWeeks,  setAvailableWeeks]  = useState<string[]>([]);
   const [selectedWeek,    setSelectedWeek]    = useState<string>("");
   const [excludedFilter,  setExcludedFilter]  = useState<"hide" | "show" | "only">("hide");
-  const [showIrregular,   setShowIrregular]   = useState(true);
+  const [irregularFilter, setIrregularFilter] = useState<"hide" | "show" | "only">("show");
   const [weeksCount,      setWeeksCount]      = useState(1);
   const [excludedNames,   setExcludedNames]   = useState<Set<string>>(new Set());
   const [irregularNames,  setIrregularNames]  = useState<Set<string>>(new Set());
@@ -246,6 +246,7 @@ export function useWeeklyComparison(): WeeklyComparisonData {
       .select("store_external_id,store_name,product_name,product_name_normalized,week_start_date,gross_qty,returns_qty,net_qty,delivery_count")
       .eq("company_id", companyId).gte("week_start_date", base.toISOString().slice(0, 10))
       .order("week_start_date", { ascending: false })
+      .limit(100000)
       .then(({ data, error: fetchError }) => {
         setIsLoading(false);
         if (fetchError) { setError(fetchError.message); return; }
@@ -255,15 +256,15 @@ export function useWeeklyComparison(): WeeklyComparisonData {
   }, [companyId, selectedWeek, fetchKey]);
 
   const stores = useMemo(
-    () => computeComparison(rawData, selectedWeek, weeksCount, excludedNames, irregularNames, excludedFilter, showIrregular),
-    [rawData, selectedWeek, weeksCount, excludedNames, irregularNames, excludedFilter, showIrregular],
+    () => computeComparison(rawData, selectedWeek, weeksCount, excludedNames, irregularNames, excludedFilter, irregularFilter),
+    [rawData, selectedWeek, weeksCount, excludedNames, irregularNames, excludedFilter, irregularFilter],
   );
 
   return {
     selectedWeek, availableWeeks, stores, isLoading, error,
-    excludedFilter, setExcludedFilter,
-    showIrregular, setShowIrregular,
-    weeksCount,    setWeeksCount,
+    excludedFilter,  setExcludedFilter,
+    irregularFilter, setIrregularFilter,
+    weeksCount,      setWeeksCount,
     selectWeek: setSelectedWeek,
     refetch, toggleIrregular, irregularNames,
     holidayWeeks, toggleHoliday,
@@ -275,13 +276,13 @@ export function useWeeklyComparison(): WeeklyComparisonData {
 // ============================================================
 
 function computeComparison(
-  rawData:        RawWeekRow[],
-  selectedWeek:   string,
-  weeksCount:     number,
-  excludedNames:  Set<string>,
-  irregularNames: Set<string>,
-  excludedFilter: "hide" | "show" | "only",
-  showIrregular:  boolean,
+  rawData:         RawWeekRow[],
+  selectedWeek:    string,
+  weeksCount:      number,
+  excludedNames:   Set<string>,
+  irregularNames:  Set<string>,
+  excludedFilter:  "hide" | "show" | "only",
+  irregularFilter: "hide" | "show" | "only",
 ): StoreWeekComparison[] {
   if (!selectedWeek || rawData.length === 0) return [];
 
@@ -392,9 +393,10 @@ function computeComparison(
     storeAggs.forEach((agg) => {
       const isExcluded  = excludedNames.has(agg.product_name_normalized);
       const isIrregular = irregularNames.has(agg.product_name_normalized);
-      if (excludedFilter === "hide" && isExcluded)  return; // hide excluded
-      if (excludedFilter === "only" && !isExcluded) return; // only excluded
-      if (isIrregular && !showIrregular) return;
+      if (excludedFilter  === "hide" && isExcluded)   return;
+      if (excludedFilter  === "only" && !isExcluded)  return;
+      if (irregularFilter === "hide" && isIrregular)  return;
+      if (irregularFilter === "only" && !isIrregular) return;
 
       const spKey   = `${storeId}|${agg.product_name_normalized}`;
       const weekMap = index.get(spKey) ?? new Map();

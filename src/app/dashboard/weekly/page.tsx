@@ -176,18 +176,30 @@ export default function WeeklyPage() {
           {/* Week dropdown + holiday toggle */}
           <div className="flex items-center gap-2">
             <label className="text-sm font-medium text-gray-700">שבוע:</label>
-            <select
-              value={weekly.selectedWeek}
-              onChange={(e) => weekly.selectWeek(e.target.value)}
-              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
-            >
-              {weekly.availableWeeks.map((w) => (
-                <option key={w} value={w}>
-                  {weekly.holidayWeeks.has(w) ? `🎉 ` : ""}{fmtDate(w)}
-                  {weekly.holidayWeeks.has(w) ? ` — ${weekly.holidayWeeks.get(w)}` : ""}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-col gap-0.5">
+              <select
+                value={weekly.selectedWeek}
+                onChange={(e) => weekly.selectWeek(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500"
+              >
+                {weekly.availableWeeks.map((w) => (
+                  <option key={w} value={w}>
+                    {weekly.holidayWeeks.has(w) ? `🎉 ` : ""}{fmtDate(w)}
+                    {weekly.holidayWeeks.has(w) ? ` — ${weekly.holidayWeeks.get(w)}` : ""}
+                  </option>
+                ))}
+              </select>
+              {/* Show selected range when weeksCount > 1 */}
+              {weekly.weeksCount > 1 && (() => {
+                const idx   = weekly.availableWeeks.indexOf(weekly.selectedWeek);
+                const endW  = weekly.availableWeeks[idx + weekly.weeksCount - 1];
+                return endW ? (
+                  <span className="text-[10px] text-purple-600 font-medium text-center">
+                    {fmtDate(endW)} – {fmtDate(weekly.selectedWeek)}
+                  </span>
+                ) : null;
+              })()}
+            </div>
             {/* Mark/unmark current week as holiday */}
             <button
               onClick={() => weekly.selectedWeek && weekly.toggleHoliday(weekly.selectedWeek)}
@@ -301,28 +313,46 @@ export default function WeeklyPage() {
             </div>
           </div>
 
-          {/* Show/hide irregular products (global toggle) */}
-          <button
-            onClick={() => weekly.setShowIrregular(!weekly.showIrregular)}
-            title={weekly.showIrregular ? "הסתר מוצרים לא-סדירים מהתצוגה" : "הצג מוצרים לא-סדירים"}
-            className={clsx(
-              "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
-              weekly.showIrregular
-                ? "bg-purple-50 text-purple-700 border-purple-300"
-                : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100",
-            )}
-          >
-            <span className="text-sm leading-none">⊘</span>
-            {weekly.irregularNames.size > 0 && (
-              <span className={clsx(
-                "rounded-full text-[10px] w-4 h-4 flex items-center justify-center font-bold",
-                weekly.showIrregular ? "bg-purple-600 text-white" : "bg-gray-400 text-white",
-              )}>
-                {weekly.irregularNames.size}
-              </span>
-            )}
-            {weekly.showIrregular ? "לא-סדירים מוצגים" : "לא-סדירים מוסתרים"}
-          </button>
+          {/* Irregular products filter — 3-way */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-500 font-medium ml-1">
+              ⊘ לא-סדירים
+              {weekly.irregularNames.size > 0 && (
+                <span className="mr-1 bg-purple-600 text-white rounded-full text-[10px] w-4 h-4 inline-flex items-center justify-center font-bold">
+                  {weekly.irregularNames.size}
+                </span>
+              )}:
+            </span>
+            <div className="flex rounded-lg border border-gray-300 overflow-hidden text-xs">
+              {(
+                [
+                  { value: "show", label: "הכל"          },
+                  { value: "hide", label: "הסתר"         },
+                  { value: "only", label: "רק לא-סדירים" },
+                ] as const
+              ).map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => weekly.setIrregularFilter(value)}
+                  title={
+                    value === "show" ? "הצג את כל המוצרים כולל לא-סדירים"
+                    : value === "hide" ? "הסתר מוצרים לא-סדירים מהתצוגה"
+                    : "הצג לא-סדירים בלבד — לבדיקת רשימת ההחרגה"
+                  }
+                  className={clsx(
+                    "flex items-center gap-1 px-2.5 py-1.5 font-medium transition-colors",
+                    weekly.irregularFilter === value
+                      ? value === "only"
+                        ? "bg-purple-600 text-white"
+                        : "bg-gray-700 text-white"
+                      : "bg-white text-gray-600 hover:bg-gray-50",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <span className="text-gray-200">|</span>
 
@@ -499,6 +529,18 @@ export default function WeeklyPage() {
           <span>
             <strong>תצוגת מוחרגים בלבד</strong>
             {" "}· מוצגים רק מוצרים שסומנו כמוחרגים. לחזרה לתצוגה רגילה — בחר &quot;הסתר&quot; או &quot;הכל&quot;.
+          </span>
+        </div>
+      )}
+
+      {/* ─── Irregular-only banner ─── */}
+      {weekly.irregularFilter === "only" && (
+        <div className="bg-purple-50 border border-purple-200 rounded-xl px-4 py-2.5 flex items-center gap-2 text-purple-800 text-sm">
+          <span className="text-base leading-none flex-shrink-0">⊘</span>
+          <span>
+            <strong>תצוגת לא-סדירים בלבד</strong>
+            {" "}· מוצגים רק מוצרים שסומנו כלא-סדירים ({weekly.irregularNames.size} מוצרים). מוצרים אלו אינם משפיעים על חישוב המגמה הכוללת של החנות.
+            {" "}לחזרה — בחר &quot;הכל&quot; או &quot;הסתר&quot;.
           </span>
         </div>
       )}
