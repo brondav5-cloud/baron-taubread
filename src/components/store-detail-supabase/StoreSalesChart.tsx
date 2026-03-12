@@ -19,13 +19,14 @@ import type { StoreChartData } from "@/hooks/useStoreDetailSupabase";
 
 interface StoreSalesChartProps {
   data: StoreChartData[];
+  onBarClick?: (period: string) => void;
 }
 
 // ============================================
 // COMPONENT
 // ============================================
 
-export function StoreSalesChart({ data }: StoreSalesChartProps) {
+export function StoreSalesChart({ data, onBarClick }: StoreSalesChartProps) {
   if (data.length === 0) {
     return (
       <div className="bg-white rounded-2xl shadow-sm border p-6 text-center text-gray-400">
@@ -39,11 +40,21 @@ export function StoreSalesChart({ data }: StoreSalesChartProps) {
       <h3 className="font-bold text-gray-900 mb-4 px-2">
         📊 מכירות חודשיות (12 חודשים אחרונים)
       </h3>
+      {onBarClick && (
+        <p className="text-xs text-gray-400 px-2 mb-2">
+          לחץ על עמודה כדי לראות פירוט מוצרים לאותו חודש
+        </p>
+      )}
       <div className="h-72">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
             data={data}
             margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+            onClick={onBarClick ? (d) => {
+              const period = (d?.activePayload?.[0]?.payload as StoreChartData | undefined)?.period;
+              if (period) onBarClick(period);
+            } : undefined}
+            style={onBarClick ? { cursor: "pointer" } : undefined}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="label" tick={{ fontSize: 12 }} tickLine={false} />

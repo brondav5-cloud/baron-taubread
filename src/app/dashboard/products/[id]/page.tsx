@@ -2,6 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useProductDetail } from "@/hooks/useProductDetail";
+import { useProductMonthlyDeliveries } from "@/hooks/useProductMonthlyDeliveries";
+import { useAuth } from "@/hooks/useAuth";
 import { Button, EmptyState } from "@/components/ui";
 import {
   ProductDetailHeader,
@@ -21,6 +23,9 @@ const ProductStoresDonut = dynamic(
 );
 
 export default function ProductDetailPage() {
+  const auth = useAuth();
+  const companyId = auth.status === "authed" ? auth.user.company_id : null;
+
   const {
     product,
 
@@ -48,6 +53,11 @@ export default function ProductDetailPage() {
     // Navigation
     goToProductsList,
   } = useProductDetail();
+
+  const { deliveries: deliveryCountByPeriod } = useProductMonthlyDeliveries(
+    product?.name,
+    companyId,
+  );
 
   // Not found state
   if (!product) {
@@ -90,6 +100,7 @@ export default function ProductDetailPage() {
         availableYears={availableYears}
         hideHolidays={hideHolidays}
         onHideHolidaysChange={setHideHolidays}
+        deliveryCountByPeriod={deliveryCountByPeriod}
       />
 
       {/* Sales Chart */}

@@ -34,14 +34,25 @@ export function StoreDeliverySummary({
 
   if (!summary) {
     return (
-      <div className="bg-gray-50 rounded-xl border border-gray-200 p-5">
-        <div className="flex items-center gap-2 text-gray-500">
+      <div className="bg-amber-50 rounded-xl border border-amber-200 p-5">
+        <div className="flex items-center gap-2 text-amber-700 mb-2">
           <Truck className="w-5 h-5" />
-          <span>אין נתוני אספקות לחנות זו</span>
+          <span className="font-medium">אין נתוני אספקות לחנות זו</span>
         </div>
-        <p className="text-sm text-gray-400 mt-1">
-          העלה קובץ תעודות משלוח בדף ההעלאה כדי לראות נתונים
+        <p className="text-sm text-amber-600">
+          הסיבות האפשריות:
         </p>
+        <ul className="text-sm text-amber-600 mt-1 mr-4 list-disc space-y-0.5">
+          <li>קובץ תעודות משלוח טרם הועלה למערכת</li>
+          <li>הקובץ הועלה אך מזהה החנות לא תואם</li>
+          <li>החנות חדשה ועדיין אין לה רקורד אספקות</li>
+        </ul>
+        <a
+          href="/dashboard/upload"
+          className="inline-flex items-center gap-1 mt-3 text-sm text-amber-700 font-medium underline hover:text-amber-900"
+        >
+          עבור לדף העלאת נתונים ←
+        </a>
       </div>
     );
   }

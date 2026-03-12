@@ -18,6 +18,8 @@ interface ProductMonthlySalesTableProps {
   availableYears?: number[];
   hideHolidays: boolean;
   onHideHolidaysChange: (hide: boolean) => void;
+  // deliveryCountByPeriod: { "202601": 42, ... }
+  deliveryCountByPeriod?: Record<string, number>;
 }
 
 export function ProductMonthlySalesTable({
@@ -29,7 +31,15 @@ export function ProductMonthlySalesTable({
   availableYears = [selectedYear],
   hideHolidays,
   onHideHolidaysChange,
+  deliveryCountByPeriod = {},
 }: ProductMonthlySalesTableProps) {
+  // Build per-month delivery list for selected year
+  const deliveriesRow = PRODUCT_MONTHS.map((_, i) => {
+    const key = `${selectedYear}${String(i + 1).padStart(2, "0")}`;
+    return deliveryCountByPeriod[key] ?? 0;
+  });
+  const totalDeliveries = deliveriesRow.reduce((s, v) => s + v, 0);
+  const hasDeliveries = totalDeliveries > 0;
   return (
     <Card>
       <CardHeader>
@@ -131,6 +141,23 @@ export function ProductMonthlySalesTable({
                 ₪{(totals.salesCurrent / 1000).toFixed(0)}K
               </td>
             </tr>
+
+            {/* Deliveries row */}
+            {hasDeliveries && (
+              <tr className="border-b bg-blue-50">
+                <td className="px-2 py-2 font-medium text-blue-700">
+                  🚚 מספר אספקות
+                </td>
+                {deliveriesRow.map((count, i) => (
+                  <td key={i} className="px-2 py-2 text-center text-blue-700 text-xs font-medium">
+                    {count > 0 ? count : "—"}
+                  </td>
+                ))}
+                <td className="px-3 py-2 text-center font-bold text-blue-800 bg-blue-100">
+                  {totalDeliveries}
+                </td>
+              </tr>
+            )}
 
             {/* Holidays */}
             {!hideHolidays && (

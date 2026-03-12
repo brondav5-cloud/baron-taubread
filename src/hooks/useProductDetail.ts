@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -128,9 +128,28 @@ function computeProductStoreMetrics(
   };
 }
 
+function computePeakDistance(
+  monthlyQty: Record<string, number>,
+): { metric_peak_distance: number; peak_value: number; current_value: number } {
+  const entries = Object.entries(monthlyQty).filter(([, v]) => v > 0);
+  if (entries.length === 0) return { metric_peak_distance: 0, peak_value: 0, current_value: 0 };
+
+  const peak_value = Math.max(...entries.map(([, v]) => v));
+  // Most recent non-zero month
+  const sorted = entries.sort((a, b) => b[0].localeCompare(a[0]));
+  const current_value = sorted[0]?.[1] ?? 0;
+  const metric_peak_distance =
+    peak_value > 0 ? ((current_value - peak_value) / peak_value) * 100 : 0;
+
+  return { metric_peak_distance, peak_value, current_value };
+}
+
 function dbProductToLegacy(p: DbProduct) {
   const m = p.metrics ?? {};
   const mx = m as unknown as Record<string, unknown>;
+  const { metric_peak_distance, peak_value, current_value } = computePeakDistance(
+    p.monthly_qty ?? {},
+  );
   return {
     ...p,
     id: p.external_id,
@@ -150,9 +169,9 @@ function dbProductToLegacy(p: DbProduct) {
     metric_6v6: m.metric_6v6 ?? 0,
     metric_3v3: m.metric_3v3 ?? 0,
     metric_2v2: m.metric_2v2 ?? 0,
-    metric_peak_distance: 0,
-    peak_value: 0,
-    current_value: m.qty_current_year ?? 0,
+    metric_peak_distance,
+    peak_value,
+    current_value,
     returns_pct_prev6: 0,
     returns_pct_last6: 0,
     returns_change: 0,

@@ -25,6 +25,7 @@ interface StoreProductsTabProps {
   // For monthly tab
   companyId?: string | null;
   storeExternalId?: number | null;
+  initialMonthlyMonth?: string; // pre-select a month in the monthly breakdown
 }
 
 type SubTab = "selling" | "missing" | "monthly";
@@ -73,8 +74,11 @@ export function StoreProductsTab({
   onMissingSearchChange,
   companyId,
   storeExternalId,
+  initialMonthlyMonth,
 }: StoreProductsTabProps) {
-  const [subTab, setSubTab] = useState<SubTab>("selling");
+  const [subTab, setSubTab] = useState<SubTab>(
+    initialMonthlyMonth ? "monthly" : "selling",
+  );
 
   if (isLoading) {
     return (
@@ -267,6 +271,7 @@ export function StoreProductsTab({
         <StoreMonthlyBreakdown
           companyId={companyId ?? null}
           storeExternalId={storeExternalId ?? null}
+          initialMonth={initialMonthlyMonth}
         />
       )}
     </div>

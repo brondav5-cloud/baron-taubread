@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronUp, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { ChevronUp, ChevronDown, GitCompare } from "lucide-react";
 import { clsx } from "clsx";
 import { formatPercent, getMetricColor } from "@/lib/calculations";
 import type { DbStore } from "@/types/supabase";
@@ -128,10 +129,19 @@ export function StoreCityComparison({
       {rankings && <CityRankingCards rankings={rankings} />}
 
       <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-        <div className="p-4 border-b">
+        <div className="p-4 border-b flex items-center justify-between">
           <h3 className="font-bold text-gray-900">
             📍 חנויות ב{store.city} ({totalInCity})
           </h3>
+          {cityStores.length > 0 && (
+            <Link
+              href={`/dashboard/compare?stores=${cityStores.map((s) => s.external_id).join(",")}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg text-xs font-medium hover:bg-purple-200 transition-colors"
+            >
+              <GitCompare className="w-3.5 h-3.5" />
+              השוואת כל החנויות
+            </Link>
+          )}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -197,14 +207,18 @@ export function StoreCityComparison({
                   >
                     <td className="px-3 py-2 text-gray-400 text-xs">{i + 1}</td>
                     <td className="px-3 py-2 text-right">
-                      <span className={clsx(isCurrent && "text-blue-700")}>
-                        {s.name}
-                      </span>
-                      {isCurrent && (
-                        <span className="text-xs text-blue-500 mr-1">
-                          {" "}
-                          (אתה)
+                      {isCurrent ? (
+                        <span className="text-blue-700 font-medium">
+                          {s.name}
+                          <span className="text-xs text-blue-500 mr-1"> (אתה)</span>
                         </span>
+                      ) : (
+                        <Link
+                          href={`/dashboard/stores/${s.id}`}
+                          className="hover:text-blue-600 hover:underline"
+                        >
+                          {s.name}
+                        </Link>
                       )}
                     </td>
                     <td className="px-3 py-2 text-center">

@@ -16,6 +16,7 @@ interface StoreMonthlyTableProps {
   selectedYear: number;
   availableYears: number[];
   onYearChange: (year: number) => void;
+  onMonthClick?: (period: string) => void;
 }
 
 // ============================================
@@ -28,6 +29,7 @@ export function StoreMonthlyTable({
   selectedYear,
   availableYears,
   onYearChange,
+  onMonthClick,
 }: StoreMonthlyTableProps) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
@@ -89,8 +91,18 @@ export function StoreMonthlyTable({
               </tr>
             ) : (
               yearMonthlyData.map((row) => (
-                <tr key={row.period} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium">{row.periodLabel}</td>
+                <tr
+                  key={row.period}
+                  className={clsx("hover:bg-gray-50", onMonthClick && "cursor-pointer")}
+                  onClick={onMonthClick ? () => onMonthClick(row.period) : undefined}
+                >
+                  <td className="px-4 py-3 font-medium">
+                    {onMonthClick ? (
+                      <span className="text-blue-600 hover:underline">{row.periodLabel}</span>
+                    ) : (
+                      row.periodLabel
+                    )}
+                  </td>
                   <td className="px-4 py-3">{row.qty.toLocaleString()}</td>
                   <td className="px-4 py-3">₪{row.sales.toLocaleString()}</td>
                   <td className="px-4 py-3">

@@ -36,9 +36,16 @@ const VALID_TABS: StoreTabType[] = [
   "competitors",
 ];
 
+function periodToMonthKey(period: string): string {
+  // "202601" → "2026-01"
+  if (period.length === 6) return `${period.slice(0, 4)}-${period.slice(4)}`;
+  return period;
+}
+
 export default function StoreDetailPage() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<StoreTabType>("overview");
+  const [jumpToMonth, setJumpToMonth] = useState<string | undefined>();
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -46,6 +53,11 @@ export default function StoreDetailPage() {
       setActiveTab(tab as StoreTabType);
     }
   }, [searchParams]);
+
+  const handleMonthClick = (period: string) => {
+    setJumpToMonth(periodToMonthKey(period));
+    setActiveTab("products");
+  };
 
   // Main store data
   const {
@@ -123,13 +135,14 @@ export default function StoreDetailPage() {
             summary={storeDelivery}
             isLoading={isLoadingDeliveries}
           />
-          <StoreSalesChart data={chartData} />
+          <StoreSalesChart data={chartData} onBarClick={handleMonthClick} />
           <StoreMonthlyTable
             yearMonthlyData={yearMonthlyData}
             currentYearTotals={currentYearTotals}
             selectedYear={selectedYear}
             availableYears={availableYears}
             onYearChange={setSelectedYear}
+            onMonthClick={handleMonthClick}
           />
           <StoreCityComparison
             store={store}
@@ -160,6 +173,7 @@ export default function StoreDetailPage() {
           onMissingSearchChange={products.setMissingSearch}
           companyId={companyId}
           storeExternalId={store?.external_id ?? null}
+          initialMonthlyMonth={jumpToMonth}
         />
       )}
 

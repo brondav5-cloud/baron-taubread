@@ -13,14 +13,12 @@ export function StoreRow({
   isExpanded,
   onToggle,
   selectedWeek,
-  onToggleIrregular,
   weeksCount = 1,
 }: {
   store: StoreWeekComparison;
   isExpanded: boolean;
   onToggle: () => void;
   selectedWeek?: string;
-  onToggleIrregular?: (productNameNormalized: string) => Promise<void>;
   weeksCount?: number;
 }) {
   const trendBg =
@@ -85,7 +83,6 @@ export function StoreRow({
                   key={product.productNameNormalized}
                   product={product}
                   selectedWeek={selectedWeek}
-                  onToggleIrregular={onToggleIrregular}
                 />
               ))}
             </tbody>
@@ -162,11 +159,9 @@ function StoreTotalsRow({
 function ProductRow({
   product,
   selectedWeek,
-  onToggleIrregular,
 }: {
   product: ProductWeekComparison;
   selectedWeek?: string;
-  onToggleIrregular?: (productNameNormalized: string) => Promise<void>;
 }) {
   const isBelowBenchmark =
     product.vsBenchmark.direction === "down" &&
@@ -215,18 +210,6 @@ function ProductRow({
             >
               {product.streak > 0 ? "↑" : "↓"}{Math.abs(product.streak)}
             </span>
-          )}
-          {onToggleIrregular && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleIrregular(product.productNameNormalized); }}
-              title={product.isIrregular ? "הסר מסימון לא-סדיר" : "סמן כמוצר לא-סדיר"}
-              className={clsx(
-                "mr-1 px-0.5 rounded hover:bg-gray-200 transition-colors text-sm leading-none",
-                product.isIrregular ? "text-purple-500" : "text-gray-300 hover:text-gray-500",
-              )}
-            >
-              ⊘
-            </button>
           )}
         </div>
       </td>

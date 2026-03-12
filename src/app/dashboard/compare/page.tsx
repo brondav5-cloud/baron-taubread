@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import {
   useStoreCrossComparison,
@@ -46,11 +47,25 @@ function StorePill({
 export default function ComparePage() {
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const searchParams = useSearchParams();
 
   const [selectedMonth,    setSelectedMonth]    = useState("");
-  const [selectedStoreIds, setSelectedStoreIds] = useState<number[]>([]);
+  const [selectedStoreIds, setSelectedStoreIds] = useState<number[]>(() => {
+    const storesParam = searchParams.get("stores");
+    if (!storesParam) return [];
+    return storesParam.split(",").map(Number).filter(Boolean);
+  });
   const [showReturns,      setShowReturns]      = useState(false);
   const [search,           setSearch]           = useState("");
+
+  // Keep URL params in sync when they change (e.g. navigating from city comparison)
+  useEffect(() => {
+    const storesParam = searchParams.get("stores");
+    if (storesParam) {
+      const ids = storesParam.split(",").map(Number).filter(Boolean);
+      setSelectedStoreIds(ids);
+    }
+  }, [searchParams]);
 
   const { pivotRows, availableMonths, stores, isLoading, error } =
     useStoreCrossComparison(companyId, selectedMonth, selectedStoreIds);

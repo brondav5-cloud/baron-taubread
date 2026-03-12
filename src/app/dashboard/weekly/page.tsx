@@ -53,6 +53,19 @@ export default function WeeklyPage() {
   const expandAll   = useCallback(() => setExpandedStores(new Set(weekly.stores.map((s) => s.storeExternalId))), [weekly.stores]);
   const collapseAll = useCallback(() => setExpandedStores(new Set()), []);
 
+  // All unique products in current weekly data (for irregular multi-select)
+  const allProducts = useMemo(() => {
+    const map = new Map<string, string>(); // normalized → display name
+    weekly.stores.forEach((s) =>
+      s.products.forEach((p) => {
+        if (!map.has(p.productNameNormalized)) map.set(p.productNameNormalized, p.productName);
+      }),
+    );
+    return Array.from(map.entries())
+      .map(([normalized, name]) => ({ normalized, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "he"));
+  }, [weekly.stores]);
+
   // Build filter options from stores that actually appear in weekly data
   const filterOptions = useMemo(() => {
     const agents   = new Set<string>();
@@ -288,16 +301,27 @@ export default function WeeklyPage() {
             </div>
           </div>
 
-          {/* Show irregular */}
+          {/* Show/hide irregular products (global toggle) */}
           <button
             onClick={() => weekly.setShowIrregular(!weekly.showIrregular)}
+            title={weekly.showIrregular ? "הסתר מוצרים לא-סדירים מהתצוגה" : "הצג מוצרים לא-סדירים"}
             className={clsx(
-              "flex items-center gap-1.5 text-xs transition-colors",
-              weekly.showIrregular ? "text-purple-600 hover:text-purple-800" : "text-gray-400 hover:text-gray-600",
+              "flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors",
+              weekly.showIrregular
+                ? "bg-purple-50 text-purple-700 border-purple-300"
+                : "bg-gray-50 text-gray-400 border-gray-200 hover:bg-gray-100",
             )}
           >
             <span className="text-sm leading-none">⊘</span>
-            {weekly.showIrregular ? "הסתר לא-סדירים" : "הצג לא-סדירים"}
+            {weekly.irregularNames.size > 0 && (
+              <span className={clsx(
+                "rounded-full text-[10px] w-4 h-4 flex items-center justify-center font-bold",
+                weekly.showIrregular ? "bg-purple-600 text-white" : "bg-gray-400 text-white",
+              )}>
+                {weekly.irregularNames.size}
+              </span>
+            )}
+            {weekly.showIrregular ? "לא-סדירים מוצגים" : "לא-סדירים מוסתרים"}
           </button>
 
           <span className="text-gray-200">|</span>
@@ -416,6 +440,13 @@ export default function WeeklyPage() {
                   נקה פילטרים
                 </button>
               )}
+
+              {/* Irregular products multi-select */}
+              <IrregularMultiSelect
+                allProducts={allProducts}
+                irregularNames={weekly.irregularNames}
+                onToggle={weekly.toggleIrregular}
+              />
             </div>
           </div>
         )}
@@ -509,7 +540,6 @@ export default function WeeklyPage() {
                 isExpanded={expandedStores.has(store.storeExternalId)}
                 onToggle={() => toggleStore(store.storeExternalId)}
                 selectedWeek={weekly.selectedWeek}
-                onToggleIrregular={weekly.toggleIrregular}
                 weeksCount={weekly.weeksCount}
               />
             ))
@@ -573,6 +603,129 @@ function AnomalyBanner({ anomalies }: {
             * חריגה = Z-score ≥ 2.5 ביחס ל-10 השבועות הקודמים. ייתכן שגיאת נתונים, אירוע מיוחד, או שינוי אמיתי.
           </p>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Irregular Products Multi-Select ──────────────────────────────────────────
+
+function IrregularMultiSelect({
+  allProducts,
+  irregularNames,
+  onToggle,
+}: {
+  allProducts: { normalized: string; name: string }[];
+  irregularNames: Set<string>;
+  onToggle: (normalized: string) => Promise<void>;
+}) {
+  const [open,   setOpen]   = useState(false);
+  const [search, setSearch] = useState("");
+
+  const count = irregularNames.size;
+  const filtered = allProducts.filter(
+    (p) => !search || p.name.toLowerCase().includes(search.toLowerCase()),
+  );
+
+  return (
+    <div className="flex flex-col gap-1 relative">
+      <label className="text-xs font-medium text-gray-600">מוצרים לא-סדירים</label>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className={clsx(
+          "flex items-center gap-2 border rounded-lg px-2.5 py-1.5 text-xs min-w-[160px] text-right transition-colors",
+          count > 0 || open
+            ? "border-purple-400 bg-purple-50 text-purple-800"
+            : "border-gray-300 text-gray-700 bg-white hover:bg-gray-50",
+        )}
+      >
+        <span className="text-sm leading-none">⊘</span>
+        <span className="flex-1 text-right">
+          {count === 0 ? "בחר מוצרים לא-סדירים" : `${count} מוצרים מסומנים`}
+        </span>
+        <span className="text-gray-400 text-xs">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div
+          className="absolute top-full mt-1 right-0 z-50 bg-white border border-gray-200 rounded-xl shadow-xl w-72"
+          style={{ maxHeight: 320, display: "flex", flexDirection: "column" }}
+        >
+          {/* Search */}
+          <div className="p-2 border-b border-gray-100">
+            <div className="relative">
+              <Search className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="חפש מוצר..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                autoFocus
+                className="w-full pr-8 pl-3 py-1.5 border border-gray-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-400 focus:outline-none"
+                dir="rtl"
+              />
+            </div>
+          </div>
+
+          {/* List */}
+          <div className="overflow-y-auto flex-1 p-1">
+            {filtered.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-4">לא נמצאו מוצרים</p>
+            ) : (
+              filtered.map((p) => {
+                const isIrregular = irregularNames.has(p.normalized);
+                return (
+                  <button
+                    key={p.normalized}
+                    onClick={() => onToggle(p.normalized)}
+                    className={clsx(
+                      "w-full flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs text-right transition-colors",
+                      isIrregular
+                        ? "bg-purple-50 text-purple-800 hover:bg-purple-100"
+                        : "text-gray-700 hover:bg-gray-50",
+                    )}
+                  >
+                    <span
+                      className={clsx(
+                        "w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 text-xs",
+                        isIrregular
+                          ? "bg-purple-600 border-purple-600 text-white"
+                          : "border-gray-300",
+                      )}
+                    >
+                      {isIrregular ? "✓" : ""}
+                    </span>
+                    <span className={clsx("flex-1 text-right", isIrregular && "font-medium")}>
+                      {p.name}
+                    </span>
+                    {isIrregular && <span className="text-purple-400 text-sm">⊘</span>}
+                  </button>
+                );
+              })
+            )}
+          </div>
+
+          {/* Footer */}
+          {count > 0 && (
+            <div className="p-2 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
+              <span>{count} מוצרים מסומנים</span>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-purple-600 hover:text-purple-800 font-medium"
+              >
+                סגור
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Click-outside to close */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40"
+          onClick={() => setOpen(false)}
+        />
       )}
     </div>
   );

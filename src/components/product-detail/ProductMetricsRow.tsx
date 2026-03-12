@@ -84,7 +84,7 @@ export function ProductMetricsRow({ product }: ProductMetricsRowProps) {
           {formatPercent(product.metric_peak_distance)}
         </p>
         <p className="text-xs text-gray-400">
-          שיא: {formatNumber(product.peak_value)} | דצמ:{" "}
+          שיא: {formatNumber(product.peak_value)} | אחרון:{" "}
           {formatNumber(product.current_value)}
         </p>
       </div>
