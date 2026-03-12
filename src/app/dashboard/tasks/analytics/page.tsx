@@ -14,6 +14,7 @@ import {
   type CategoryStats,
   type MonthlyData,
 } from "@/components/tasks/analytics";
+import { UserPerformanceTable } from "@/components/tasks/analytics/UserPerformanceTable";
 
 const TasksTrendChart = dynamic(
   () => import("@/components/tasks/analytics/TasksTrendChart").then((m) => m.TasksTrendChart),
@@ -94,7 +95,7 @@ function getTasksForMonth(tasks: Task[], month: string): Task[] {
 
 export default function TasksAnalyticsPage() {
   const { tasks } = useTasks();
-  const { categories } = useUsers();
+  const { categories, allUsers } = useUsers();
 
   // Default: this month
   const [dateRange, setDateRange] = useState<DateRange>(() =>
@@ -217,6 +218,9 @@ export default function TasksAnalyticsPage() {
         <TasksTrendChart data={trendData} />
         <CategoryBreakdown data={categoryStats} />
       </div>
+
+      {/* Per-user performance */}
+      <UserPerformanceTable tasks={rangeTasks} users={allUsers} />
     </div>
   );
 }

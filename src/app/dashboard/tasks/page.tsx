@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { Plus, ListTodo, BarChart3, List, Bug } from "lucide-react";
+import { Plus, ListTodo, BarChart3, List, Bug, Users, X, ChevronDown } from "lucide-react";
 import { useUsers } from "@/context/UsersContext";
 import { useTasks } from "@/context/TasksContext";
 import { useWorkflow } from "@/context/WorkflowContext";
@@ -27,15 +27,15 @@ export default function TasksPage() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
-  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(
-    null,
-  );
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<number | null>(null);
-  const [selectedStoreNameFromSession, setSelectedStoreNameFromSession] =
-    useState<string | null>(null);
+  const [selectedStoreNameFromSession, setSelectedStoreNameFromSession] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>("my_new");
+  const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
+  const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
+  const assigneeDropdownRef = useRef<HTMLDivElement>(null);
 
-  const { currentUser } = useUsers();
+  const { currentUser, allUsers } = useUsers();
   const { tasks } = useTasks();
   const { createWorkflow, workflows } = useWorkflow();
 
@@ -175,12 +175,59 @@ export default function TasksPage() {
         onFilterChange={setActiveFilter}
       />
 
+      {/* Assignee Filter */}
+      <div className="relative" ref={assigneeDropdownRef}>
+        <button
+          onClick={() => setShowAssigneeDropdown((v) => !v)}
+          className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <Users className="w-4 h-4 text-gray-500" />
+          {assigneeFilter.length === 0
+            ? "סנן לפי מוקצה"
+            : `${assigneeFilter.length} מוקצ${assigneeFilter.length === 1 ? "ה" : "ים"} נבחר${assigneeFilter.length === 1 ? "" : "ו"}`}
+          <ChevronDown className="w-4 h-4 text-gray-400" />
+          {assigneeFilter.length > 0 && (
+            <span
+              onClick={(e) => { e.stopPropagation(); setAssigneeFilter([]); }}
+              className="ml-1 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-3 h-3" />
+            </span>
+          )}
+        </button>
+
+        {showAssigneeDropdown && (
+          <div className="absolute top-full mt-1 right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2 min-w-52 max-h-64 overflow-y-auto">
+            <div className="text-xs text-gray-400 px-2 py-1 mb-1">בחר מוקצים להצגה</div>
+            {allUsers.filter((u) => u.id !== "anon").map((user) => (
+              <label key={user.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={assigneeFilter.includes(user.id)}
+                  onChange={() =>
+                    setAssigneeFilter((prev) =>
+                      prev.includes(user.id)
+                        ? prev.filter((id) => id !== user.id)
+                        : [...prev, user.id],
+                    )
+                  }
+                  className="w-4 h-4 accent-primary-600"
+                />
+                <span className="text-base">{user.avatar}</span>
+                <span className="text-sm text-gray-800">{user.name}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Unified Tasks List */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4">
         <UnifiedTasksList
           filter={activeFilter}
           onTaskClick={setSelectedTask}
           onWorkflowClick={setSelectedWorkflowId}
+          assigneeFilter={assigneeFilter}
         />
       </div>
 
