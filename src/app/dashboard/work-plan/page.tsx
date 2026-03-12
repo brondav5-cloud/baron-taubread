@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Calendar,
   ChevronLeft,
@@ -23,6 +24,9 @@ import {
 import type { PlanItem, PlannedVisit, PlannedTask } from "@/hooks/useWorkPlan";
 
 export default function WorkPlanPage() {
+  const searchParams = useSearchParams();
+  const initialWeek = searchParams.get("week") ? parseInt(searchParams.get("week")!, 10) : 0;
+
   const {
     cities,
     agents,
@@ -55,7 +59,7 @@ export default function WorkPlanPage() {
     handleDrop,
     formatDate,
     isToday,
-  } = useWorkPlan();
+  } = useWorkPlan(initialWeek);
 
   // Get treatment stores from context
   const { stores: treatmentStores } = useTreatmentContext();

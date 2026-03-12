@@ -59,7 +59,7 @@ function dbToPlanItem(row: DbWorkPlanItem): PlanItem {
   return task;
 }
 
-export function useWorkPlan() {
+export function useWorkPlan(initialWeekOffset?: number) {
   const auth = useAuth();
   const { stores: dbStores, getStoreByExternalId } = useStoresAndProducts();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
@@ -96,7 +96,7 @@ export function useWorkPlan() {
   );
 
   // State
-  const [weekOffset, setWeekOffset] = useState(0);
+  const [weekOffset, setWeekOffset] = useState(initialWeekOffset ?? 0);
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [selectedAgent, setSelectedAgent] = useState<string>("");
   const [showAddModal, setShowAddModal] = useState(false);

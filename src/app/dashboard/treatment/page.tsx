@@ -100,7 +100,7 @@ export default function TreatmentPage() {
     if (workPlanStoreId) {
       addVisitFromTreatment(workPlanStoreId, day, weekOffset);
       setWorkPlanStoreId(null);
-      router.push("/dashboard/work-plan");
+      router.push(`/dashboard/work-plan?week=${weekOffset}`);
     }
   };
 
