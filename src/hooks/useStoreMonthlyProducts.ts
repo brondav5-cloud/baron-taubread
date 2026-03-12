@@ -1,6 +1,6 @@
 // ============================================================
 // STORE MONTHLY PRODUCTS HOOK
-// מביא פירוט מוצרים חודשי לפי חנות מטבלת store_product_monthly
+// קורא מ-store_products ומפרק monthly_qty/monthly_sales ל-שורות לפי חודש
 // ============================================================
 
 "use client";
@@ -16,15 +16,15 @@ export interface MonthlyProductRow {
   month:               number;
   qty:                 number;
   sales:               number;
-  returns_qty:         number;
-  returns_pct:         number;
+  returns_qty:         number; // 0 — not available at product level from this table
+  returns_pct:         number; // 0 — not available at product level from this table
 }
 
 interface UseStoreMonthlyProductsResult {
-  rows:           MonthlyProductRow[];
+  rows:            MonthlyProductRow[];
   availableMonths: string[]; // sorted desc
-  isLoading:      boolean;
-  error:          string | null;
+  isLoading:       boolean;
+  error:           string | null;
 }
 
 export function useStoreMonthlyProducts(
@@ -44,25 +44,55 @@ export function useStoreMonthlyProducts(
     setError(null);
 
     supabase
-      .from("store_product_monthly")
+      .from("store_products")
       .select(
-        "product_external_id,product_name,month_key,year,month,qty,sales,returns_qty,returns_pct",
+        "product_external_id, product_name, monthly_qty, monthly_sales",
       )
       .eq("company_id", companyId)
       .eq("store_external_id", storeExternalId)
-      .order("month_key", { ascending: false })
+      .order("total_qty", { ascending: false })
       .then(({ data, error: fetchError }) => {
         setIsLoading(false);
+
         if (fetchError) {
           setError(fetchError.message);
           return;
         }
-        const fetched = (data ?? []) as MonthlyProductRow[];
-        setRows(fetched);
 
-        const seen = new Set<string>();
-        fetched.forEach((r) => seen.add(r.month_key));
-        const months = Array.from(seen).sort((a, b) => (a > b ? -1 : 1));
+        // Expand JSONB monthly_qty / monthly_sales into flat per-month rows
+        const expanded: MonthlyProductRow[] = [];
+        const monthSet = new Set<string>();
+
+        (data ?? []).forEach((sp) => {
+          const monthlyQty   = (sp.monthly_qty   ?? {}) as Record<string, number>;
+          const monthlySales = (sp.monthly_sales ?? {}) as Record<string, number>;
+
+          Object.entries(monthlyQty).forEach(([monthKey, qty]) => {
+            if (!qty || qty === 0) return;
+
+            const parts = monthKey.split("-");
+            const year  = parseInt(parts[0] ?? "0", 10);
+            const month = parseInt(parts[1] ?? "0", 10);
+            if (!year || !month) return;
+
+            monthSet.add(monthKey);
+            expanded.push({
+              product_external_id: sp.product_external_id,
+              product_name:        sp.product_name,
+              month_key:           monthKey,
+              year,
+              month,
+              qty,
+              sales:       monthlySales[monthKey] ?? 0,
+              returns_qty: 0,
+              returns_pct: 0,
+            });
+          });
+        });
+
+        setRows(expanded);
+
+        const months = Array.from(monthSet).sort((a, b) => (a > b ? -1 : 1));
         setAvailableMonths(months);
       });
   }, [companyId, storeExternalId]);
