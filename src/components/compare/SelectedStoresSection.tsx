@@ -61,7 +61,7 @@ export function SelectedStoresSection({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {sorted.map((store, index) => {
+              {sorted.map((store) => {
                 const originalIndex = stores.indexOf(store);
                 const color = CHART_COLORS[originalIndex % CHART_COLORS.length];
                 return (
