@@ -141,18 +141,52 @@ export function useWeeklyComparison(): WeeklyComparisonData {
       });
   }, [companyId]);
 
-  // Fetch weekly raw data
+  // Step 1: Fetch available weeks (no date cutoff — all historical weeks)
   useEffect(() => {
     if (!companyId) return;
 
     const supabase = createClient();
-
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - HISTORY_WEEKS * 7);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-
     setIsLoading(true);
     setError(null);
+
+    supabase
+      .from("store_product_weekly")
+      .select("week_start_date")
+      .eq("company_id", companyId)
+      .order("week_start_date", { ascending: false })
+      .limit(5000)
+      .then(({ data, error: fetchError }) => {
+        if (fetchError) {
+          setIsLoading(false);
+          setError(fetchError.message);
+          return;
+        }
+        const weekSet = new Set<string>();
+        (data ?? []).forEach((r) => weekSet.add(r.week_start_date as string));
+        const weeks = Array.from(weekSet).sort((a, b) => (a > b ? -1 : 1));
+        setAvailableWeeks(weeks);
+
+        if (weeks.length > 0 && !selectedWeek) {
+          setSelectedWeek(weeks[0]!);
+        } else {
+          setIsLoading(false);
+        }
+      });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, fetchKey]);
+
+  // Step 2: Fetch raw data — cutoff relative to selected week, not today
+  useEffect(() => {
+    if (!companyId || !selectedWeek) return;
+
+    const supabase = createClient();
+    setIsLoading(true);
+    setError(null);
+
+    // Cutoff: HISTORY_WEEKS before the selected week
+    const base = new Date(selectedWeek);
+    base.setDate(base.getDate() - HISTORY_WEEKS * 7);
+    const cutoffStr = base.toISOString().slice(0, 10);
 
     supabase
       .from("store_product_weekly")
@@ -168,22 +202,10 @@ export function useWeeklyComparison(): WeeklyComparisonData {
           setError(fetchError.message);
           return;
         }
-        const rows = (data ?? []) as RawWeekRow[];
-        setRawData(rows);
-
-        // Build sorted unique week list
-        const weekSet = new Set<string>();
-        rows.forEach((r) => weekSet.add(r.week_start_date));
-        const weeks = Array.from(weekSet).sort((a, b) => (a > b ? -1 : 1));
-        setAvailableWeeks(weeks);
-
-        // Auto-select most recent week
-        if (weeks.length > 0 && !selectedWeek) {
-          setSelectedWeek(weeks[0]!);
-        }
+        setRawData((data ?? []) as RawWeekRow[]);
       });
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, fetchKey]);
+  }, [companyId, selectedWeek, fetchKey]);
 
   // Compute comparison data for the selected week
   const stores = computeComparison(rawData, selectedWeek, excludedNames, showExcluded);

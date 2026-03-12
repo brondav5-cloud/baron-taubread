@@ -158,18 +158,18 @@ export async function getWeeklyComparisonData(
 export async function getAvailableWeeks(
   supabase: SupabaseClient,
   companyId: string,
-  limit = 20,
+  limit = 52, // up to 52 most recent weeks
 ): Promise<string[]> {
+  // No date cutoff — return all weeks ever uploaded for this company
   const { data } = await supabase
     .from("store_product_weekly")
     .select("week_start_date")
     .eq("company_id", companyId)
     .order("week_start_date", { ascending: false })
-    .limit(limit * 50); // fetch extra to deduplicate
+    .limit(limit * 100); // fetch extra rows to deduplicate
 
   if (!data) return [];
   const uniqueSet = new Set<string>();
   data.forEach((r) => uniqueSet.add(r.week_start_date as string));
-  const unique = Array.from(uniqueSet);
-  return unique.slice(0, limit);
+  return Array.from(uniqueSet).slice(0, limit);
 }
