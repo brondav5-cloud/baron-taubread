@@ -89,23 +89,27 @@ export async function uploadProductDeliveryFile(
       return { success: false, error: "סוג קובץ לא נתמך. יש להעלות קובץ Excel (.xlsx)" };
     }
 
+    onProgress(5);
+    // Yield to the browser before SheetJS blocks the main thread
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
     onProgress(20);
     const result = await processProductDeliveryExcel(file);
     if (!result.success) return { success: false, error: result.error ?? "שגיאה בעיבוד הקובץ" };
 
     onProgress(50);
-    const chunks      = buildChunks(result.records);
-    const totalChunks = chunks.length;
+    const recordChunks = buildChunks(result.records);
+    // storeDeliveries is always sent as its own final request to avoid
+    // pushing the last records chunk over the server's body size limit.
+    const totalChunks = recordChunks.length + 1;
     let uploadResponse = null;
 
-    for (let i = 0; i < totalChunks; i++) {
-      const isLast = i === totalChunks - 1;
+    // Send all record chunks (none of them are the "last" chunk)
+    for (let i = 0; i < recordChunks.length; i++) {
       const payload: ProductDeliveryUploadPayload = {
-        filename:        file.name,
-        records:         chunks[i]!,
-        storeDeliveries: isLast ? (result.storeDeliveries as StoreDeliveryAggregate[]) : undefined,
-        stats:           result.stats,
-        chunkIndex:      i,
+        filename:   file.name,
+        records:    recordChunks[i]!,
+        stats:      result.stats,
+        chunkIndex: i,
         totalChunks,
       };
       const response = await fetch("/api/upload-product-deliveries", {
@@ -118,10 +122,30 @@ export async function uploadProductDeliveryFile(
         try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
         return { success: false, error: errMsg };
       }
-      const chunkResponse = await response.json();
-      if (isLast) uploadResponse = chunkResponse;
       onProgress(50 + Math.round(((i + 1) / totalChunks) * 50));
     }
+
+    // Final chunk: empty records + storeDeliveries only
+    const finalPayload: ProductDeliveryUploadPayload = {
+      filename:        file.name,
+      records:         [],
+      storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
+      stats:           result.stats,
+      chunkIndex:      totalChunks - 1,
+      totalChunks,
+    };
+    const finalResponse = await fetch("/api/upload-product-deliveries", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(finalPayload),
+    });
+    if (!finalResponse.ok) {
+      let errMsg = "שגיאה בשמירת נתוני אספקות";
+      try { const d = await finalResponse.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
+      return { success: false, error: errMsg };
+    }
+    uploadResponse = await finalResponse.json();
+    onProgress(100);
 
     return { success: true, stats: uploadResponse?.stats ?? null };
   } catch (err) {
@@ -182,19 +206,17 @@ export function useProductDeliveryUpload() {
       // Step 3: Upload in chunks
       setState((prev) => ({ ...prev, status: "uploading", progress: 70 }));
 
-      const chunks      = buildChunks(result.records);
-      const totalChunks = chunks.length;
+      const recordChunks = buildChunks(result.records);
+      // storeDeliveries always goes as its own final request
+      const totalChunks = recordChunks.length + 1;
       let uploadResponse = null;
 
-      for (let i = 0; i < totalChunks; i++) {
-        const isLast = i === totalChunks - 1;
-
+      for (let i = 0; i < recordChunks.length; i++) {
         const payload: ProductDeliveryUploadPayload = {
-          filename:        file.name,
-          records:         chunks[i]!,
-          storeDeliveries: isLast ? (result.storeDeliveries as StoreDeliveryAggregate[]) : undefined,
-          stats:           result.stats,
-          chunkIndex:      i,
+          filename:   file.name,
+          records:    recordChunks[i]!,
+          stats:      result.stats,
+          chunkIndex: i,
           totalChunks,
         };
 
@@ -215,13 +237,36 @@ export function useProductDeliveryUpload() {
           throw new Error(errMsg);
         }
 
-        const chunkResponse = await response.json();
-        if (isLast) uploadResponse = chunkResponse;
-
-        // Progress 70-100% across chunks
         const chunkProgress = 70 + Math.round(((i + 1) / totalChunks) * 30);
         setState((prev) => ({ ...prev, progress: chunkProgress }));
       }
+
+      // Final chunk: storeDeliveries only (empty records)
+      const finalPayload: ProductDeliveryUploadPayload = {
+        filename:        file.name,
+        records:         [],
+        storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
+        stats:           result.stats,
+        chunkIndex:      totalChunks - 1,
+        totalChunks,
+      };
+      const finalResponse = await fetch("/api/upload-product-deliveries", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(finalPayload),
+      });
+      if (!finalResponse.ok) {
+        let errMsg = "שגיאה בשמירת נתוני אספקות";
+        try {
+          const errorData = await finalResponse.json();
+          if (errorData?.error) errMsg = errorData.error;
+        } catch {
+          errMsg = `שגיאת שרת (${finalResponse.status})`;
+        }
+        throw new Error(errMsg);
+      }
+      uploadResponse = await finalResponse.json();
+      setState((prev) => ({ ...prev, progress: 100 }));
 
       setState((prev) => ({
         ...prev,

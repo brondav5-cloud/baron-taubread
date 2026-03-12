@@ -108,7 +108,12 @@ export async function POST(request: NextRequest) {
 
     const payload = parseResult.data as ProductDeliveryUploadPayload;
 
-    if (!payload.records || payload.records.length === 0) {
+    const chunkIndex  = payload.chunkIndex  ?? 0;
+    const totalChunks = payload.totalChunks ?? 1;
+    const isLastChunk = chunkIndex === totalChunks - 1;
+
+    // Allow empty records only on the final chunk (storeDeliveries-only request)
+    if (!payload.records || (payload.records.length === 0 && !isLastChunk)) {
       return NextResponse.json(
         { error: "אין נתונים בבקשה" },
         { status: 400 },
@@ -122,7 +127,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Upsert weekly records
+    // Upsert weekly records (may be empty on the final storeDeliveries-only chunk)
     const result = await upsertWeeklyRecords(
       supabaseAdmin,
       companyId,
@@ -137,10 +142,6 @@ export async function POST(request: NextRequest) {
     }
 
     const processingTime = Math.round(performance.now() - startTime);
-
-    const chunkIndex  = payload.chunkIndex  ?? 0;
-    const totalChunks = payload.totalChunks ?? 1;
-    const isLastChunk = chunkIndex === totalChunks - 1;
 
     // On the last chunk: also upsert store-level delivery aggregates → store_deliveries
     if (isLastChunk && payload.storeDeliveries?.length) {

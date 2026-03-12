@@ -72,6 +72,9 @@ export function useUploadQueue<TStats = unknown>(uploadFn: UploadFn<TStats>) {
 
     for (const item of snapshot) {
       updateItem(item.id, { status: "processing", progress: 0 });
+      // Yield to the browser so React can render the "processing" state
+      // before SheetJS blocks the main thread with large file parsing.
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
 
       try {
         const result = await uploadFnRef.current(item.file, (pct) => {
