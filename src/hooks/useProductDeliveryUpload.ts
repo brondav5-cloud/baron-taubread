@@ -71,6 +71,66 @@ function buildChunks(records: AggregatedWeeklyRecord[]): AggregatedWeeklyRecord[
   return chunks;
 }
 
+// ============================================================
+// STANDALONE UPLOAD FUNCTION (for queue use)
+// ============================================================
+
+export async function uploadProductDeliveryFile(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<{
+  success: boolean;
+  stats?: UploadState["uploadResponse"];
+  error?: string;
+}> {
+  try {
+    const validExts = [".xlsx", ".xls"];
+    if (!validExts.some((ext) => file.name.toLowerCase().endsWith(ext))) {
+      return { success: false, error: "סוג קובץ לא נתמך. יש להעלות קובץ Excel (.xlsx)" };
+    }
+
+    onProgress(20);
+    const result = await processProductDeliveryExcel(file);
+    if (!result.success) return { success: false, error: result.error ?? "שגיאה בעיבוד הקובץ" };
+
+    onProgress(50);
+    const chunks      = buildChunks(result.records);
+    const totalChunks = chunks.length;
+    let uploadResponse = null;
+
+    for (let i = 0; i < totalChunks; i++) {
+      const isLast = i === totalChunks - 1;
+      const payload: ProductDeliveryUploadPayload = {
+        filename:        file.name,
+        records:         chunks[i]!,
+        storeDeliveries: isLast ? (result.storeDeliveries as StoreDeliveryAggregate[]) : undefined,
+        stats:           result.stats,
+        chunkIndex:      i,
+        totalChunks,
+      };
+      const response = await fetch("/api/upload-product-deliveries", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        let errMsg = "שגיאה בשמירת הנתונים";
+        try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
+        return { success: false, error: errMsg };
+      }
+      const chunkResponse = await response.json();
+      if (isLast) uploadResponse = chunkResponse;
+      onProgress(50 + Math.round(((i + 1) / totalChunks) * 50));
+    }
+
+    return { success: true, stats: uploadResponse?.stats ?? null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא ידועה" };
+  }
+}
+
+// ============================================================
+
 export function useProductDeliveryUpload() {
   const [state, setState] = useState<UploadState>({
     status:         "idle",

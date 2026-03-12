@@ -4,13 +4,17 @@ import { useCallback, useRef, useState } from "react";
 import { Upload, FileSpreadsheet, X } from "lucide-react";
 
 interface UploadDropZoneProps {
-  onFileSelect: (file: File) => void;
-  disabled?: boolean;
-  accentColor?: "blue" | "green" | "purple";
+  onFileSelect:  (file: File) => void;
+  onFilesSelect?: (files: File[]) => void; // multi-file mode
+  multiple?:     boolean;
+  disabled?:     boolean;
+  accentColor?:  "blue" | "green" | "purple";
 }
 
 export function UploadDropZone({
   onFileSelect,
+  onFilesSelect,
+  multiple = false,
   disabled,
   accentColor = "blue",
 }: UploadDropZoneProps) {
@@ -56,31 +60,39 @@ export function UploadDropZone({
     setIsDragging(false);
   }, []);
 
+  const handleFiles = useCallback(
+    (fileList: FileList | null) => {
+      if (!fileList || fileList.length === 0) return;
+      const valid = Array.from(fileList).filter(
+        (f) => f.name.endsWith(".xlsx") || f.name.endsWith(".xls"),
+      );
+      if (valid.length === 0) return;
+
+      if (multiple && onFilesSelect) {
+        onFilesSelect(valid);
+      } else {
+        setSelectedFile(valid[0]!);
+        onFileSelect(valid[0]!);
+      }
+    },
+    [multiple, onFilesSelect, onFileSelect],
+  );
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-
       if (disabled) return;
-
-      const file = e.dataTransfer.files[0];
-      if (file && (file.name.endsWith(".xlsx") || file.name.endsWith(".xls"))) {
-        setSelectedFile(file);
-        onFileSelect(file);
-      }
+      handleFiles(e.dataTransfer.files);
     },
-    [disabled, onFileSelect],
+    [disabled, handleFiles],
   );
 
   const handleFileChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        setSelectedFile(file);
-        onFileSelect(file);
-      }
+      handleFiles(e.target.files);
     },
-    [onFileSelect],
+    [handleFiles],
   );
 
   const handleClick = () => {
@@ -110,6 +122,7 @@ export function UploadDropZone({
         ref={inputRef}
         type="file"
         accept=".xlsx,.xls"
+        multiple={multiple}
         onChange={handleFileChange}
         className="hidden"
         disabled={disabled}
@@ -145,11 +158,15 @@ export function UploadDropZone({
           </div>
           <div>
             <p className="text-lg font-medium text-gray-900">
-              גרור קובץ Excel לכאן
+              {multiple ? "גרור קבצי Excel לכאן" : "גרור קובץ Excel לכאן"}
             </p>
-            <p className="text-sm text-gray-500 mt-1">או לחץ לבחירת קובץ</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {multiple ? "או לחץ לבחירת מספר קבצים" : "או לחץ לבחירת קובץ"}
+            </p>
           </div>
-          <p className="text-xs text-gray-400">קבצים נתמכים: .xlsx, .xls</p>
+          <p className="text-xs text-gray-400">
+            {multiple ? "ניתן לבחור מספר קבצים בבת אחת" : "קבצים נתמכים: .xlsx, .xls"}
+          </p>
         </div>
       )}
     </div>

@@ -27,6 +27,51 @@ interface UploadState {
   } | null;
 }
 
+// ============================================================
+// STANDALONE UPLOAD FUNCTION (for queue use)
+// ============================================================
+
+export async function uploadSalesFile(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<{ success: boolean; stats?: unknown; error?: string }> {
+  try {
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      return { success: false, error: "סוג קובץ לא נתמך. יש להעלות קובץ Excel (.xlsx)" };
+    }
+    onProgress(20);
+    const result = await processExcelFile(file);
+    if (!result.success) return { success: false, error: result.error ?? "שגיאה בעיבוד הקובץ" };
+
+    onProgress(60);
+    const payload = {
+      filename: file.name,
+      stores: result.stores, products: result.products,
+      storeProducts: result.storeProducts, filters: result.filters,
+      periods: result.periods, stats: result.stats,
+    };
+    const bodyStr = JSON.stringify(payload);
+    if (new Blob([bodyStr]).size > 3.5 * 1024 * 1024) {
+      return { success: false, error: "גודל הנתונים חורג מהמותר (4MB). נסה קובץ קטן יותר." };
+    }
+    const response = await fetch("/api/upload", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: bodyStr,
+    });
+    if (!response.ok) {
+      let errMsg = "שגיאה בשמירת הנתונים";
+      try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
+      return { success: false, error: errMsg };
+    }
+    onProgress(100);
+    const uploadResponse = await response.json();
+    return { success: true, stats: uploadResponse?.stats ?? null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא ידועה" };
+  }
+}
+
+// ============================================================
+
 export function useDataUpload() {
   const [state, setState] = useState<UploadState>({
     status: "idle",

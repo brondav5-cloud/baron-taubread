@@ -64,6 +64,9 @@ const COL_ALIASES: Record<string, string[]> = {
   weekStart:  ["שבוע"],
 };
 
+// Networks to exclude from processing (wholesale/non-distribution channels)
+const EXCLUDED_NETWORKS = new Set(["בלנדר איגור"]);
+
 // ============================================================
 // NORMALISE HELPERS
 // ============================================================
@@ -170,6 +173,7 @@ interface ColMap {
   returnsQty:   number;
   netQty:       number;
   weekStart:    number;
+  network:      number; // -1 if column not present in file
 }
 
 function findHeaderRow(rawRows: unknown[][]): {
@@ -192,6 +196,9 @@ function findHeaderRow(rawRows: unknown[][]): {
       return headers.find((h) => all.includes(h.norm))?.i ?? -1;
     };
 
+    const findOptional = (name: string): number =>
+      headers.find((h) => h.norm === normalizeHeader(name))?.i ?? -1;
+
     const colMap: ColMap = {
       documentDate: find("documentDate"),
       customerId:   find("customerId"),
@@ -201,10 +208,12 @@ function findHeaderRow(rawRows: unknown[][]): {
       returnsQty:   find("returnsQty"),
       netQty:       find("netQty"),
       weekStart:    find("weekStart"),
+      network:      findOptional("רשת"),
     };
 
     const missing: string[] = [];
     for (const [k, idx] of Object.entries(colMap)) {
+      if (k === "network") continue; // optional column
       if (idx === -1) missing.push(REQUIRED_COLS[k as keyof typeof REQUIRED_COLS]);
     }
 
@@ -279,6 +288,12 @@ function aggregateRecords(
     const storeId = Number(rawCustomerId);
     if (!storeId || isNaN(storeId) || storeId <= 0) { rowsSkipped++; continue; }
 
+    // Skip excluded networks (e.g. wholesale channels that distort distribution data)
+    if (colMap.network >= 0) {
+      const network = String(row[colMap.network] ?? "").trim();
+      if (EXCLUDED_NETWORKS.has(network)) { rowsSkipped++; continue; }
+    }
+
     const storeName = String(row[colMap.customerName] ?? "").trim();
     if (!storeName) { rowsSkipped++; continue; }
 
@@ -305,10 +320,11 @@ function aggregateRecords(
       existing.data.grossQty   += grossQty;
       existing.data.returnsQty += returnsQty;
       existing.data.netQty     += netQty;
-      if (deliveryDateRaw) existing.data.uniqueDates.add(deliveryDateRaw);
+      // Only count as a delivery visit if actual goods were supplied (not return-only)
+      if (deliveryDateRaw && grossQty > 0) existing.data.uniqueDates.add(deliveryDateRaw);
     } else {
       const dates = new Set<string>();
-      if (deliveryDateRaw) dates.add(deliveryDateRaw);
+      if (deliveryDateRaw && grossQty > 0) dates.add(deliveryDateRaw);
       map.set(mapKey, {
         key: {
           storeId,
@@ -330,11 +346,11 @@ function aggregateRecords(
     const storeWeekKey = `${storeId}|${weekInfo.weekStartDate}`;
     const existingSW = storeWeekMap.get(storeWeekKey);
     if (existingSW) {
-      if (deliveryDateRaw) existingSW.uniqueDates.add(deliveryDateRaw);
+      if (deliveryDateRaw && grossQty > 0) existingSW.uniqueDates.add(deliveryDateRaw);
       existingSW.totalNetQty += netQty;
     } else {
       const dates = new Set<string>();
-      if (deliveryDateRaw) dates.add(deliveryDateRaw);
+      if (deliveryDateRaw && grossQty > 0) dates.add(deliveryDateRaw);
       storeWeekMap.set(storeWeekKey, {
         storeExternalId: storeId,
         storeName,

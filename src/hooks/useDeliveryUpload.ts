@@ -32,6 +32,63 @@ interface DeliveryUploadState {
   } | null;
 }
 
+// ============================================================
+// STANDALONE UPLOAD FUNCTION (for queue use)
+// ============================================================
+
+export async function uploadDeliveryFile(
+  file: File,
+  onProgress: (pct: number) => void,
+): Promise<{ success: boolean; stats?: unknown; error?: string }> {
+  try {
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      return { success: false, error: "סוג קובץ לא נתמך. יש להעלות קובץ Excel (.xlsx)" };
+    }
+    onProgress(20);
+    const result = await processDeliveryExcel(file);
+    if (!result.success) return { success: false, error: result.error ?? "שגיאה בעיבוד הקובץ" };
+
+    onProgress(50);
+    const CHUNK_MAX_BYTES = 3.5 * 1024 * 1024;
+    const deliveries = result.deliveries;
+    const chunks: (typeof deliveries)[] = [];
+    let current: typeof deliveries = [];
+    let currentSize = 2;
+    for (const delivery of deliveries) {
+      const recordSize = JSON.stringify(delivery).length + 1;
+      if (current.length > 0 && currentSize + recordSize > CHUNK_MAX_BYTES) {
+        chunks.push(current); current = []; currentSize = 2;
+      }
+      current.push(delivery); currentSize += recordSize;
+    }
+    if (current.length > 0) chunks.push(current);
+
+    const totalChunks = chunks.length;
+    let uploadResponse = null;
+    for (let i = 0; i < totalChunks; i++) {
+      const isLast = i === totalChunks - 1;
+      const response = await fetch("/api/upload-deliveries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename: file.name, deliveries: chunks[i], stats: result.stats, chunkIndex: i, totalChunks }),
+      });
+      if (!response.ok) {
+        let errMsg = "שגיאה בשמירת הנתונים";
+        try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
+        return { success: false, error: errMsg };
+      }
+      const chunkResponse = await response.json();
+      if (isLast) uploadResponse = chunkResponse;
+      onProgress(50 + Math.round(((i + 1) / totalChunks) * 50));
+    }
+    return { success: true, stats: uploadResponse?.stats ?? null };
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : "שגיאה לא ידועה" };
+  }
+}
+
+// ============================================================
+
 export function useDeliveryUpload() {
   const [state, setState] = useState<DeliveryUploadState>({
     status: "idle",
