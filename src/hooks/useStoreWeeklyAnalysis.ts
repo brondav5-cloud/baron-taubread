@@ -194,6 +194,9 @@ export function useStoreWeeklyAnalysis(storeExternalId: number | null) {
         streak:                 0,
         isAnomaly:              false,
         anomalyZScore:          null,
+        returnsLastMonth:       null,
+        returnsAvg3Months:      null,
+        returnsAvgMonthly:      null,
       });
     });
 

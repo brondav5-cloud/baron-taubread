@@ -74,7 +74,9 @@ export function StoreRow({
                 </th>
                 <th className="text-center px-3 py-2 font-medium">שנה שעב׳</th>
                 <th className="text-center px-3 py-2 font-medium">Top-10</th>
-                <th className="text-center px-3 py-2 font-medium">החזרות</th>
+                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">חזרות חודש</th>
+                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">ממוצע 3 חודשים</th>
+                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">ממוצע לחודש</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -89,7 +91,6 @@ export function StoreRow({
             <StoreTotalsRow
               products={store.products}
               totalGrossQty={store.totalGrossQty}
-              totalReturnsQty={store.totalReturnsQty}
               weeksCount={weeksCount}
             />
           </table>
@@ -106,12 +107,10 @@ export function StoreRow({
 function StoreTotalsRow({
   products,
   totalGrossQty,
-  totalReturnsQty,
   weeksCount = 1,
 }: {
   products: ProductWeekComparison[];
   totalGrossQty: number;
-  totalReturnsQty: number;
   weeksCount?: number;
 }) {
   const hasLastWeek  = products.some((p) => p.lastWeekQty !== null);
@@ -121,7 +120,13 @@ function StoreTotalsRow({
   const sumLastWeek  = hasLastWeek  ? products.reduce((s, p) => s + (p.lastWeekQty     ?? 0), 0) : null;
   const sumAvg3w     = hasAvg3w     ? products.reduce((s, p) => s + (p.avgLast3WeeksQty ?? 0), 0) : null;
   const sumLastYear  = hasLastYear  ? products.reduce((s, p) => s + (p.lastYearQty     ?? 0), 0) : null;
-  const returnsRate  = totalGrossQty > 0 ? (totalReturnsQty / totalGrossQty) * 100 : 0;
+
+  const hasRetLastMonth  = products.some((p) => p.returnsLastMonth  !== null);
+  const hasRetAvg3m      = products.some((p) => p.returnsAvg3Months !== null);
+  const hasRetAvgMonthly = products.some((p) => p.returnsAvgMonthly !== null);
+  const sumRetLastMonth  = hasRetLastMonth  ? products.reduce((s, p) => s + (p.returnsLastMonth  ?? 0), 0) : null;
+  const sumRetAvg3m      = hasRetAvg3m      ? products.reduce((s, p) => s + (p.returnsAvg3Months ?? 0), 0) : null;
+  const sumRetAvgMonthly = hasRetAvgMonthly ? products.reduce((s, p) => s + (p.returnsAvgMonthly ?? 0), 0) : null;
 
   const fmtNum = (v: number | null) =>
     v !== null ? Math.round(v).toLocaleString("he-IL") : <span className="text-gray-300">—</span>;
@@ -137,16 +142,9 @@ function StoreTotalsRow({
         <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumAvg3w)}</td>
         <td className="px-3 py-2 text-center text-gray-500">{fmtNum(sumLastYear)}</td>
         <td className="px-3 py-2 text-center text-gray-300">—</td>
-        <td className="px-3 py-2 text-center">
-          {totalReturnsQty > 0 ? (
-            <span className="text-red-600">
-              {totalReturnsQty.toLocaleString("he-IL")}
-              {" "}({returnsRate.toFixed(0)}%)
-            </span>
-          ) : (
-            <span className="text-gray-300">—</span>
-          )}
-        </td>
+        <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetLastMonth)}</td>
+        <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetAvg3m)}</td>
+        <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetAvgMonthly)}</td>
       </tr>
     </tfoot>
   );
@@ -233,24 +231,30 @@ function ProductRow({
         />
       </td>
       <td className="px-3 py-2 text-center">
-        {product.returnsQty > 0 ? (
-          <span
-            className={clsx(
-              "text-xs font-medium px-1.5 py-0.5 rounded",
-              product.returnsRate > 15
-                ? "bg-red-100 text-red-700"
-                : product.returnsRate > 7
-                  ? "bg-orange-100 text-orange-700"
-                  : "bg-gray-100 text-gray-600",
-            )}
-          >
-            {product.returnsQty} ({product.returnsRate.toFixed(0)}%)
-          </span>
-        ) : (
-          <span className="text-gray-300 text-xs">—</span>
-        )}
+        <ReturnsCell value={product.returnsLastMonth} />
+      </td>
+      <td className="px-3 py-2 text-center">
+        <ReturnsCell value={product.returnsAvg3Months} />
+      </td>
+      <td className="px-3 py-2 text-center">
+        <ReturnsCell value={product.returnsAvgMonthly} />
       </td>
     </tr>
+  );
+}
+
+// ============================================================
+// RETURNS CELL
+// ============================================================
+
+function ReturnsCell({ value }: { value: number | null }) {
+  if (value === null) return <span className="text-gray-300 text-xs">—</span>;
+  const rounded = Math.round(value);
+  if (rounded === 0) return <span className="text-gray-400 text-xs">0</span>;
+  return (
+    <span className="text-xs font-medium text-red-600">
+      {rounded.toLocaleString("he-IL")}
+    </span>
   );
 }
 

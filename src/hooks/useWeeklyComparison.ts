@@ -36,6 +36,10 @@ export interface ProductWeekComparison {
   streak:                number; // +N = N weeks up in a row, -N = N weeks down, 0 = stable/nodata
   isAnomaly:             boolean;
   anomalyZScore:         number | null;
+  // Monthly returns aggregations (computed from raw weekly data)
+  returnsLastMonth:      number | null; // sum of returns for last ~4 weeks (1 month)
+  returnsAvg3Months:     number | null; // avg monthly returns over last 3 months (sum 12wks / 3)
+  returnsAvgMonthly:     number | null; // overall avg monthly returns (all history / months)
 }
 
 export interface StoreWeekComparison {
@@ -431,6 +435,26 @@ function computeComparison(
       const returnsQty  = Math.round(agg.returns_qty);
       const returnsRate = grossQty > 0 ? (returnsQty / grossQty) * 100 : 0;
 
+      // ── Monthly returns aggregations ─────────────────────────────────────
+      // last month (~4 weeks ending at selected week, inclusive)
+      const last4Wks = allWeeks.slice(selectedIdx, selectedIdx + 4);
+      const returnsLastMonth: number | null = last4Wks.some((w) => weekMap.has(w))
+        ? last4Wks.reduce((s, w) => s + (weekMap.get(w)?.returns_qty ?? 0), 0)
+        : null;
+
+      // avg 3-month returns = sum of last 12 weeks / 3
+      const last12Wks = allWeeks.slice(selectedIdx, selectedIdx + 12);
+      const returnsAvg3Months: number | null = last12Wks.some((w) => weekMap.has(w))
+        ? last12Wks.reduce((s, w) => s + (weekMap.get(w)?.returns_qty ?? 0), 0) / 3
+        : null;
+
+      // overall avg monthly returns (all historical weeks up to and including selected)
+      const allHistWks = Array.from(weekMap.keys()).filter((w) => w <= selectedWeek);
+      const monthsCount = allHistWks.length / 4.33;
+      const returnsAvgMonthly: number | null = monthsCount >= 1
+        ? allHistWks.reduce((s, w) => s + (weekMap.get(w)?.returns_qty ?? 0), 0) / monthsCount
+        : null;
+
       const vsLastWeekTrend = computeTrend(grossQty, lw1);
       const streak = weeksCount === 1
         ? computeStreak(weekMap, allWeeks, selectedIdx, vsLastWeekTrend.direction)
@@ -475,6 +499,9 @@ function computeComparison(
         streak,
         isAnomaly,
         anomalyZScore,
+        returnsLastMonth,
+        returnsAvg3Months,
+        returnsAvgMonthly,
       });
     });
 

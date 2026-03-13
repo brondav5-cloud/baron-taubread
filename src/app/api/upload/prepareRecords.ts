@@ -79,7 +79,26 @@ export function prepareStoreRecords(
     return true;
   });
 
-  return validStores.map((store) => {
+  // Deduplicate by external_id — merge monthly data for stores that appear more than once
+  const storeMap = new Map<number, StoreInput>();
+  for (const store of validStores) {
+    const prev = storeMap.get(store.external_id);
+    if (!prev) {
+      storeMap.set(store.external_id, { ...store });
+    } else {
+      // Keep the latest metadata but sum monthly data across duplicate rows
+      storeMap.set(store.external_id, {
+        ...store,
+        monthly_qty: { ...prev.monthly_qty, ...store.monthly_qty },
+        monthly_sales: { ...prev.monthly_sales, ...store.monthly_sales },
+        monthly_gross: { ...prev.monthly_gross, ...store.monthly_gross },
+        monthly_returns: { ...prev.monthly_returns, ...store.monthly_returns },
+      });
+    }
+  }
+  const deduplicatedStores = Array.from(storeMap.values());
+
+  return deduplicatedStores.map((store) => {
     const existing = existingStoresMap.get(store.external_id);
     const mergedMonthlyQty = mergeMonthlyData(existing?.monthly_qty || null, store.monthly_qty);
     const mergedMonthlySales = mergeMonthlyData(existing?.monthly_sales || null, store.monthly_sales);

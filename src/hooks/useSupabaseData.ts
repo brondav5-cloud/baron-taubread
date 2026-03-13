@@ -78,7 +78,16 @@ export function useSupabaseData(): SupabaseData {
       if (storesRes.error) throw new Error(storesRes.error.message);
       if (productsRes.error) throw new Error(productsRes.error.message);
 
-      setStores(storesRes.data || []);
+      // Deduplicate stores by external_id — keep the most recently updated row
+      const rawStores = storesRes.data || [];
+      const storeMap = new Map<number, DbStore>();
+      for (const store of rawStores) {
+        const prev = storeMap.get(store.external_id);
+        if (!prev || store.updated_at > prev.updated_at) {
+          storeMap.set(store.external_id, store);
+        }
+      }
+      setStores(Array.from(storeMap.values()));
       setProducts(productsRes.data || []);
       setMetadata(metadataRes.data);
       setFilters(filtersRes.data);
