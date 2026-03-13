@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import type { MonthlyData, DbStore, DbProduct } from "@/types/supabase";
+import type { DbStore, DbProduct } from "@/types/supabase";
 
 const MAX_BODY_BYTES = 4 * 1024 * 1024;
 const MAX_PROCESSING_MS = 55_000;
