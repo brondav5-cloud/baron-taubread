@@ -8,7 +8,6 @@ const MAX_PROCESSING_MS = 55_000;
 import { mergePeriodLists } from "@/lib/periodUtils";
 import { normalizeAndValidateStoreProductRow } from "@/lib/storeProducts/normalize";
 import { prepareStoreRecords, prepareProductRecords, prepareStoreProductRecords } from "./prepareRecords";
-import { getStoreProductsByCompany } from "@/lib/db/storeProducts.repo";
 import {
   normalizeMonth,
   normalizeMonthsDetected,
@@ -167,14 +166,15 @@ export async function POST(request: NextRequest) {
 
     try {
       // ============================================
-      // 2. FETCH EXISTING DATA (for merging) — parallel
+      // 2. FETCH EXISTING DATA (for stores + products merging)
+      // store_products merge is now handled by the DB (upsert with jsonb ||)
+      // so we no longer fetch all store_products here — major perf improvement
       // ============================================
 
       const [
         { data: existingStores },
         { data: existingProducts },
         { data: existingMetadata },
-        existingStoreProducts,
       ] = await Promise.all([
         supabaseAdmin
           .from("stores")
@@ -189,7 +189,6 @@ export async function POST(request: NextRequest) {
           .select("months_list")
           .eq("company_id", companyId)
           .single(),
-        getStoreProductsByCompany(supabaseAdmin, companyId),
       ]);
 
       // Create maps for quick lookup
@@ -204,19 +203,6 @@ export async function POST(request: NextRequest) {
       (existingProducts || []).forEach((p) =>
         existingProductsMap.set(p.external_id, p as ProductLite),
       );
-
-      const existingStoreProductsMap = new Map<
-        string,
-        { monthly_qty: MonthlyData; monthly_sales: MonthlyData; monthly_returns: MonthlyData }
-      >();
-      existingStoreProducts.forEach((sp) => {
-        const key = `${sp.store_external_id}_${sp.product_external_id}`;
-        existingStoreProductsMap.set(key, {
-          monthly_qty: (sp.monthly_qty as MonthlyData) || {},
-          monthly_sales: (sp.monthly_sales as MonthlyData) || {},
-          monthly_returns: (sp.monthly_returns as MonthlyData) || {},
-        });
-      });
 
       // Compute insert/update counts for summary (before any DB writes)
       const existingStoreIds = new Set(
@@ -277,7 +263,6 @@ export async function POST(request: NextRequest) {
       if (validatedStoreProducts.length > 0) {
         const { records, errors: mergeErrors } = prepareStoreProductRecords(
           validatedStoreProducts,
-          existingStoreProductsMap,
         );
 
         if (mergeErrors.length > 0) {

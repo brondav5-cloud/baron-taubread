@@ -9,6 +9,7 @@ import {
   computeTotals,
 } from "@/lib/storeProducts/normalize";
 
+
 interface StoreInput {
   external_id: number;
   name: string;
@@ -167,33 +168,18 @@ export function prepareProductRecords(
   });
 }
 
+// No existingStoreProductsMap needed — the DB RPC handles JSONB merge via
+// INSERT ... ON CONFLICT DO UPDATE SET monthly_qty = existing || new, etc.
 export function prepareStoreProductRecords(
   validatedStoreProducts: ValidatedSP[],
-  existingStoreProductsMap: Map<string, { monthly_qty: MonthlyData; monthly_sales: MonthlyData; monthly_returns?: MonthlyData }>,
 ): { records: Array<ValidatedSP & { total_qty: number; total_sales: number; monthly_returns: Record<string, number> }>; errors: string[] } {
   const records: Array<ValidatedSP & { total_qty: number; total_sales: number; monthly_returns: Record<string, number> }> = [];
   const errors: string[] = [];
 
   for (const validated of validatedStoreProducts) {
-    const key = `${validated.store_external_id}_${validated.product_external_id}`;
-    const existing = existingStoreProductsMap.get(key);
-
-    const mergedMonthlyQty = mergeMonthlyData(
-      (existing?.monthly_qty as Record<string, number>) ?? null,
-      validated.monthly_qty,
-    );
-    const mergedMonthlySales = mergeMonthlyData(
-      (existing?.monthly_sales as Record<string, number>) ?? null,
-      validated.monthly_sales,
-    );
-    const mergedMonthlyReturns = mergeMonthlyData(
-      (existing?.monthly_returns as Record<string, number>) ?? null,
-      validated.monthly_returns ?? {},
-    );
-
-    const qtyRes     = validateMonthlyMap(mergedMonthlyQty,     "monthly_qty");
-    const salesRes   = validateMonthlyMap(mergedMonthlySales,   "monthly_sales");
-    const returnsRes = validateMonthlyMap(mergedMonthlyReturns, "monthly_returns");
+    const qtyRes     = validateMonthlyMap(validated.monthly_qty,          "monthly_qty");
+    const salesRes   = validateMonthlyMap(validated.monthly_sales,        "monthly_sales");
+    const returnsRes = validateMonthlyMap(validated.monthly_returns ?? {}, "monthly_returns");
 
     if (!qtyRes.ok || !salesRes.ok || !returnsRes.ok) {
       errors.push(
