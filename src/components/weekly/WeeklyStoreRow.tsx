@@ -4,6 +4,26 @@ import { AlertTriangle, ChevronDown, ChevronRight, Minus, TrendingDown, Trending
 import { clsx } from "clsx";
 import type { StoreWeekComparison, ProductWeekComparison, TrendResult } from "@/hooks/useWeeklyComparison";
 
+// ── Hebrew month helpers ──────────────────────────────────────────────────────
+
+const HE_MONTHS = ["ינו׳","פבר׳","מרץ","אפר׳","מאי","יונ׳","יול׳","אוג׳","ספט׳","אוק׳","נוב׳","דצ׳"];
+
+function monthAbbr(dateStr: string | undefined): string {
+  if (!dateStr) return "";
+  return HE_MONTHS[new Date(dateStr).getMonth()] ?? "";
+}
+
+// Returns "ממוצע [from_month]–[to_month]" covering ~12 weeks back from selectedWeek
+function threeMonthRangeLabel(selectedWeek: string | undefined): string {
+  if (!selectedWeek) return "ממוצע 3 חד׳";
+  const end   = new Date(selectedWeek);
+  const start = new Date(selectedWeek);
+  start.setDate(start.getDate() - 11 * 7);
+  const from = HE_MONTHS[start.getMonth()] ?? "";
+  const to   = HE_MONTHS[end.getMonth()]   ?? "";
+  return from === to ? `ממוצע ${to}` : `ממוצע ${from}–${to}`;
+}
+
 // ============================================================
 // STORE ROW
 // ============================================================
@@ -74,9 +94,13 @@ export function StoreRow({
                 </th>
                 <th className="text-center px-3 py-2 font-medium">שנה שעב׳</th>
                 <th className="text-center px-3 py-2 font-medium">Top-10</th>
-                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">חזרות חודש</th>
-                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">ממוצע 3 חודשים</th>
-                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">ממוצע לחודש</th>
+                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">
+                  חז׳ {monthAbbr(selectedWeek)}
+                </th>
+                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">
+                  {threeMonthRangeLabel(selectedWeek)}
+                </th>
+                <th className="text-center px-3 py-2 font-medium whitespace-nowrap">ממוצע שבועי</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -123,10 +147,10 @@ function StoreTotalsRow({
 
   const hasRetLastMonth  = products.some((p) => p.returnsLastMonth  !== null);
   const hasRetAvg3m      = products.some((p) => p.returnsAvg3Months !== null);
-  const hasRetAvgMonthly = products.some((p) => p.returnsAvgMonthly !== null);
+  const hasRetAvgWeekly  = products.some((p) => p.returnsAvgWeekly  !== null);
   const sumRetLastMonth  = hasRetLastMonth  ? products.reduce((s, p) => s + (p.returnsLastMonth  ?? 0), 0) : null;
   const sumRetAvg3m      = hasRetAvg3m      ? products.reduce((s, p) => s + (p.returnsAvg3Months ?? 0), 0) : null;
-  const sumRetAvgMonthly = hasRetAvgMonthly ? products.reduce((s, p) => s + (p.returnsAvgMonthly ?? 0), 0) : null;
+  const sumRetAvgWeekly  = hasRetAvgWeekly  ? products.reduce((s, p) => s + (p.returnsAvgWeekly  ?? 0), 0) : null;
 
   const fmtNum = (v: number | null) =>
     v !== null ? Math.round(v).toLocaleString("he-IL") : <span className="text-gray-300">—</span>;
@@ -144,7 +168,7 @@ function StoreTotalsRow({
         <td className="px-3 py-2 text-center text-gray-300">—</td>
         <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetLastMonth)}</td>
         <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetAvg3m)}</td>
-        <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetAvgMonthly)}</td>
+        <td className="px-3 py-2 text-center text-red-600">{fmtNum(sumRetAvgWeekly)}</td>
       </tr>
     </tfoot>
   );
@@ -237,7 +261,7 @@ function ProductRow({
         <ReturnsCell value={product.returnsAvg3Months} />
       </td>
       <td className="px-3 py-2 text-center">
-        <ReturnsCell value={product.returnsAvgMonthly} />
+        <ReturnsCell value={product.returnsAvgWeekly} />
       </td>
     </tr>
   );

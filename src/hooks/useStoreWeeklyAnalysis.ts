@@ -196,7 +196,7 @@ export function useStoreWeeklyAnalysis(storeExternalId: number | null) {
         anomalyZScore:          null,
         returnsLastMonth:       null,
         returnsAvg3Months:      null,
-        returnsAvgMonthly:      null,
+        returnsAvgWeekly:       null,
       });
     });
 

@@ -291,8 +291,11 @@ export async function uploadFaultDocument(
   sessionId: string,
 ): Promise<FaultDocument | null> {
   const supabase = createClient();
-  const safeName = file.name.replace(/[^a-zA-Z0-9._\u0590-\u05FF-]/g, "_");
-  const path = `${companyId}/${sessionId}/${Date.now()}_${safeName}`;
+  // Use only timestamp + ASCII extension in the storage path (Hebrew/unicode breaks Supabase Storage keys)
+  const ext = file.name.includes(".")
+    ? "." + file.name.split(".").pop()!.replace(/[^a-zA-Z0-9]/g, "").toLowerCase()
+    : "";
+  const path = `${companyId}/${sessionId}/${Date.now()}${ext}`;
 
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
     cacheControl: "3600",

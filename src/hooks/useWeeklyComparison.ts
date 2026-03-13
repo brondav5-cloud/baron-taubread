@@ -36,10 +36,10 @@ export interface ProductWeekComparison {
   streak:                number; // +N = N weeks up in a row, -N = N weeks down, 0 = stable/nodata
   isAnomaly:             boolean;
   anomalyZScore:         number | null;
-  // Monthly returns aggregations (computed from raw weekly data)
+  // Monthly/weekly returns aggregations (computed from raw weekly data)
   returnsLastMonth:      number | null; // sum of returns for last ~4 weeks (1 month)
   returnsAvg3Months:     number | null; // avg monthly returns over last 3 months (sum 12wks / 3)
-  returnsAvgMonthly:     number | null; // overall avg monthly returns (all history / months)
+  returnsAvgWeekly:      number | null; // avg weekly returns over all history (total / num weeks)
 }
 
 export interface StoreWeekComparison {
@@ -226,7 +226,7 @@ export function useWeeklyComparison(): WeeklyComparisonData {
     setError(null);
     createClient()
       .from("store_product_weekly").select("week_start_date")
-      .eq("company_id", companyId).order("week_start_date", { ascending: false }).limit(5000)
+      .eq("company_id", companyId).order("week_start_date", { ascending: false }).limit(200000)
       .then(({ data, error: fetchError }) => {
         if (fetchError) { setIsLoading(false); setError(fetchError.message); return; }
         const weekSet = new Set<string>();
@@ -448,11 +448,10 @@ function computeComparison(
         ? last12Wks.reduce((s, w) => s + (weekMap.get(w)?.returns_qty ?? 0), 0) / 3
         : null;
 
-      // overall avg monthly returns (all historical weeks up to and including selected)
+      // avg weekly returns over all historical weeks up to and including selected
       const allHistWks = Array.from(weekMap.keys()).filter((w) => w <= selectedWeek);
-      const monthsCount = allHistWks.length / 4.33;
-      const returnsAvgMonthly: number | null = monthsCount >= 1
-        ? allHistWks.reduce((s, w) => s + (weekMap.get(w)?.returns_qty ?? 0), 0) / monthsCount
+      const returnsAvgWeekly: number | null = allHistWks.length >= 1
+        ? allHistWks.reduce((s, w) => s + (weekMap.get(w)?.returns_qty ?? 0), 0) / allHistWks.length
         : null;
 
       const vsLastWeekTrend = computeTrend(grossQty, lw1);
@@ -501,7 +500,7 @@ function computeComparison(
         anomalyZScore,
         returnsLastMonth,
         returnsAvg3Months,
-        returnsAvgMonthly,
+        returnsAvgWeekly,
       });
     });
 
