@@ -308,9 +308,9 @@ function StatsDetail({ stats: s }: { stats: Record<string, unknown> }) {
             <span className="text-gray-500">שורות דחויות (client)</span>
             <span className="font-medium text-amber-700">
               {fmt(s.clientRowsSkipped ?? s.rowsSkipped)}
-              {s.clientSkipReasons && Object.keys(s.clientSkipReasons as object).length > 0 && (
+              {s.clientSkipReasons != null && typeof s.clientSkipReasons === "object" && Object.keys(s.clientSkipReasons as Record<string, number>).length > 0 && (
                 <span className="text-gray-400 font-normal ms-1">
-                  ({Object.entries(s.clientSkipReasons as Record<string,number>)
+                  ({Object.entries(s.clientSkipReasons as Record<string, number>)
                     .map(([r, n]) => `${r === "no_period" ? "תאריך חסר" : r === "no_id" ? "מזהה חסר" : r}: ${n}`)
                     .join(", ")})
                 </span>

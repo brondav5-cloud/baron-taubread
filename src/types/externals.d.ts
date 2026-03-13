@@ -75,6 +75,7 @@ declare module "lucide-react" {
   export const Network: Icon;
   export const Package: Icon;
   export const Palette: Icon;
+  export const Paperclip: Icon;
   export const Pencil: Icon;
   export const Percent: Icon;
   export const Phone: Icon;
