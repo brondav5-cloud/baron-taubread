@@ -342,16 +342,18 @@ export async function POST(request: NextRequest) {
       const clientTotalReturns = stats.totalReturnsQty ?? 0;
       const clientTotalGross   = stats.totalGrossQty   ?? 0;
 
-      // DB totals for the uploaded months only
+      // DB totals — only meaningful if the RPC is available (migration ran).
+      // If RPC is missing, skip verification entirely rather than show a false alarm.
+      const dbVerifyAvailable = !verifyError && dbVerify !== null;
       const dbTotalGross   = dbVerify?.total_gross_qty   ?? 0;
       const dbTotalReturns = dbVerify?.total_returns_qty ?? 0;
 
-      const returnsDiff = Math.abs(dbTotalReturns - clientTotalReturns);
-      const grossDiff   = Math.abs(dbTotalGross   - clientTotalGross);
+      const returnsDiff = dbVerifyAvailable ? Math.abs(dbTotalReturns - clientTotalReturns) : 0;
+      const grossDiff   = dbVerifyAvailable ? Math.abs(dbTotalGross   - clientTotalGross)   : 0;
 
-      // > 0.5% discrepancy flagged as warning
-      const returnsWarning = clientTotalReturns > 0 && returnsDiff / clientTotalReturns > 0.005;
-      const grossWarning   = clientTotalGross   > 0 && grossDiff   / clientTotalGross   > 0.005;
+      // > 0.5% discrepancy flagged as warning — only when DB verification succeeded
+      const returnsWarning = dbVerifyAvailable && clientTotalReturns > 0 && returnsDiff / clientTotalReturns > 0.005;
+      const grossWarning   = dbVerifyAvailable && clientTotalGross   > 0 && grossDiff   / clientTotalGross   > 0.005;
 
       const rejectedRows = (stats.storeProductsCount ?? 0) - validatedStoreProducts.length;
 
