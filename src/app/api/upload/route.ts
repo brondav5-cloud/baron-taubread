@@ -308,36 +308,48 @@ export async function POST(request: NextRequest) {
       }
 
       // ============================================
-      // 6c. IN-MEMORY VERIFICATION (no extra DB roundtrip)
-      // Compare what client reported vs. what we actually prepared and saved.
-      // Only sums months that belong to THIS upload (not historical months).
+      // 6c. DB-LEVEL VERIFICATION
+      // Re-query the DB after the RPC so the comparison is against
+      // what is ACTUALLY stored — not what was prepared in memory.
+      // Uses server-side SUM — no row-limit issues.
       // ============================================
 
-      // Normalize to "YYYY-MM" — periods.all uses "YYYYMM" format but monthly keys
-      // are normalized to "YYYY-MM" by validateMonthlyMap. Always compare in "YYYY-MM".
-      const uploadedMonthsSet = new Set(periods.all.map(normalizeMonth));
+      const normalizedMonths = periods.all.map(normalizeMonth);
 
-      let serverTotalGross = 0;
-      for (const sr of storeRecords) {
-        for (const [month, v] of Object.entries(sr.monthly_gross as Record<string, number>)) {
-          if (uploadedMonthsSet.has(normalizeMonth(month))) serverTotalGross += v;
-        }
-      }
+      const { data: verifyData, error: verifyError } = await supabaseAdmin.rpc(
+        "verify_monthly_upload",
+        {
+          p_company_id: companyId,
+          p_months:     JSON.stringify(normalizedMonths),
+        },
+      );
 
-      let serverTotalReturns = 0;
-      for (const sp of storeProductRecords) {
-        for (const [month, v] of Object.entries(sp.monthly_returns)) {
-          if (uploadedMonthsSet.has(normalizeMonth(month))) serverTotalReturns += v;
-        }
+      const dbVerify = (verifyError || !verifyData)
+        ? null
+        : (verifyData as {
+            total_gross_qty:   number;
+            total_returns_qty: number;
+            total_net_qty:     number;
+            total_sales:       number;
+            stores_count:      number;
+            products_count:    number;
+          });
+
+      if (verifyError) {
+        console.warn("[UPLOAD] verify_monthly_upload RPC error:", verifyError.message);
       }
 
       const clientTotalReturns = stats.totalReturnsQty ?? 0;
       const clientTotalGross   = stats.totalGrossQty   ?? 0;
 
-      const returnsDiff = Math.abs(serverTotalReturns - clientTotalReturns);
-      const grossDiff   = Math.abs(serverTotalGross   - clientTotalGross);
+      // DB totals for the uploaded months only
+      const dbTotalGross   = dbVerify?.total_gross_qty   ?? 0;
+      const dbTotalReturns = dbVerify?.total_returns_qty ?? 0;
 
-      // > 0.5% discrepancy is flagged as a warning
+      const returnsDiff = Math.abs(dbTotalReturns - clientTotalReturns);
+      const grossDiff   = Math.abs(dbTotalGross   - clientTotalGross);
+
+      // > 0.5% discrepancy flagged as warning
       const returnsWarning = clientTotalReturns > 0 && returnsDiff / clientTotalReturns > 0.005;
       const grossWarning   = clientTotalGross   > 0 && grossDiff   / clientTotalGross   > 0.005;
 
@@ -476,9 +488,14 @@ export async function POST(request: NextRequest) {
           products_inserted: productsInserted,
           products_updated: productsUpdated,
           months_detected: monthsDetected,
-          // Totals computed server-side (for validation display)
-          totalGrossQty:    serverTotalGross,
-          totalReturnsQty:  serverTotalReturns,
+          // DB totals (queried AFTER save — reflects what is actually stored)
+          totalGrossQty:    dbTotalGross,
+          totalReturnsQty:  dbTotalReturns,
+          dbStoresCount:    dbVerify?.stores_count   ?? storeRecords.length,
+          dbProductsCount:  dbVerify?.products_count ?? productRecords.length,
+          dbNetQty:         dbVerify?.total_net_qty  ?? 0,
+          dbSales:          dbVerify?.total_sales    ?? 0,
+          verifiedByDb:     !verifyError,
           // Client-reported totals (for comparison in UI)
           clientTotalGrossQty:   clientTotalGross,
           clientTotalReturnsQty: clientTotalReturns,
@@ -494,6 +511,7 @@ export async function POST(request: NextRequest) {
             returnsDiff,
             grossDiff,
             rejectedRows,
+            verifiedByDb: !verifyError,
           },
         },
       });

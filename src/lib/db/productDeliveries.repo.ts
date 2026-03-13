@@ -73,34 +73,30 @@ export async function verifyProductDeliveryTotals(
   dbTotalReturnsQty: number;
   dbRecordsCount: number;
 }> {
-  // High limit to avoid Supabase's default 1000-row cap.
-  // 842 stores × 102 products × 52 weeks ≈ 4.5M max, but typical is 50k–200k.
-  const { data, error } = await supabase
-    .from("store_product_weekly")
-    .select("store_external_id, gross_qty, returns_qty")
-    .eq("company_id", companyId)
-    .gte("week_start_date", periodStart)
-    .lte("week_start_date", periodEnd)
-    .limit(500000);
+  // Use a server-side aggregate RPC — no row-limit issues, DB does the SUM.
+  const { data, error } = await supabase.rpc("verify_weekly_upload", {
+    p_company_id:   companyId,
+    p_period_start: periodStart,
+    p_period_end:   periodEnd,
+  });
 
   if (error || !data) {
+    console.error("[verifyProductDeliveryTotals] RPC error:", error?.message);
     return { dbStoresCount: 0, dbTotalGrossQty: 0, dbTotalReturnsQty: 0, dbRecordsCount: 0 };
   }
 
-  const uniqueStores = new Set<number>();
-  let totalGross = 0;
-  let totalReturns = 0;
-  for (const row of data) {
-    uniqueStores.add(row.store_external_id as number);
-    totalGross   += Number(row.gross_qty   ?? 0);
-    totalReturns += Number(row.returns_qty ?? 0);
-  }
+  const result = data as {
+    total_gross_qty:   number;
+    total_returns_qty: number;
+    records_count:     number;
+    stores_count:      number;
+  };
 
   return {
-    dbStoresCount:    uniqueStores.size,
-    dbTotalGrossQty:  totalGross,
-    dbTotalReturnsQty: totalReturns,
-    dbRecordsCount:   data.length,
+    dbStoresCount:     result.stores_count     ?? 0,
+    dbTotalGrossQty:   result.total_gross_qty   ?? 0,
+    dbTotalReturnsQty: result.total_returns_qty ?? 0,
+    dbRecordsCount:    result.records_count     ?? 0,
   };
 }
 
