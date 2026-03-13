@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { WhoamiCompany } from "@/context/SupabaseAuthContext";
 import { Building2, Loader2 } from "lucide-react";
+import { ForceLogoutBanner } from "./ForceLogoutBanner";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -86,6 +87,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
           <MobileBottomNav onMenuClick={() => setSidebarOpen(true)} />
         </div>
+      )}
+      {auth.status === "authed" && (
+        <ForceLogoutBanner companyId={auth.user.company_id} />
       )}
     </div>
   );

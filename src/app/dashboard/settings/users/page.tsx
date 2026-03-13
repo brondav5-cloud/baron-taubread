@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Users, Pencil, Plus, Trash2, RefreshCw } from "lucide-react";
+import { Users, Pencil, Plus, Trash2, RefreshCw, LogOut } from "lucide-react";
 import { useUsers, type AppUser } from "@/context/UsersContext";
 import { useAuth } from "@/hooks/useAuth";
 import { UserEditModal } from "@/components/settings/users/UserEditModal";
@@ -13,6 +13,12 @@ export default function UsersSettingsPage() {
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [sendingReset, setSendingReset] = useState(false);
+  const [showForceLogout, setShowForceLogout] = useState(false);
+  const [forceLogoutMessage, setForceLogoutMessage] = useState(
+    "יש לצאת מהמערכת לצורך עדכון. אנא שמור עבודתך והתנתק.",
+  );
+  const [forceLogoutMinutes, setForceLogoutMinutes] = useState(5);
+  const [sendingForceLogout, setSendingForceLogout] = useState(false);
 
   const role = authState.status === "authed" ? authState.user.selectedCompanyRole ?? authState.user.role : null;
   const canSendResetAll = role === "admin" || role === "super_admin";
@@ -32,6 +38,31 @@ export default function UsersSettingsPage() {
       toast.error("שגיאה בשליחת אימיילים");
     } finally {
       setSendingReset(false);
+    }
+  };
+
+  const handleForceLogout = async () => {
+    setSendingForceLogout(true);
+    try {
+      const res = await fetch("/api/admin/force-logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: forceLogoutMessage,
+          auto_logout_minutes: forceLogoutMinutes,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בשליחת הודעת ניתוק");
+        return;
+      }
+      toast.success("הודעת ניתוק נשלחה לכל המשתמשים");
+      setShowForceLogout(false);
+    } catch {
+      toast.error("שגיאה בשליחת הודעת ניתוק");
+    } finally {
+      setSendingForceLogout(false);
     }
   };
 
@@ -62,20 +93,29 @@ export default function UsersSettingsPage() {
         </div>
         <div className="flex items-center gap-2">
           {canSendResetAll && (
-            <button
-              onClick={handleSendPasswordResetAll}
-              disabled={sendingReset || allUsers.length === 0}
-              className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {sendingReset ? (
-                <>שולח...</>
-              ) : (
-                <>
-                  <RefreshCw className="w-4 h-4" />
-                  איפוס סיסמה לכולם
-                </>
-              )}
-            </button>
+            <>
+              <button
+                onClick={handleSendPasswordResetAll}
+                disabled={sendingReset || allUsers.length === 0}
+                className="flex items-center gap-2 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {sendingReset ? (
+                  <>שולח...</>
+                ) : (
+                  <>
+                    <RefreshCw className="w-4 h-4" />
+                    איפוס סיסמה לכולם
+                  </>
+                )}
+              </button>
+              <button
+                onClick={() => setShowForceLogout(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-50 text-red-600 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium border border-red-200"
+              >
+                <LogOut className="w-4 h-4" />
+                נתק את כולם
+              </button>
+            </>
           )}
           <button
             onClick={() => setShowAddModal(true)}
@@ -163,6 +203,80 @@ export default function UsersSettingsPage() {
 
       {showAddModal && (
         <UserEditModal user={null} onClose={() => setShowAddModal(false)} />
+      )}
+
+      {showForceLogout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => setShowForceLogout(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <LogOut className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">נתק את כולם</h2>
+                <p className="text-sm text-gray-500">
+                  כל המשתמשים יראו הודעה ויתנתקו אוטומטית
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                הודעה למשתמשים
+              </label>
+              <textarea
+                value={forceLogoutMessage}
+                onChange={(e) => setForceLogoutMessage(e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-red-300 focus:border-red-400"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                זמן לניתוק אוטומטי (דקות)
+              </label>
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min={1}
+                  max={30}
+                  value={forceLogoutMinutes}
+                  onChange={(e) =>
+                    setForceLogoutMinutes(Number(e.target.value))
+                  }
+                  className="flex-1 accent-red-500"
+                />
+                <span className="text-sm font-medium text-gray-700 w-12 text-center">
+                  {forceLogoutMinutes} דק׳
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowForceLogout(false)}
+                className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700 hover:bg-gray-50"
+              >
+                ביטול
+              </button>
+              <button
+                type="button"
+                onClick={handleForceLogout}
+                disabled={sendingForceLogout || !forceLogoutMessage.trim()}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                {sendingForceLogout ? "שולח..." : "שלח ונתק"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
