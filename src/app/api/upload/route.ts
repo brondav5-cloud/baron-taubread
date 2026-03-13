@@ -320,7 +320,7 @@ export async function POST(request: NextRequest) {
         "verify_monthly_upload",
         {
           p_company_id: companyId,
-          p_months:     JSON.stringify(normalizedMonths),
+          p_months:     normalizedMonths,  // pass as JS array — Supabase serializes to jsonb correctly
         },
       );
 
