@@ -495,6 +495,8 @@ export async function POST(request: NextRequest) {
           clientTotalGrossQty:   clientTotalGross,
           clientTotalReturnsQty: clientTotalReturns,
           clientRowsCount:       stats.rowsCount,
+          clientRowsSkipped:     stats.rowsSkipped ?? 0,
+          clientSkipReasons:     stats.skipReasons ?? {},
           rejectedRows,
           // Validation summary
           validation: {

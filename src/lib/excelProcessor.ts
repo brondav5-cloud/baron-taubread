@@ -110,7 +110,7 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
     const previousYear = currentYear - 1;
 
     // Aggregate rows
-    const { storesMap, productsMap, storeProductsMap, cities, networks, drivers, agents, categories } =
+    const { storesMap, productsMap, storeProductsMap, cities, networks, drivers, agents, categories, rowsSkipped, skipReasons } =
       aggregateRows(rows, getVal);
 
     if (storesMap.size === 0) return makeEmptyError("אין נתונים בקובץ");
@@ -152,6 +152,8 @@ export async function processExcelFile(file: File): Promise<ProcessingResult> {
       },
       stats: {
         rowsCount: rows.length,
+        rowsSkipped,
+        skipReasons,
         storesCount: storesMap.size,
         productsCount: productsMap.size,
         storeProductsCount: storeProductsMap.size,

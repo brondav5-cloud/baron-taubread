@@ -303,10 +303,19 @@ function StatsDetail({ stats: s }: { stats: Record<string, unknown> }) {
         <span className="text-gray-500">שורות בקובץ</span>
         <span className="font-medium text-gray-800">{fmt(s.clientRowsCount ?? s.rowsProcessed ?? s.rowsCount)}</span>
 
-        {s.rowsSkipped != null && Number(s.rowsSkipped) > 0 && (
+        {(s.clientRowsSkipped != null ? Number(s.clientRowsSkipped) : Number(s.rowsSkipped ?? 0)) > 0 && (
           <>
-            <span className="text-gray-500">שורות דחויות</span>
-            <span className="font-medium text-amber-700">{fmt(s.rowsSkipped)}</span>
+            <span className="text-gray-500">שורות דחויות (client)</span>
+            <span className="font-medium text-amber-700">
+              {fmt(s.clientRowsSkipped ?? s.rowsSkipped)}
+              {s.clientSkipReasons && Object.keys(s.clientSkipReasons as object).length > 0 && (
+                <span className="text-gray-400 font-normal ms-1">
+                  ({Object.entries(s.clientSkipReasons as Record<string,number>)
+                    .map(([r, n]) => `${r === "no_period" ? "תאריך חסר" : r === "no_id" ? "מזהה חסר" : r}: ${n}`)
+                    .join(", ")})
+                </span>
+              )}
+            </span>
           </>
         )}
 

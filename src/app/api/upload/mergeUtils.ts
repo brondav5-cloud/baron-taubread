@@ -18,22 +18,16 @@ export function normalizeMonthsDetected(months: string[]): string[] {
 }
 
 /**
- * Merge monthly data - keep existing + add new.
- * Existing data is preserved, only new months are added.
+ * Merge monthly data — new upload data overwrites existing months.
+ * Months NOT present in the new file are preserved from the DB.
+ * Months present in the new file replace the stored value (allows corrections).
  */
 export function mergeMonthlyData(
   existing: MonthlyData | null,
   newData: MonthlyData,
 ): MonthlyData {
   if (!existing) return { ...newData };
-
-  const merged = { ...existing };
-
-  for (const [month, value] of Object.entries(newData)) {
-    if (!(month in merged)) {
-      merged[month] = value;
-    }
-  }
-
-  return merged;
+  // Spread order: existing first (preserves old months), then newData
+  // (overwrites any matching months with the freshly-uploaded values).
+  return { ...existing, ...newData };
 }

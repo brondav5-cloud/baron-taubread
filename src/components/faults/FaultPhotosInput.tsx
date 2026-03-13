@@ -2,7 +2,6 @@
 
 import { useRef, useCallback } from "react";
 import { Camera, X, FolderOpen } from "lucide-react";
-import Image from "next/image";
 
 async function compressImage(
   file: File,
@@ -113,13 +112,11 @@ export function FaultPhotosInput({
             key={i}
             className="relative aspect-square bg-gray-100 rounded-xl overflow-hidden"
           >
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src={url}
               alt=""
-              fill
-              className="object-cover"
-              unoptimized
-              sizes="150px"
+              className="object-cover w-full h-full"
             />
             <button
               type="button"

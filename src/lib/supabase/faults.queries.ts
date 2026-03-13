@@ -28,6 +28,14 @@ export interface DbFaultStatus {
   created_at: string;
 }
 
+export interface FaultDocument {
+  name: string;
+  url: string;
+  size: number;
+  type: string;
+  path: string;
+}
+
 export interface DbFault {
   id: string;
   company_id: string;
@@ -42,6 +50,7 @@ export interface DbFault {
   assigned_to_ids: string[];
   assigned_to_names: string[];
   photos: string[];
+  documents: FaultDocument[];
   comments: Array<{
     id: string;
     userId: string;
@@ -267,5 +276,47 @@ export async function updateFault(
     .from("faults")
     .update({ ...updates, updated_at: new Date().toISOString() })
     .eq("id", id);
+  return !error;
+}
+
+// ============================================
+// FAULT DOCUMENTS — Supabase Storage
+// ============================================
+
+const BUCKET = "fault-documents";
+
+export async function uploadFaultDocument(
+  file: File,
+  companyId: string,
+  sessionId: string,
+): Promise<FaultDocument | null> {
+  const supabase = createClient();
+  const safeName = file.name.replace(/[^a-zA-Z0-9._\u0590-\u05FF-]/g, "_");
+  const path = `${companyId}/${sessionId}/${Date.now()}_${safeName}`;
+
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+  });
+
+  if (error) {
+    console.error("Error uploading fault document:", error);
+    return null;
+  }
+
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+
+  return {
+    name: file.name,
+    url: data.publicUrl,
+    size: file.size,
+    type: file.type,
+    path,
+  };
+}
+
+export async function deleteFaultDocument(path: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
   return !error;
 }

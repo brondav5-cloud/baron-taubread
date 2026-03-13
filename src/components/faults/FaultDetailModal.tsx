@@ -1,14 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import Image from "next/image";
+import { X, FileText, FileSpreadsheet, File, Download } from "lucide-react";
 import { useFaults } from "@/context/FaultsContext";
+import type { FaultDocument } from "@/lib/supabase/faults.queries";
 import { useUsers } from "@/context/UsersContext";
 
 interface FaultDetailModalProps {
   faultId: string | null;
   onClose: () => void;
+}
+
+function getDocIcon(type: string) {
+  if (type.includes("pdf")) return <FileText className="w-4 h-4 text-red-500 flex-shrink-0" />;
+  if (type.includes("word") || type.includes("document"))
+    return <FileText className="w-4 h-4 text-blue-500 flex-shrink-0" />;
+  if (type.includes("excel") || type.includes("spreadsheet") || type.includes("csv"))
+    return <FileSpreadsheet className="w-4 h-4 text-green-600 flex-shrink-0" />;
+  return <File className="w-4 h-4 text-gray-500 flex-shrink-0" />;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const COLOR_MAP: Record<string, string> = {
@@ -134,16 +149,40 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
                   key={i}
                   className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100"
                 >
-                  <Image
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
                     src={url}
                     alt=""
-                    fill
-                    className="object-cover"
-                    unoptimized
-                    sizes="96px"
+                    className="object-cover w-full h-full"
                   />
                 </div>
               ))}
+            </div>
+          )}
+
+          {fault.documents && fault.documents.length > 0 && (
+            <div>
+              <span className="text-gray-500 text-sm block mb-1.5">מסמכים מצורפים:</span>
+              <div className="space-y-1.5">
+                {fault.documents.map((doc: FaultDocument) => (
+                  <a
+                    key={doc.path}
+                    href={doc.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-lg transition-colors group"
+                  >
+                    {getDocIcon(doc.type)}
+                    <span className="flex-1 text-sm text-gray-800 truncate group-hover:text-blue-700">
+                      {doc.name}
+                    </span>
+                    <span className="text-xs text-gray-400 flex-shrink-0">
+                      {formatSize(doc.size)}
+                    </span>
+                    <Download className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
+                  </a>
+                ))}
+              </div>
             </div>
           )}
 

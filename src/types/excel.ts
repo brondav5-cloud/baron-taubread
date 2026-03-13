@@ -92,6 +92,7 @@ export interface ProcessingResult {
   stats: {
     rowsCount: number;
     rowsSkipped?: number;
+    skipReasons?: Record<string, number>;
     storesCount: number;
     productsCount: number;
     storeProductsCount?: number;

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useId } from "react";
 import Link from "next/link";
 import { X, Users, XCircle } from "lucide-react";
 import { useFaults } from "@/context/FaultsContext";
 import { useUsers } from "@/context/UsersContext";
+import { useAuth } from "@/hooks/useAuth";
 import { FaultPhotosInput } from "./FaultPhotosInput";
+import { FaultDocumentsInput } from "./FaultDocumentsInput";
+import type { FaultDocument } from "@/lib/supabase/faults.queries";
 
 interface CreateFaultModalProps {
   isOpen: boolean;
@@ -15,12 +18,16 @@ interface CreateFaultModalProps {
 export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
   const { faultTypes, createFault } = useFaults();
   const { allUsers } = useUsers();
+  const auth = useAuth();
+  const companyId = auth.status === "authed" ? auth.user.company_id : "";
+  const sessionId = useId().replace(/:/g, "");
 
   const [typeId, setTypeId] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedToIds, setAssignedToIds] = useState<string[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [documents, setDocuments] = useState<FaultDocument[]>([]);
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [notifySms, setNotifySms] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -39,6 +46,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
     setTitle("");
     setDescription("");
     setPhotos([]);
+    setDocuments([]);
     setNotifyEmail(false);
     setNotifySms(false);
     setError(null);
@@ -94,6 +102,7 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
         assignedToIds: ids,
         assignedToNames: names,
         photos,
+        documents,
         notifyEmail,
         notifySms,
       });
@@ -236,6 +245,13 @@ export function CreateFaultModal({ isOpen, onClose }: CreateFaultModalProps) {
             photos={photos}
             maxPhotos={2}
             onPhotosChange={setPhotos}
+          />
+
+          <FaultDocumentsInput
+            documents={documents}
+            companyId={companyId}
+            sessionId={sessionId}
+            onDocumentsChange={setDocuments}
           />
 
           {/* Notification Toggles */}

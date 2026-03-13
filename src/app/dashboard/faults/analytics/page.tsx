@@ -2,13 +2,25 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-import { BarChart3, ArrowRight } from "lucide-react";
+import { BarChart3, ArrowRight, X } from "lucide-react";
 import { useFaults, type Fault } from "@/context/FaultsContext";
+import { FaultDetailModal } from "@/components/faults";
 import {
   DateRangePicker,
   createDateRange,
   type DateRange,
 } from "@/components/ui/DateRangePicker";
+
+const COLOR_MAP: Record<string, string> = {
+  blue: "bg-blue-100 text-blue-700",
+  green: "bg-green-100 text-green-700",
+  yellow: "bg-yellow-100 text-yellow-700",
+  red: "bg-red-100 text-red-700",
+  orange: "bg-orange-100 text-orange-700",
+  gray: "bg-gray-100 text-gray-700",
+  purple: "bg-purple-100 text-purple-700",
+  pink: "bg-pink-100 text-pink-700",
+};
 
 function getFaultsInRange(faults: Fault[], from: Date, to: Date): Fault[] {
   const fromTime = from.getTime();
@@ -31,6 +43,11 @@ function formatMonth(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
+interface DrillDown {
+  title: string;
+  faults: Fault[];
+}
+
 export default function FaultsAnalyticsPage() {
   const { getVisibleFaults, faultTypes, faultStatuses } = useFaults();
   const faults = getVisibleFaults();
@@ -41,6 +58,8 @@ export default function FaultsAnalyticsPage() {
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterAssignee, setFilterAssignee] = useState("");
+  const [drillDown, setDrillDown] = useState<DrillDown | null>(null);
+  const [selectedFaultId, setSelectedFaultId] = useState<string | null>(null);
 
   const rangeFaults = useMemo(() => {
     let list = getFaultsInRange(faults, dateRange.from, dateRange.to);
@@ -79,6 +98,7 @@ export default function FaultsAnalyticsPage() {
       .map((s) => ({
         statusId: s.id,
         name: s.name,
+        color: s.color,
         count: rangeFaults.filter((f) => f.statusId === s.id).length,
       }))
       .filter((x) => x.count > 0)
@@ -123,6 +143,33 @@ export default function FaultsAnalyticsPage() {
     return months;
   }, [faults, faultStatuses]);
 
+  const handleTypeClick = (typeId: string, typeName: string, icon: string) => {
+    const list = rangeFaults.filter((f) => f.typeId === typeId);
+    setDrillDown({ title: `${icon} ${typeName}`, faults: list });
+  };
+
+  const handleStatusClick = (statusId: string, statusName: string) => {
+    const list = rangeFaults.filter((f) => f.statusId === statusId);
+    setDrillDown({ title: `סטטוס: ${statusName}`, faults: list });
+  };
+
+  const handleMonthClick = (month: string, label: string) => {
+    const list = getFaultsForMonth(faults, month);
+    setDrillDown({ title: `חודש: ${label}`, faults: list });
+  };
+
+  const handleTotalClick = () => {
+    setDrillDown({ title: "כל התקלות בתקופה", faults: rangeFaults });
+  };
+
+  const handleOpenClick = () => {
+    const list = rangeFaults.filter((f) => {
+      const s = faultStatuses.find((st) => st.id === f.statusId);
+      return !s?.is_final;
+    });
+    setDrillDown({ title: "תקלות פתוחות", faults: list });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -140,7 +187,7 @@ export default function FaultsAnalyticsPage() {
           className="flex items-center gap-2 text-primary-600 hover:text-primary-700"
         >
           <ArrowRight className="w-4 h-4" />
-          חזרה לתיקלות
+          חזרה לתקלות
         </Link>
       </div>
 
@@ -189,20 +236,30 @@ export default function FaultsAnalyticsPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white rounded-2xl shadow-sm p-4">
+        <button
+          type="button"
+          onClick={handleTotalClick}
+          className="bg-white rounded-2xl shadow-sm p-4 text-right hover:bg-gray-50 transition-colors cursor-pointer"
+        >
           <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
           <p className="text-sm text-gray-500">סה״כ תקלות</p>
-        </div>
+          <p className="text-xs text-primary-600 mt-1">לחץ לפירוט ←</p>
+        </button>
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <p className="text-2xl font-bold text-green-600">{stats.closed}</p>
           <p className="text-sm text-gray-500">נסגרו</p>
         </div>
-        <div className="bg-white rounded-2xl shadow-sm p-4">
+        <button
+          type="button"
+          onClick={handleOpenClick}
+          className="bg-white rounded-2xl shadow-sm p-4 text-right hover:bg-gray-50 transition-colors cursor-pointer"
+        >
           <p className="text-2xl font-bold text-orange-600">
             {stats.total - stats.closed}
           </p>
           <p className="text-sm text-gray-500">פתוחות</p>
-        </div>
+          <p className="text-xs text-primary-600 mt-1">לחץ לפירוט ←</p>
+        </button>
         <div className="bg-white rounded-2xl shadow-sm p-4">
           <p className="text-2xl font-bold text-gray-900">
             {stats.total > 0
@@ -220,17 +277,22 @@ export default function FaultsAnalyticsPage() {
           {byType.length === 0 ? (
             <p className="text-gray-500 text-sm">אין נתונים</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {byType.map((t) => (
-                <div
+                <button
                   key={t.typeId}
-                  className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+                  type="button"
+                  onClick={() => handleTypeClick(t.typeId, t.name, t.icon)}
+                  className="w-full flex items-center justify-between py-2 px-2 rounded-lg hover:bg-orange-50 transition-colors text-right border-b border-gray-100 last:border-0"
                 >
-                  <span>
+                  <span className="text-sm">
                     {t.icon} {t.name}
                   </span>
-                  <span className="font-medium">{t.count}</span>
-                </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{t.count}</span>
+                    <span className="text-xs text-primary-500">פירוט</span>
+                  </div>
+                </button>
               ))}
             </div>
           )}
@@ -240,15 +302,24 @@ export default function FaultsAnalyticsPage() {
           {byStatus.length === 0 ? (
             <p className="text-gray-500 text-sm">אין נתונים</p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1">
               {byStatus.map((s) => (
-                <div
+                <button
                   key={s.statusId}
-                  className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0"
+                  type="button"
+                  onClick={() => handleStatusClick(s.statusId, s.name)}
+                  className="w-full flex items-center justify-between py-2 px-2 rounded-lg hover:bg-orange-50 transition-colors text-right border-b border-gray-100 last:border-0"
                 >
-                  <span>{s.name}</span>
-                  <span className="font-medium">{s.count}</span>
-                </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium ${COLOR_MAP[s.color] ?? "bg-gray-100 text-gray-700"}`}
+                  >
+                    {s.name}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{s.count}</span>
+                    <span className="text-xs text-primary-500">פירוט</span>
+                  </div>
+                </button>
               ))}
             </div>
           )}
@@ -262,20 +333,78 @@ export default function FaultsAnalyticsPage() {
         <div className="overflow-x-auto">
           <div className="flex gap-4 min-w-max">
             {trendData.map((m) => (
-              <div
+              <button
                 key={m.month}
-                className="flex flex-col items-center gap-2 px-4 py-3 bg-gray-50 rounded-xl min-w-[80px]"
+                type="button"
+                onClick={() => handleMonthClick(m.month, m.label)}
+                className="flex flex-col items-center gap-2 px-4 py-3 bg-gray-50 hover:bg-orange-50 transition-colors rounded-xl min-w-[80px] cursor-pointer"
               >
                 <span className="text-sm text-gray-600">{m.label}</span>
                 <span className="text-xl font-bold text-gray-900">
                   {m.total}
                 </span>
                 <span className="text-xs text-green-600">{m.closed} נסגרו</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
       </div>
+
+      {/* Drill-down panel */}
+      {drillDown && (
+        <div className="bg-white rounded-2xl shadow-sm border border-orange-200">
+          <div className="flex items-center justify-between p-4 border-b border-gray-100">
+            <h3 className="font-semibold text-gray-900">
+              {drillDown.title}
+              <span className="mr-2 text-sm font-normal text-gray-500">
+                ({drillDown.faults.length} תקלות)
+              </span>
+            </h3>
+            <button
+              type="button"
+              onClick={() => setDrillDown(null)}
+              className="p-1.5 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          </div>
+          {drillDown.faults.length === 0 ? (
+            <p className="p-4 text-gray-500 text-sm">אין תקלות</p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {drillDown.faults.map((fault) => (
+                <button
+                  key={fault.id}
+                  type="button"
+                  onClick={() => setSelectedFaultId(fault.id)}
+                  className="w-full flex items-center gap-3 p-3 text-right hover:bg-gray-50 transition-colors"
+                >
+                  <span className="text-xl">{fault.typeIcon || "⚠️"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate text-sm">
+                      {fault.title}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {fault.reportedByName} ·{" "}
+                      {new Date(fault.createdAt).toLocaleDateString("he-IL")}
+                    </p>
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${COLOR_MAP[fault.statusColor ?? "gray"] ?? "bg-gray-100 text-gray-700"}`}
+                  >
+                    {fault.statusName}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <FaultDetailModal
+        faultId={selectedFaultId}
+        onClose={() => setSelectedFaultId(null)}
+      />
     </div>
   );
 }

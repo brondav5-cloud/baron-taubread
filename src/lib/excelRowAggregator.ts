@@ -19,6 +19,8 @@ export interface AggregatorResult {
   drivers: Set<string>;
   agents: Set<string>;
   categories: Set<string>;
+  rowsSkipped: number;
+  skipReasons: Record<string, number>; // reason → count
 }
 
 const QTY_NET_KEYS = ["כמות נטו", "כמות נטו ", 'סה"כ כמות', "סהכ כמות"];
@@ -43,6 +45,13 @@ export function aggregateRows(
   const agents = new Set<string>();
   const categories = new Set<string>();
 
+  let rowsSkipped = 0;
+  const skipReasons: Record<string, number> = {};
+  const skip = (reason: string) => {
+    rowsSkipped++;
+    skipReasons[reason] = (skipReasons[reason] ?? 0) + 1;
+  };
+
   const parseNum = (v: unknown): number => {
     if (typeof v === "number") return v;
     if (typeof v === "string") return Number(v.replace(/[₪,\s]/g, "")) || 0;
@@ -51,7 +60,7 @@ export function aggregateRows(
 
   for (const row of rows) {
     const period = parsePeriod(String(getVal(row, PERIOD_KEYS) ?? ""));
-    if (!period) continue;
+    if (!period) { skip("no_period"); continue; }
 
     const storeIdRaw = getVal(row, ["מזהה לקוח"]);
     const productIdRaw = getVal(row, ["מזהה מוצר"]);
@@ -63,7 +72,7 @@ export function aggregateRows(
       typeof productIdRaw === "number"
         ? productIdRaw
         : parseInt(String(productIdRaw ?? 0), 10);
-    if (!storeId || !productId) continue;
+    if (!storeId || !productId) { skip("no_id"); continue; }
 
     const city = String(getVal(row, ["עיר"]) ?? "").trim();
     const network = String(getVal(row, ["רשת"]) ?? "").trim();
@@ -151,5 +160,7 @@ export function aggregateRows(
     drivers,
     agents,
     categories,
+    rowsSkipped,
+    skipReasons,
   };
 }

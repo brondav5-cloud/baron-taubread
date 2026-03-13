@@ -27,6 +27,7 @@ import {
   type DbFaultType,
   type DbFaultStatus,
   type DbFault,
+  type FaultDocument,
 } from "@/lib/supabase/faults.queries";
 import { sendNotification } from "@/lib/notifications/notify";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
@@ -49,6 +50,7 @@ export interface Fault {
   assignedToIds: string[];
   assignedToNames: string[];
   photos: string[];
+  documents: FaultDocument[];
   comments: Array<{
     id: string;
     userId: string;
@@ -111,6 +113,7 @@ interface CreateFaultInput {
   assignedToIds?: string[];
   assignedToNames?: string[];
   photos?: string[];
+  documents?: FaultDocument[];
   notifyEmail?: boolean;
   notifySms?: boolean;
 }
@@ -153,6 +156,7 @@ function dbToFault(
     assignedToIds,
     assignedToNames,
     photos: db.photos || [],
+    documents: db.documents || [],
     comments: db.comments || [],
     history: db.history || [],
     createdAt: db.created_at,
@@ -336,6 +340,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
         assigned_to_ids: ids,
         assigned_to_names: names,
         photos: input.photos || [],
+        documents: input.documents || [],
         comments: [],
         history: [
           {
