@@ -115,6 +115,7 @@ export async function POST(request: NextRequest) {
       product_category: string | null;
       monthly_qty: Record<string, number>;
       monthly_sales: Record<string, number>;
+      monthly_returns: Record<string, number>;
     }> = [];
     if (storeProducts.length > 0) {
       const validationErrors: string[] = [];
@@ -312,19 +313,21 @@ export async function POST(request: NextRequest) {
       // Only sums months that belong to THIS upload (not historical months).
       // ============================================
 
-      const uploadedMonthsSet = new Set(periods.all);
+      // Normalize to "YYYY-MM" — periods.all uses "YYYYMM" format but monthly keys
+      // are normalized to "YYYY-MM" by validateMonthlyMap. Always compare in "YYYY-MM".
+      const uploadedMonthsSet = new Set(periods.all.map(normalizeMonth));
 
       let serverTotalGross = 0;
       for (const sr of storeRecords) {
         for (const [month, v] of Object.entries(sr.monthly_gross as Record<string, number>)) {
-          if (uploadedMonthsSet.has(month)) serverTotalGross += v;
+          if (uploadedMonthsSet.has(normalizeMonth(month))) serverTotalGross += v;
         }
       }
 
       let serverTotalReturns = 0;
       for (const sp of storeProductRecords) {
         for (const [month, v] of Object.entries(sp.monthly_returns)) {
-          if (uploadedMonthsSet.has(month)) serverTotalReturns += v;
+          if (uploadedMonthsSet.has(normalizeMonth(month))) serverTotalReturns += v;
         }
       }
 

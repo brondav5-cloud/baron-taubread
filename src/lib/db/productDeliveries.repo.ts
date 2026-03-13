@@ -73,12 +73,15 @@ export async function verifyProductDeliveryTotals(
   dbTotalReturnsQty: number;
   dbRecordsCount: number;
 }> {
+  // High limit to avoid Supabase's default 1000-row cap.
+  // 842 stores × 102 products × 52 weeks ≈ 4.5M max, but typical is 50k–200k.
   const { data, error } = await supabase
     .from("store_product_weekly")
     .select("store_external_id, gross_qty, returns_qty")
     .eq("company_id", companyId)
     .gte("week_start_date", periodStart)
-    .lte("week_start_date", periodEnd);
+    .lte("week_start_date", periodEnd)
+    .limit(500000);
 
   if (error || !data) {
     return { dbStoresCount: 0, dbTotalGrossQty: 0, dbTotalReturnsQty: 0, dbRecordsCount: 0 };
