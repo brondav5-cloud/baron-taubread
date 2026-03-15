@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { AUTH_COOKIE_NAME } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/client";
 
 function mapAuthError(message: string): string {
   if (message.includes("Invalid login")) return "פרטי התחברות שגויים";
@@ -33,29 +33,24 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      // Clear any stale Supabase session cookies (base cookie + up to 10 chunks)
-      // that may be lingering from a previous/invalidated session.
-      // Incognito users have no stale cookies so this is a safe no-op for them.
-      const clearOpts = "path=/; max-age=0; SameSite=Lax";
-      document.cookie = `${AUTH_COOKIE_NAME}=; ${clearOpts}`;
-      for (let i = 0; i < 10; i++) {
-        document.cookie = `${AUTH_COOKIE_NAME}.${i}=; ${clearOpts}`;
-      }
-
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      // Sign in directly with the browser Supabase client.
+      // This sets both the in-memory session AND the cookies correctly,
+      // ensuring all subsequent data requests (RPC, select, etc.) include
+      // the Authorization header. Using a server-side Route Handler for login
+      // only sets cookies but leaves the browser client's in-memory state empty,
+      // which causes 401s on data requests right after login.
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      const data = await res.json();
-      if (!res.ok || !data.ok) {
-        setError(mapAuthError(data.error || "אירעה שגיאה, נסה שוב"));
+
+      if (error) {
+        setError(mapAuthError(error.message));
         return;
       }
 
-      // Full page reload — ensures the browser Supabase client picks up
-      // the new session cookie set by the server. router.push() alone
-      // does a SPA navigation and the client may keep using the old (invalid) session.
+      // Full reload so the singleton is recreated with the fresh session.
       window.location.href = "/dashboard";
     } catch (err) {
       const msg =
