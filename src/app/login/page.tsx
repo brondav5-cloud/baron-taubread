@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { AUTH_COOKIE_NAME } from "@/lib/supabase/env";
 
 function mapAuthError(message: string): string {
   if (message.includes("Invalid login")) return "פרטי התחברות שגויים";
@@ -32,6 +33,15 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
+      // Clear any stale Supabase session cookies (base cookie + up to 10 chunks)
+      // that may be lingering from a previous/invalidated session.
+      // Incognito users have no stale cookies so this is a safe no-op for them.
+      const clearOpts = "path=/; max-age=0; SameSite=Lax";
+      document.cookie = `${AUTH_COOKIE_NAME}=; ${clearOpts}`;
+      for (let i = 0; i < 10; i++) {
+        document.cookie = `${AUTH_COOKIE_NAME}.${i}=; ${clearOpts}`;
+      }
+
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

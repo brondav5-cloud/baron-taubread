@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { createClient } from "@/lib/supabase/client";
 import { useUsers } from "@/context/UsersContext";
 import {
   getFaultTypes as fetchFaultTypes,
@@ -201,6 +202,13 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
 
   const refetch = useCallback(async () => {
     if (!companyId) return;
+
+    // Guard: verify the browser Supabase client actually has a valid session
+    // before making any queries. RLS SELECT returns empty rows (no error) for
+    // anonymous users — which would incorrectly trigger default-status seeding.
+    const { data: { session } } = await createClient().auth.getSession();
+    if (!session) return;
+
     let types = await fetchFaultTypes(companyId);
     const statusResult = await fetchFaultStatuses(companyId);
     let statuses = statusResult.data;
