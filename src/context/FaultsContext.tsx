@@ -212,14 +212,20 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     if (!statusResult.fetchError && statuses.length === 0 && !seedingCompanies.has(companyId)) {
       seedingCompanies.add(companyId);
       try {
-        await createClient().rpc("seed_default_fault_statuses", {
-          p_company_id: companyId,
-        });
+        const { data: seedResult, error: seedError } = await createClient().rpc(
+          "seed_default_fault_statuses",
+          { p_company_id: companyId },
+        );
+        if (seedError) {
+          console.warn("[FaultsContext] seed RPC error:", seedError);
+        } else if (seedResult) {
+          console.info("[FaultsContext] seed result:", seedResult);
+        }
         // Re-fetch to get the authoritative state
         const reseeded = await fetchFaultStatuses(companyId);
         statuses = reseeded.data;
-      } catch {
-        // Seeding is best-effort; ignore errors silently
+      } catch (err) {
+        console.warn("[FaultsContext] seed error:", err);
       } finally {
         seedingCompanies.delete(companyId);
       }
