@@ -169,14 +169,6 @@ function dbToFault(
   };
 }
 
-const DEFAULT_STATUSES = [
-  { name: "חדש", color: "blue", order: 1, is_final: false },
-  { name: "נצפה", color: "yellow", order: 2, is_final: false },
-  { name: "בטיפול", color: "orange", order: 3, is_final: false },
-  { name: "נפתר", color: "green", order: 4, is_final: false },
-  { name: "נסגר", color: "gray", order: 5, is_final: true },
-];
-
 // ============================================
 // CONTEXT
 // ============================================
@@ -203,37 +195,31 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
   const refetch = useCallback(async () => {
     if (!companyId) return;
 
-    // Guard: verify the browser Supabase client actually has a valid session
-    // before making any queries. RLS SELECT returns empty rows (no error) for
-    // anonymous users — which would incorrectly trigger default-status seeding.
-    const { data: { session } } = await createClient().auth.getSession();
-    if (!session) return;
+    // Guard: verify the browser Supabase client has a truly valid session by
+    // asking the Supabase Auth server (not just reading local cookies).
+    // getSession() can return an expired token from local storage without
+    // actually verifying it — getUser() always validates against the server.
+    const { data: { user: sessionUser } } = await createClient().auth.getUser();
+    if (!sessionUser) return;
 
     let types = await fetchFaultTypes(companyId);
     const statusResult = await fetchFaultStatuses(companyId);
     let statuses = statusResult.data;
 
     // Only seed defaults if the fetch SUCCEEDED and genuinely returned nothing.
-    // Never seed on a fetch error (e.g. 401 / network failure) — that would
-    // create duplicate rows once auth is established.
+    // Never seed on a fetch error (e.g. 401 / network failure).
+    // Seeding is done via a SECURITY DEFINER RPC to bypass RLS reliably.
     if (!statusResult.fetchError && statuses.length === 0 && !seedingCompanies.has(companyId)) {
       seedingCompanies.add(companyId);
       try {
-        await Promise.all(
-          DEFAULT_STATUSES.map((s) =>
-            insertFaultStatus({
-              company_id: companyId,
-              name: s.name,
-              color: s.color,
-              order: s.order,
-              is_final: s.is_final,
-              is_active: true,
-            }),
-          ),
-        );
-        // Re-fetch to get the authoritative state (handles any concurrent seeding)
+        await createClient().rpc("seed_default_fault_statuses", {
+          p_company_id: companyId,
+        });
+        // Re-fetch to get the authoritative state
         const reseeded = await fetchFaultStatuses(companyId);
         statuses = reseeded.data;
+      } catch {
+        // Seeding is best-effort; ignore errors silently
       } finally {
         seedingCompanies.delete(companyId);
       }
