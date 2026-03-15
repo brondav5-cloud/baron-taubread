@@ -319,6 +319,42 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
   const createFault = useCallback(
     async (input: CreateFaultInput): Promise<Fault | null> => {
       if (!companyId) return null;
+
+      const getInitialStatusId = async (): Promise<string | null> => {
+        const fromState = faultStatuses
+          .filter((s) => s.is_active)
+          .sort((a, b) => a.order - b.order);
+        const stateStatusId = fromState.find((s) => s.order === 1)?.id ?? fromState[0]?.id ?? null;
+        if (stateStatusId) return stateStatusId;
+
+        let fetched = await fetchFaultStatuses(companyId);
+        let statuses = fetched.data;
+
+        if (!fetched.fetchError && statuses.length === 0) {
+          try {
+            await createClient().rpc("seed_default_fault_statuses", {
+              p_company_id: companyId,
+            });
+          } catch {
+            // best effort; we'll validate after re-fetch
+          }
+          fetched = await fetchFaultStatuses(companyId);
+          statuses = fetched.data;
+        }
+
+        if (statuses.length === 0) return null;
+        setFaultStatuses(statuses);
+
+        const active = statuses.filter((s) => s.is_active).sort((a, b) => a.order - b.order);
+        return active.find((s) => s.order === 1)?.id ?? active[0]?.id ?? null;
+      };
+
+      const initialStatusId = await getInitialStatusId();
+      if (!initialStatusId) {
+        console.error("[createFault] missing initial status for company", companyId);
+        return null;
+      }
+
       const ids = input.assignedToIds?.length
         ? input.assignedToIds
         : input.assignedTo
@@ -332,10 +368,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
       const { data, error } = await insertFault({
         company_id: companyId,
         type_id: input.typeId,
-        status_id:
-          faultStatuses.find((s) => s.order === 1)?.id ??
-          faultStatuses[0]?.id ??
-          "",
+        status_id: initialStatusId,
         title: input.title,
         description: input.description || "",
         reported_by: userId,
@@ -358,7 +391,10 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
           },
         ],
       });
-      if (error || !data) return null;
+      if (error || !data) {
+        console.error("[createFault] insert failed:", error);
+        return null;
+      }
       await refetch();
 
       const notifyIds = ids.filter((id) => id !== userId);
