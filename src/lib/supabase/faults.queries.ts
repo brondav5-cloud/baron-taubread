@@ -144,7 +144,7 @@ export async function deleteFaultType(id: string): Promise<boolean> {
 
 export async function getFaultStatuses(
   companyId: string,
-): Promise<DbFaultStatus[]> {
+): Promise<{ data: DbFaultStatus[]; fetchError: boolean }> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from("fault_statuses")
@@ -154,9 +154,9 @@ export async function getFaultStatuses(
 
   if (error) {
     console.error("Error fetching fault statuses:", error);
-    return [];
+    return { data: [], fetchError: true };
   }
-  return data || [];
+  return { data: data || [], fetchError: false };
 }
 
 /** Returns all fault statuses accessible to the current user (own + cross-company, via RLS). */

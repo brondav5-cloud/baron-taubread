@@ -202,9 +202,13 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
   const refetch = useCallback(async () => {
     if (!companyId) return;
     let types = await fetchFaultTypes(companyId);
-    let statuses = await fetchFaultStatuses(companyId);
+    const statusResult = await fetchFaultStatuses(companyId);
+    let statuses = statusResult.data;
 
-    if (statuses.length === 0 && !seedingCompanies.has(companyId)) {
+    // Only seed defaults if the fetch SUCCEEDED and genuinely returned nothing.
+    // Never seed on a fetch error (e.g. 401 / network failure) — that would
+    // create duplicate rows once auth is established.
+    if (!statusResult.fetchError && statuses.length === 0 && !seedingCompanies.has(companyId)) {
       seedingCompanies.add(companyId);
       try {
         await Promise.all(
@@ -220,7 +224,8 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
           ),
         );
         // Re-fetch to get the authoritative state (handles any concurrent seeding)
-        statuses = await fetchFaultStatuses(companyId);
+        const reseeded = await fetchFaultStatuses(companyId);
+        statuses = reseeded.data;
       } finally {
         seedingCompanies.delete(companyId);
       }
