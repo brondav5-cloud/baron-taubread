@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 function mapAuthError(message: string): string {
@@ -18,7 +17,6 @@ function mapAuthError(message: string): string {
 }
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -45,8 +43,10 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/dashboard");
-      router.refresh();
+      // Full page reload — ensures the browser Supabase client picks up
+      // the new session cookie set by the server. router.push() alone
+      // does a SPA navigation and the client may keep using the old (invalid) session.
+      window.location.href = "/dashboard";
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "אירעה שגיאה, נסה שוב";
