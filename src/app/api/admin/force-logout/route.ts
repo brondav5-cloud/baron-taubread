@@ -89,3 +89,56 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE() {
+  try {
+    const supabaseAuth = createServerSupabaseClient();
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAuth.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "נדרשת התחברות" }, { status: 401 });
+    }
+
+    const { companyId, role } = await resolveSelectedCompanyId(
+      supabaseAuth,
+      user.id,
+    );
+
+    if (!companyId) {
+      return NextResponse.json({ error: "יש לבחור חברה" }, { status: 400 });
+    }
+
+    const allowedRoles = ["admin", "super_admin"];
+    if (!role || !allowedRoles.includes(role)) {
+      return NextResponse.json(
+        { error: "רק מנהל יכול לבטל ניתוק משתמשים" },
+        { status: 403 },
+      );
+    }
+
+    const admin = getSupabaseAdmin();
+    const { error: deleteError } = await admin
+      .from("logout_requests")
+      .delete()
+      .eq("company_id", companyId);
+
+    if (deleteError) {
+      console.error("[force-logout][delete]", deleteError);
+      return NextResponse.json(
+        { error: deleteError.message },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[force-logout][delete]", err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "שגיאה לא צפויה" },
+      { status: 500 },
+    );
+  }
+}

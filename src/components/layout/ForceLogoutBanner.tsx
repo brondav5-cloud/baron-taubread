@@ -30,12 +30,19 @@ export function ForceLogoutBanner({ companyId }: ForceLogoutBannerProps) {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const clearCountdown = useCallback(() => {
+    if (countdownRef.current) {
+      clearInterval(countdownRef.current);
+      countdownRef.current = null;
+    }
+  }, []);
+
   const doLogout = useCallback(async () => {
-    if (countdownRef.current) clearInterval(countdownRef.current);
+    clearCountdown();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.replace("/login");
-  }, [router]);
+  }, [clearCountdown, router]);
 
   const applyRequest = useCallback(
     (data: LogoutRequest) => {
@@ -44,9 +51,12 @@ export function ForceLogoutBanner({ companyId }: ForceLogoutBannerProps) {
         data.auto_logout_minutes * 60 * 1000;
       const remaining = Math.max(0, Math.floor((deadline - Date.now()) / 1000));
 
-      // Request already expired — log out immediately
+      // Request already expired: do NOT force-logout newly signed-in users.
+      // We only show/enforce active requests.
       if (remaining === 0) {
-        void doLogout();
+        clearCountdown();
+        setRequest(null);
+        setSecondsLeft(0);
         return;
       }
 
@@ -54,7 +64,7 @@ export function ForceLogoutBanner({ companyId }: ForceLogoutBannerProps) {
       setSecondsLeft(remaining);
 
       // Clear any previous countdown
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      clearCountdown();
 
       countdownRef.current = setInterval(() => {
         const sLeft = Math.max(
@@ -63,12 +73,12 @@ export function ForceLogoutBanner({ companyId }: ForceLogoutBannerProps) {
         );
         setSecondsLeft(sLeft);
         if (sLeft === 0) {
-          clearInterval(countdownRef.current!);
+          clearCountdown();
           void doLogout();
         }
       }, 1000);
     },
-    [doLogout],
+    [clearCountdown, doLogout],
   );
 
   const fetchRequest = useCallback(async () => {
@@ -79,8 +89,15 @@ export function ForceLogoutBanner({ companyId }: ForceLogoutBannerProps) {
       .eq("company_id", companyId)
       .maybeSingle();
 
-    if (data) applyRequest(data as LogoutRequest);
-  }, [companyId, applyRequest]);
+    if (data) {
+      applyRequest(data as LogoutRequest);
+      return;
+    }
+
+    clearCountdown();
+    setRequest(null);
+    setSecondsLeft(0);
+  }, [companyId, applyRequest, clearCountdown]);
 
   useEffect(() => {
     if (!companyId) return;
@@ -104,9 +121,9 @@ export function ForceLogoutBanner({ companyId }: ForceLogoutBannerProps) {
 
     return () => {
       supabase.removeChannel(channel);
-      if (countdownRef.current) clearInterval(countdownRef.current);
+      clearCountdown();
     };
-  }, [companyId, fetchRequest]);
+  }, [companyId, fetchRequest, clearCountdown]);
 
   if (!request) return null;
 

@@ -19,6 +19,7 @@ export default function UsersSettingsPage() {
   );
   const [forceLogoutMinutes, setForceLogoutMinutes] = useState(5);
   const [sendingForceLogout, setSendingForceLogout] = useState(false);
+  const [clearingForceLogout, setClearingForceLogout] = useState(false);
 
   const role = authState.status === "authed" ? authState.user.selectedCompanyRole ?? authState.user.role : null;
   const canSendResetAll = role === "admin" || role === "super_admin";
@@ -63,6 +64,27 @@ export default function UsersSettingsPage() {
       toast.error("שגיאה בשליחת הודעת ניתוק");
     } finally {
       setSendingForceLogout(false);
+    }
+  };
+
+  const handleClearForceLogout = async () => {
+    if (!confirm("לבטל את בקשת הניתוק הפעילה לכל המשתמשים?")) return;
+    setClearingForceLogout(true);
+    try {
+      const res = await fetch("/api/admin/force-logout", {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בביטול בקשת ניתוק");
+        return;
+      }
+      toast.success("בקשת הניתוק בוטלה");
+      setShowForceLogout(false);
+    } catch {
+      toast.error("שגיאה בביטול בקשת ניתוק");
+    } finally {
+      setClearingForceLogout(false);
     }
   };
 
@@ -258,6 +280,15 @@ export default function UsersSettingsPage() {
             </div>
 
             <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleClearForceLogout}
+                disabled={clearingForceLogout || sendingForceLogout}
+                className="py-2.5 px-3 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="בטל בקשת ניתוק פעילה"
+              >
+                {clearingForceLogout ? "מבטל..." : "בטל ניתוק פעיל"}
+              </button>
               <button
                 type="button"
                 onClick={() => setShowForceLogout(false)}
