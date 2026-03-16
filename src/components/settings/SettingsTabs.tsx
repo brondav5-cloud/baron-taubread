@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 import {
   Settings,
   Receipt,
@@ -43,8 +44,20 @@ const TABS = [
   },
 ];
 
+const ADMIN_ONLY_TABS = new Set([
+  "/dashboard/settings/users",
+  "/dashboard/settings/pricing",
+  "/dashboard/settings/costs",
+]);
+
 export function SettingsTabs() {
   const pathname = usePathname();
+  const auth = useAuth();
+  const role =
+    auth.status === "authed"
+      ? auth.user.selectedCompanyRole ?? auth.user.role
+      : null;
+  const isAdmin = role === "admin" || role === "super_admin";
 
   const isActive = (href: string, exact?: boolean) => {
     if (exact) return pathname === href;
@@ -54,7 +67,9 @@ export function SettingsTabs() {
   return (
     <div className="bg-white rounded-2xl shadow-sm p-2 mb-6">
       <div className="flex gap-2 overflow-x-auto">
-        {TABS.map((tab) => {
+        {TABS.filter(
+          (tab) => isAdmin || !ADMIN_ONLY_TABS.has(tab.href),
+        ).map((tab) => {
           const Icon = tab.icon;
           const active = isActive(tab.href, tab.exact);
 

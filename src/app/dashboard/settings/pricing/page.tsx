@@ -1,9 +1,12 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Receipt, CheckCircle, Upload } from "lucide-react";
 import { usePricing } from "@/hooks/usePricing";
 import { usePricingUpload } from "@/hooks/usePricingUpload";
 import { useStoresAndProducts } from "@/context/StoresAndProductsContext";
+import { useAuth } from "@/hooks/useAuth";
 import {
   PricingUploadZone,
   PricingPreview,
@@ -12,10 +15,28 @@ import {
 import { PageHeader } from "@/components/ui";
 
 export default function PricingPage() {
+  const auth = useAuth();
+  const router = useRouter();
   const { index, storesWithPricingStatus, hasPricingData, refresh } =
     usePricing();
   const { stores } = useStoresAndProducts();
   const upload = usePricingUpload(refresh, stores);
+
+  const role =
+    auth.status === "authed"
+      ? auth.user.selectedCompanyRole ?? auth.user.role
+      : null;
+  const isAdmin = role === "admin" || role === "super_admin";
+
+  useEffect(() => {
+    if (auth.status !== "loading" && !isAdmin) {
+      router.replace("/dashboard/settings");
+    }
+  }, [auth.status, isAdmin, router]);
+
+  if (auth.status === "loading" || !isAdmin) {
+    return null;
+  }
 
   return (
     <div className="space-y-6">

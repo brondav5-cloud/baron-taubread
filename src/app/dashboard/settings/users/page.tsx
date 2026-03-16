@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Users, Pencil, Plus, Trash2, RefreshCw, LogOut } from "lucide-react";
 import { useUsers, type AppUser } from "@/context/UsersContext";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,6 +9,7 @@ import { UserEditModal } from "@/components/settings/users/UserEditModal";
 import toast from "react-hot-toast";
 
 export default function UsersSettingsPage() {
+  const router = useRouter();
   const { allUsers, isLoading, removeUser, currentUser } = useUsers();
   const authState = useAuth();
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
@@ -28,6 +30,16 @@ export default function UsersSettingsPage() {
         currentUser.role
       : currentUser.role;
   const canSendResetAll = role === "admin" || role === "super_admin";
+
+  useEffect(() => {
+    if (authState.status !== "loading" && !canSendResetAll) {
+      router.replace("/dashboard/settings");
+    }
+  }, [authState.status, canSendResetAll, router]);
+
+  if (authState.status === "loading" || !canSendResetAll) {
+    return null;
+  }
 
   const handleSendPasswordResetAll = async () => {
     if (!confirm("לשלוח אימייל איפוס סיסמה לכל המשתמשים? כל אחד יקבל לינק להגדרת סיסמה חדשה.")) return;

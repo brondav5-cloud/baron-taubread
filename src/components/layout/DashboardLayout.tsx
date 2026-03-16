@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import MobileBottomNav from "./MobileBottomNav";
@@ -11,6 +11,7 @@ import type { WhoamiCompany } from "@/context/SupabaseAuthContext";
 import { Building2, Loader2 } from "lucide-react";
 import { ForceLogoutBanner } from "./ForceLogoutBanner";
 import { AppUpdateBanner } from "./AppUpdateBanner";
+import { UsageNoticeBanner } from "./UsageNoticeBanner";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -21,6 +22,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const auth = useAuth();
   const { selectCompany } = useSupabaseAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (auth.status === "anon") {
@@ -48,6 +50,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     auth.user &&
     (auth.user.companies?.length ?? 0) > 1 &&
     !auth.user.selectedCompanyId;
+  const showUsageNotice = pathname === "/dashboard";
 
   return (
     <div className="min-h-screen bg-gradient-main overflow-x-hidden">
@@ -82,6 +85,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header onMenuClick={() => setSidebarOpen(true)} />
+            {showUsageNotice && <UsageNoticeBanner />}
             <AppUpdateBanner />
             <main className="flex-1 p-4 lg:p-6 min-w-0 pb-20 lg:pb-6">
               {children}
