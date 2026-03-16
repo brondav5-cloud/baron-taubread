@@ -17,6 +17,19 @@ interface TrackedUserActivity {
   lastRoute: string | null;
 }
 
+interface ActivitySummaryRow {
+  date: string;
+  userId: string;
+  name: string;
+  email: string;
+  loginCount: number;
+  pageViews: number;
+  heartbeatCount: number;
+  activeMinutes: number;
+  lastRoute: string | null;
+  lastSeenAt: string | null;
+}
+
 export default function UsersSettingsPage() {
   const router = useRouter();
   const { allUsers, isLoading, removeUser, currentUser } = useUsers();
@@ -35,6 +48,9 @@ export default function UsersSettingsPage() {
   const [trackedUsers, setTrackedUsers] = useState<TrackedUserActivity[]>([]);
   const [loadingTracked, setLoadingTracked] = useState(false);
   const [savingTracked, setSavingTracked] = useState(false);
+  const [summaryDays, setSummaryDays] = useState<2 | 7>(7);
+  const [loadingSummary, setLoadingSummary] = useState(false);
+  const [summaryRows, setSummaryRows] = useState<ActivitySummaryRow[]>([]);
 
   const role =
     authState.status === "authed"
@@ -66,6 +82,25 @@ export default function UsersSettingsPage() {
       toast.error("שגיאה בטעינת משתמשים במעקב");
     } finally {
       setLoadingTracked(false);
+    }
+  };
+
+  const loadSummary = async (days: 2 | 7 = summaryDays) => {
+    setLoadingSummary(true);
+    try {
+      const res = await fetch(`/api/admin/activity/summary?days=${days}`, {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בטעינת סיכום ניטור");
+        return;
+      }
+      setSummaryRows(Array.isArray(data.rows) ? data.rows : []);
+    } catch {
+      toast.error("שגיאה בטעינת סיכום ניטור");
+    } finally {
+      setLoadingSummary(false);
     }
   };
 
@@ -120,8 +155,10 @@ export default function UsersSettingsPage() {
   useEffect(() => {
     if (canSendResetAll) {
       void loadTrackedUsers();
+      void loadSummary(summaryDays);
     }
-  }, [canSendResetAll]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canSendResetAll, summaryDays]);
 
   const handleSendPasswordResetAll = async () => {
     if (!confirm("לשלוח אימייל איפוס סיסמה לכל המשתמשים? כל אחד יקבל לינק להגדרת סיסמה חדשה.")) return;
@@ -480,6 +517,62 @@ export default function UsersSettingsPage() {
                 >
                   הסר
                 </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">סיכום פעילות יבש</h2>
+            <p className="text-sm text-gray-500">
+              נתונים מצטברים לפי יום (ללא לוג מלא) לשמירה על ביצועים
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <select
+              value={summaryDays}
+              onChange={(e) => setSummaryDays(Number(e.target.value) as 2 | 7)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            >
+              <option value={2}>יומיים אחרונים</option>
+              <option value={7}>7 ימים אחרונים</option>
+            </select>
+            <button
+              type="button"
+              onClick={() => void loadSummary(summaryDays)}
+              disabled={loadingSummary}
+              className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+            >
+              {loadingSummary ? "טוען..." : "רענן"}
+            </button>
+          </div>
+        </div>
+
+        {summaryRows.length === 0 ? (
+          <p className="text-sm text-gray-500">אין נתוני סיכום לתקופה שנבחרה.</p>
+        ) : (
+          <div className="space-y-2">
+            {summaryRows.map((r) => (
+              <div
+                key={`${r.date}-${r.userId}`}
+                className="p-3 border border-gray-200 rounded-xl text-sm"
+              >
+                <div className="flex flex-wrap items-center gap-2 text-gray-800">
+                  <span className="font-semibold">{r.name}</span>
+                  <span className="text-xs text-gray-500">{r.email}</span>
+                  <span className="text-xs text-gray-400">· {r.date}</span>
+                </div>
+                <p className="text-xs text-gray-600 mt-1">
+                  דקות פעילות: {r.activeMinutes} · צפיות מסך: {r.pageViews} ·
+                  כניסות: {r.loginCount}
+                  {r.lastRoute ? ` · דף אחרון: ${r.lastRoute}` : ""}
+                  {r.lastSeenAt
+                    ? ` · נראה לאחרונה: ${new Date(r.lastSeenAt).toLocaleString("he-IL")}`
+                    : ""}
+                </p>
               </div>
             ))}
           </div>

@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false }, { status: 401 });
     }
 
-    let payload: { eventType?: string; route?: string } = {};
+    let payload: { eventType?: string; route?: string; isActive?: boolean } = {};
     try {
       payload = await request.json();
     } catch {
@@ -56,6 +56,14 @@ export async function POST(request: NextRequest) {
       console.warn("[activity/track] insert failed:", insertError.message);
       return NextResponse.json({ ok: true, tracked: true });
     }
+
+    await admin.rpc("upsert_user_activity_daily_summary", {
+      p_company_id: companyId,
+      p_user_id: user.id,
+      p_event_type: eventType,
+      p_route: typeof payload.route === "string" ? payload.route : null,
+      p_is_active: payload.isActive === true,
+    });
 
     return NextResponse.json({ ok: true, tracked: true });
   } catch (err) {
