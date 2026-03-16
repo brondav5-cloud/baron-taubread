@@ -307,6 +307,12 @@ export async function updateFault(
   return !error;
 }
 
+export async function deleteFaultById(id: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase.from("faults").delete().eq("id", id);
+  return !error;
+}
+
 // ============================================
 // FAULT DOCUMENTS — Supabase Storage
 // ============================================

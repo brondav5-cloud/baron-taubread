@@ -25,6 +25,7 @@ import {
   updateFaultStatus as updateFaultStatusInDb,
   deleteFaultStatus as deleteFaultStatusInDb,
   updateFault,
+  deleteFaultById as deleteFaultByIdInDb,
   type DbFaultType,
   type DbFaultStatus,
   type DbFault,
@@ -99,6 +100,7 @@ interface FaultsContextValue {
   deleteFaultStatus: (id: string) => Promise<boolean>;
   createFault: (input: CreateFaultInput) => Promise<Fault | null>;
   updateFaultStatus: (faultId: string, statusId: string) => Promise<boolean>;
+  deleteFault: (faultId: string) => Promise<boolean>;
   markFaultViewed: (faultId: string) => Promise<void>;
   addComment: (faultId: string, text: string) => Promise<boolean>;
   getVisibleFaults: () => Fault[];
@@ -463,6 +465,15 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     [faults, faultStatuses, userId, currentUser.name, refetch],
   );
 
+  const deleteFault = useCallback(
+    async (faultId: string): Promise<boolean> => {
+      const ok = await deleteFaultByIdInDb(faultId);
+      if (ok) await refetch();
+      return ok;
+    },
+    [refetch],
+  );
+
   const addComment = useCallback(
     async (faultId: string, text: string): Promise<boolean> => {
       const fault = faults.find((f) => f.id === faultId);
@@ -567,6 +578,7 @@ export function FaultsProvider({ children }: { children: ReactNode }) {
     deleteFaultStatus,
     createFault,
     updateFaultStatus,
+    deleteFault,
     markFaultViewed,
     addComment,
     getVisibleFaults,

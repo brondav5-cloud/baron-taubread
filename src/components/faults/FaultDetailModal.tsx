@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { X, FileText, FileSpreadsheet, File, Download } from "lucide-react";
+import { X, FileText, FileSpreadsheet, File, Download, Trash2 } from "lucide-react";
 import { useFaults } from "@/context/FaultsContext";
 import type { FaultDocument } from "@/lib/supabase/faults.queries";
 import { useUsers } from "@/context/UsersContext";
@@ -38,11 +38,16 @@ const COLOR_MAP: Record<string, string> = {
 };
 
 export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
-  const { faults, faultStatuses, updateFaultStatus, markFaultViewed, addComment, canComment } =
+  const { faults, faultStatuses, updateFaultStatus, deleteFault, markFaultViewed, addComment, canComment } =
     useFaults();
   const { currentUser } = useUsers();
   const [commentText, setCommentText] = useState("");
   const [saving, setSaving] = useState(false);
+  const [preview, setPreview] = useState<{
+    kind: "image" | "pdf";
+    url: string;
+    name: string;
+  } | null>(null);
 
   // Always get the LIVE fault from context — realtime updates are reflected automatically
   const fault = faults.find((f) => f.id === faultId) ?? null;
@@ -59,6 +64,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
   // Reset comment input when the modal opens for a different fault
   useEffect(() => {
     setCommentText("");
+    setPreview(null);
   }, [faultId]);
 
   if (!faultId || !fault) return null;
@@ -67,6 +73,8 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
     .filter((s) => s.is_active)
     .sort((a, b) => a.order - b.order);
   const canWriteComment = canComment(fault);
+  const canDeleteFault =
+    currentUser.role === "admin" || currentUser.role === "super_admin";
 
   const handleStatusChange = async (statusId: string) => {
     setSaving(true);
@@ -88,10 +96,31 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
     setSaving(false);
   };
 
+  const handleDeleteFault = async () => {
+    if (!canDeleteFault) return;
+    const confirmed = window.confirm("למחוק את התקלה לצמיתות?");
+    if (!confirmed) return;
+
+    setSaving(true);
+    const ok = await deleteFault(fault.id);
+    setSaving(false);
+    if (ok) {
+      onClose();
+      return;
+    }
+    window.alert("מחיקת התקלה נכשלה. נסה שוב.");
+  };
+
   const assigneeDisplay =
     fault.assignedToNames.length > 0
       ? fault.assignedToNames.join(", ")
       : fault.assignedToName || "—";
+
+  const isPdfDoc = (doc: FaultDocument): boolean => {
+    const name = doc.name.toLowerCase();
+    const type = doc.type.toLowerCase();
+    return name.endsWith(".pdf") || type.includes("pdf");
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -102,12 +131,26 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
             <span className="text-2xl">{fault.typeIcon || "⚠️"}</span>
             <h2 className="text-lg font-bold text-gray-900">{fault.title}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            <X className="w-5 h-5 text-gray-500" />
-          </button>
+          <div className="flex items-center gap-2">
+            {canDeleteFault && (
+              <button
+                type="button"
+                onClick={handleDeleteFault}
+                disabled={saving}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                title="מחק תקלה"
+              >
+                <Trash2 className="w-4 h-4" />
+                מחיקה
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="p-2 hover:bg-gray-100 rounded-lg"
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+          </div>
         </div>
 
         <div className="p-4 space-y-4">
@@ -145,17 +188,25 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
           {fault.photos.length > 0 && (
             <div className="flex gap-2 overflow-x-auto">
               {fault.photos.map((url, i) => (
-                <div
+                <button
+                  type="button"
                   key={i}
+                  onClick={() =>
+                    setPreview({
+                      kind: "image",
+                      url,
+                      name: `photo-${i + 1}.jpg`,
+                    })
+                  }
                   className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={url}
                     alt=""
-                    className="object-cover w-full h-full"
+                    className="object-cover w-full h-full hover:scale-105 transition-transform"
                   />
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -165,11 +216,20 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
               <span className="text-gray-500 text-sm block mb-1.5">מסמכים מצורפים:</span>
               <div className="space-y-1.5">
                 {fault.documents.map((doc: FaultDocument) => (
-                  <a
+                  <button
+                    type="button"
                     key={doc.path}
-                    href={doc.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                    onClick={() => {
+                      if (isPdfDoc(doc)) {
+                        setPreview({
+                          kind: "pdf",
+                          url: doc.url,
+                          name: doc.name,
+                        });
+                        return;
+                      }
+                      window.open(doc.url, "_blank", "noopener,noreferrer");
+                    }}
                     className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-200 rounded-lg transition-colors group"
                   >
                     {getDocIcon(doc.type)}
@@ -179,8 +239,16 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
                     <span className="text-xs text-gray-400 flex-shrink-0">
                       {formatSize(doc.size)}
                     </span>
-                    <Download className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
-                  </a>
+                    <a
+                      href={doc.url}
+                      download={doc.name}
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex"
+                      title="הורד קובץ"
+                    >
+                      <Download className="w-3.5 h-3.5 text-gray-400 group-hover:text-blue-500 flex-shrink-0" />
+                    </a>
+                  </button>
                 ))}
               </div>
             </div>
@@ -281,6 +349,54 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
           )}
         </div>
       </div>
+      {preview && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/80"
+            onClick={() => setPreview(null)}
+          />
+          <div className="relative w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+              <p className="text-sm font-medium text-gray-800 truncate">
+                {preview.name}
+              </p>
+              <div className="flex items-center gap-2">
+                <a
+                  href={preview.url}
+                  download={preview.name}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 transition-colors"
+                >
+                  <Download className="w-4 h-4" />
+                  הורדה
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  className="p-2 hover:bg-gray-100 rounded-lg"
+                >
+                  <X className="w-5 h-5 text-gray-500" />
+                </button>
+              </div>
+            </div>
+            <div className="bg-gray-100 h-[80vh]">
+              {preview.kind === "pdf" ? (
+                <iframe
+                  src={preview.url}
+                  title={preview.name}
+                  className="w-full h-full"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={preview.url}
+                  alt={preview.name}
+                  className="w-full h-full object-contain"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
