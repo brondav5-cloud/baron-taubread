@@ -257,14 +257,42 @@ export async function insertFault(
 ): Promise<{ data: DbFault | null; error: string | null }> {
   const supabase = createClient();
   const now = new Date().toISOString();
-  const { data, error } = await supabase
-    .from("faults")
-    .insert({ ...row, created_at: now, updated_at: now })
-    .select()
-    .single();
+  const payload: Record<string, unknown> = {
+    ...row,
+    created_at: now,
+    updated_at: now,
+  };
 
-  if (error) return { data: null, error: error.message };
-  return { data, error: null };
+  const getMissingColumnFromMessage = (message: string | undefined): string | null => {
+    if (!message) return null;
+    const match = message.match(/Could not find the '([^']+)' column/i);
+    return match?.[1] ?? null;
+  };
+
+  // Backward compatibility:
+  // Some environments may not yet have all newer optional columns (e.g. documents).
+  // If PostgREST reports a missing column, remove it from payload and retry.
+  for (let i = 0; i < 4; i += 1) {
+    const { data, error } = await supabase
+      .from("faults")
+      .insert(payload)
+      .select()
+      .single();
+
+    if (!error) return { data, error: null };
+
+    const missingColumn = getMissingColumnFromMessage(error.message);
+    if (!missingColumn || !(missingColumn in payload)) {
+      return { data: null, error: error.message };
+    }
+
+    delete payload[missingColumn];
+    console.warn(
+      `[insertFault] Missing column "${missingColumn}" in DB. Retrying without it.`,
+    );
+  }
+
+  return { data: null, error: "Insert failed after compatibility retries" };
 }
 
 export async function updateFault(
