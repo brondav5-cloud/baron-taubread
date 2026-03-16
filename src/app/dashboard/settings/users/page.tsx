@@ -51,6 +51,10 @@ export default function UsersSettingsPage() {
   const [summaryDays, setSummaryDays] = useState<2 | 7>(7);
   const [loadingSummary, setLoadingSummary] = useState(false);
   const [summaryRows, setSummaryRows] = useState<ActivitySummaryRow[]>([]);
+  const [summarySource, setSummarySource] = useState<
+    "daily_summary" | "raw_fallback" | "empty"
+  >("empty");
+  const [monitorView, setMonitorView] = useState<"live" | "summary">("live");
 
   const role =
     authState.status === "authed"
@@ -97,6 +101,11 @@ export default function UsersSettingsPage() {
         return;
       }
       setSummaryRows(Array.isArray(data.rows) ? data.rows : []);
+      setSummarySource(
+        data.source === "daily_summary" || data.source === "raw_fallback"
+          ? data.source
+          : "empty",
+      );
     } catch {
       toast.error("שגיאה בטעינת סיכום ניטור");
     } finally {
@@ -455,127 +464,159 @@ export default function UsersSettingsPage() {
           <div>
             <h2 className="text-lg font-bold text-gray-900">ניטור משתמשים</h2>
             <p className="text-sm text-gray-500">
-              מעקב קל על כניסות ופעילות בסיסית למשתמשים נבחרים
+              תצוגה חיה לצד סיכום יבש, במינימום עומס
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void loadTrackedUsers()}
-            disabled={loadingTracked || savingTracked}
-            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          >
-            {loadingTracked ? "טוען..." : "רענן"}
-          </button>
-        </div>
-
-        <div className="flex gap-2">
-          <input
-            type="email"
-            value={trackedEmail}
-            onChange={(e) => setTrackedEmail(e.target.value)}
-            placeholder="הוסף משתמש למעקב לפי אימייל"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            dir="ltr"
-          />
-          <button
-            type="button"
-            onClick={() => void handleAddTrackedUser()}
-            disabled={savingTracked || !trackedEmail.trim()}
-            className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 disabled:opacity-50"
-          >
-            הוסף
-          </button>
-        </div>
-
-        {trackedUsers.length === 0 ? (
-          <p className="text-sm text-gray-500">אין משתמשים במעקב כרגע.</p>
-        ) : (
-          <div className="space-y-2">
-            {trackedUsers.map((u) => (
-              <div
-                key={u.userId}
-                className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900 truncate">
-                    {u.name}
-                  </p>
-                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    פעילות 24ש׳: {u.events24h} · אחרון:{" "}
-                    {u.lastSeenAt
-                      ? new Date(u.lastSeenAt).toLocaleString("he-IL")
-                      : "אין"}
-                    {u.lastRoute ? ` · דף: ${u.lastRoute}` : ""}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => void handleRemoveTrackedUser(u.userId)}
-                  disabled={savingTracked}
-                  className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
-                >
-                  הסר
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-bold text-gray-900">סיכום פעילות יבש</h2>
-            <p className="text-sm text-gray-500">
-              נתונים מצטברים לפי יום (ללא לוג מלא) לשמירה על ביצועים
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={summaryDays}
-              onChange={(e) => setSummaryDays(Number(e.target.value) as 2 | 7)}
-              className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
-            >
-              <option value={2}>יומיים אחרונים</option>
-              <option value={7}>7 ימים אחרונים</option>
-            </select>
+          <div className="inline-flex rounded-xl bg-gray-100 p-1">
             <button
               type="button"
-              onClick={() => void loadSummary(summaryDays)}
-              disabled={loadingSummary}
-              className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              onClick={() => setMonitorView("live")}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                monitorView === "live"
+                  ? "bg-white text-primary-700 shadow-sm"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
             >
-              {loadingSummary ? "טוען..." : "רענן"}
+              ניטור חי
+            </button>
+            <button
+              type="button"
+              onClick={() => setMonitorView("summary")}
+              className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+                monitorView === "summary"
+                  ? "bg-white text-primary-700 shadow-sm"
+                  : "text-gray-600 hover:text-gray-800"
+              }`}
+            >
+              סיכום יבש
             </button>
           </div>
         </div>
 
-        {summaryRows.length === 0 ? (
-          <p className="text-sm text-gray-500">אין נתוני סיכום לתקופה שנבחרה.</p>
-        ) : (
-          <div className="space-y-2">
-            {summaryRows.map((r) => (
-              <div
-                key={`${r.date}-${r.userId}`}
-                className="p-3 border border-gray-200 rounded-xl text-sm"
+        {monitorView === "live" ? (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-gray-500">
+                מעקב מתבצע רק עבור משתמשים שנבחרו במפורש
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadTrackedUsers()}
+                disabled={loadingTracked || savingTracked}
+                className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
               >
-                <div className="flex flex-wrap items-center gap-2 text-gray-800">
-                  <span className="font-semibold">{r.name}</span>
-                  <span className="text-xs text-gray-500">{r.email}</span>
-                  <span className="text-xs text-gray-400">· {r.date}</span>
-                </div>
-                <p className="text-xs text-gray-600 mt-1">
-                  דקות פעילות: {r.activeMinutes} · צפיות מסך: {r.pageViews} ·
-                  כניסות: {r.loginCount}
-                  {r.lastRoute ? ` · דף אחרון: ${r.lastRoute}` : ""}
-                  {r.lastSeenAt
-                    ? ` · נראה לאחרונה: ${new Date(r.lastSeenAt).toLocaleString("he-IL")}`
-                    : ""}
-                </p>
+                {loadingTracked ? "טוען..." : "רענן"}
+              </button>
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                type="email"
+                value={trackedEmail}
+                onChange={(e) => setTrackedEmail(e.target.value)}
+                placeholder="הוסף משתמש למעקב לפי אימייל"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                dir="ltr"
+              />
+              <button
+                type="button"
+                onClick={() => void handleAddTrackedUser()}
+                disabled={savingTracked || !trackedEmail.trim()}
+                className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 disabled:opacity-50"
+              >
+                הוסף
+              </button>
+            </div>
+
+            {trackedUsers.length === 0 ? (
+              <p className="text-sm text-gray-500">אין משתמשים במעקב כרגע.</p>
+            ) : (
+              <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
+                {trackedUsers.map((u) => (
+                  <div
+                    key={u.userId}
+                    className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl hover:border-primary-200 transition-colors"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate">{u.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        פעילות 24ש׳: {u.events24h} · אחרון:{" "}
+                        {u.lastSeenAt
+                          ? new Date(u.lastSeenAt).toLocaleString("he-IL")
+                          : "אין"}
+                        {u.lastRoute ? ` · דף: ${u.lastRoute}` : ""}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void handleRemoveTrackedUser(u.userId)}
+                      disabled={savingTracked}
+                      className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                    >
+                      הסר
+                    </button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-gray-500">
+                {summarySource === "daily_summary"
+                  ? "מקור: סיכום יומי מהיר"
+                  : summarySource === "raw_fallback"
+                    ? "מקור: fallback מנתונים גולמיים (זמני)"
+                    : "אין נתונים לתקופה שנבחרה"}
+              </p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={summaryDays}
+                  onChange={(e) => setSummaryDays(Number(e.target.value) as 2 | 7)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                >
+                  <option value={2}>יומיים אחרונים</option>
+                  <option value={7}>7 ימים אחרונים</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => void loadSummary(summaryDays)}
+                  disabled={loadingSummary}
+                  className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  {loadingSummary ? "טוען..." : "רענן"}
+                </button>
+              </div>
+            </div>
+
+            {summaryRows.length === 0 ? (
+              <p className="text-sm text-gray-500">אין נתוני סיכום לתקופה שנבחרה.</p>
+            ) : (
+              <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
+                {summaryRows.map((r) => (
+                  <div
+                    key={`${r.date}-${r.userId}`}
+                    className="p-3 border border-gray-200 rounded-xl text-sm hover:border-primary-200 transition-colors"
+                  >
+                    <div className="flex flex-wrap items-center gap-2 text-gray-800">
+                      <span className="font-semibold">{r.name}</span>
+                      <span className="text-xs text-gray-500">{r.email}</span>
+                      <span className="text-xs text-gray-400">· {r.date}</span>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-1">
+                      דקות פעילות: {r.activeMinutes} · צפיות מסך: {r.pageViews} · כניסות: {r.loginCount}
+                      {r.lastRoute ? ` · דף אחרון: ${r.lastRoute}` : ""}
+                      {r.lastSeenAt
+                        ? ` · נראה לאחרונה: ${new Date(r.lastSeenAt).toLocaleString("he-IL")}`
+                        : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

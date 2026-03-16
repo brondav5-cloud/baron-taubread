@@ -68,5 +68,80 @@ export async function GET(request: NextRequest) {
     lastSeenAt: r.last_seen_at ?? null,
   }));
 
-  return NextResponse.json({ ok: true, days, rows });
+  if (rows.length > 0) {
+    return NextResponse.json({ ok: true, days, rows, source: "daily_summary" });
+  }
+
+  // Fallback: aggregate from raw events if daily summary is empty.
+  // This keeps UX useful even before the summary migration starts accumulating data.
+  const { data: rawEvents, error: rawError } = await admin
+    .from("user_activity_events")
+    .select("created_at, user_id, event_type, route")
+    .gte("created_at", `${fromDate}T00:00:00.000Z`)
+    .order("created_at", { ascending: false })
+    .limit(3000);
+
+  if (rawError) {
+    return NextResponse.json({ ok: true, days, rows: [], source: "empty" });
+  }
+
+  const rawUserIds = Array.from(new Set((rawEvents ?? []).map((e) => e.user_id)));
+  const { data: rawUsersRows } = rawUserIds.length
+    ? await admin.from("users").select("id, name, email").in("id", rawUserIds)
+    : { data: [] as Array<{ id: string; name: string | null; email: string }> };
+  const rawUsersMap = new Map((rawUsersRows ?? []).map((u) => [u.id, u]));
+
+  type Agg = {
+    date: string;
+    userId: string;
+    loginCount: number;
+    pageViews: number;
+    heartbeatCount: number;
+    activeMinutes: number;
+    lastRoute: string | null;
+    lastSeenAt: string | null;
+  };
+
+  const agg = new Map<string, Agg>();
+  for (const e of rawEvents ?? []) {
+    const date = e.created_at.slice(0, 10);
+    const key = `${date}:${e.user_id}`;
+    const prev = agg.get(key) ?? {
+      date,
+      userId: e.user_id,
+      loginCount: 0,
+      pageViews: 0,
+      heartbeatCount: 0,
+      activeMinutes: 0,
+      lastRoute: null,
+      lastSeenAt: null,
+    };
+    if (e.event_type === "login") prev.loginCount += 1;
+    if (e.event_type === "page_view") {
+      prev.pageViews += 1;
+      prev.activeMinutes += 1;
+    }
+    if (e.event_type === "heartbeat") {
+      prev.heartbeatCount += 1;
+      prev.activeMinutes += 1;
+    }
+    if (!prev.lastSeenAt) {
+      prev.lastSeenAt = e.created_at;
+      prev.lastRoute = e.route ?? null;
+    }
+    agg.set(key, prev);
+  }
+
+  const fallbackRows = Array.from(agg.values())
+    .sort((a, b) => {
+      if (a.date === b.date) return (b.lastSeenAt ?? "").localeCompare(a.lastSeenAt ?? "");
+      return b.date.localeCompare(a.date);
+    })
+    .map((r) => ({
+      ...r,
+      name: rawUsersMap.get(r.userId)?.name ?? "משתמש",
+      email: rawUsersMap.get(r.userId)?.email ?? "",
+    }));
+
+  return NextResponse.json({ ok: true, days, rows: fallbackRows, source: "raw_fallback" });
 }
