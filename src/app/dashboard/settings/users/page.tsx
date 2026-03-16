@@ -8,7 +8,7 @@ import { UserEditModal } from "@/components/settings/users/UserEditModal";
 import toast from "react-hot-toast";
 
 export default function UsersSettingsPage() {
-  const { allUsers, isLoading, removeUser } = useUsers();
+  const { allUsers, isLoading, removeUser, currentUser } = useUsers();
   const authState = useAuth();
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -21,7 +21,12 @@ export default function UsersSettingsPage() {
   const [sendingForceLogout, setSendingForceLogout] = useState(false);
   const [clearingForceLogout, setClearingForceLogout] = useState(false);
 
-  const role = authState.status === "authed" ? authState.user.selectedCompanyRole ?? authState.user.role : null;
+  const role =
+    authState.status === "authed"
+      ? authState.user.selectedCompanyRole ??
+        authState.user.role ??
+        currentUser.role
+      : currentUser.role;
   const canSendResetAll = role === "admin" || role === "super_admin";
 
   const handleSendPasswordResetAll = async () => {

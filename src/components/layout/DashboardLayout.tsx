@@ -10,6 +10,7 @@ import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { WhoamiCompany } from "@/context/SupabaseAuthContext";
 import { Building2, Loader2 } from "lucide-react";
 import { ForceLogoutBanner } from "./ForceLogoutBanner";
+import { AppUpdateBanner } from "./AppUpdateBanner";
 
 interface DashboardLayoutProps {
   children: ReactNode;
@@ -81,6 +82,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
           <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
           <div className="flex-1 min-w-0 flex flex-col">
             <Header onMenuClick={() => setSidebarOpen(true)} />
+            <AppUpdateBanner />
             <main className="flex-1 p-4 lg:p-6 min-w-0 pb-20 lg:pb-6">
               {children}
             </main>
