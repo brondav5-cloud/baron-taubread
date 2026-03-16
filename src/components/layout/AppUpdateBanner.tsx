@@ -10,6 +10,8 @@ interface VersionPayload {
 }
 
 const POLL_MS = 60_000;
+const UPDATE_KEY = "app_update_available_version";
+const DISMISSED_KEY = "app_update_dismissed_version";
 
 export function AppUpdateBanner() {
   const initialVersionRef = useRef<string | null>(null);
@@ -27,6 +29,22 @@ export function AppUpdateBanner() {
 
       if (!initialVersionRef.current) {
         initialVersionRef.current = version;
+
+        const pendingVersion = sessionStorage.getItem(UPDATE_KEY);
+        const dismissedVersion = sessionStorage.getItem(DISMISSED_KEY);
+
+        // If we already reloaded into the pending version, clear stale flags.
+        if (pendingVersion && pendingVersion === version) {
+          sessionStorage.removeItem(UPDATE_KEY);
+          sessionStorage.removeItem(DISMISSED_KEY);
+        }
+
+        // If a newer version was already detected in this tab, keep showing banner
+        // across all dashboard pages (even after navigation/remount).
+        if (pendingVersion && pendingVersion !== version) {
+          setHasUpdate(true);
+          setDismissed(dismissedVersion === pendingVersion);
+        }
         return;
       }
 
@@ -35,6 +53,9 @@ export function AppUpdateBanner() {
       }
 
       if (version !== initialVersionRef.current) {
+        sessionStorage.setItem(UPDATE_KEY, version);
+        sessionStorage.removeItem(DISMISSED_KEY);
+        setDismissed(false);
         setHasUpdate(true);
       }
     } catch {
@@ -47,6 +68,14 @@ export function AppUpdateBanner() {
     const id = setInterval(() => void checkVersion(), POLL_MS);
     return () => clearInterval(id);
   }, [checkVersion]);
+
+  const handleDismiss = () => {
+    const pendingVersion = sessionStorage.getItem(UPDATE_KEY);
+    if (pendingVersion) {
+      sessionStorage.setItem(DISMISSED_KEY, pendingVersion);
+    }
+    setDismissed(true);
+  };
 
   if (!hasUpdate || dismissed) return null;
 
@@ -63,7 +92,7 @@ export function AppUpdateBanner() {
         {!forceRefresh && (
           <button
             type="button"
-            onClick={() => setDismissed(true)}
+            onClick={handleDismiss}
             className="rounded-lg p-1.5 hover:bg-blue-100 transition-colors"
             title="סגור"
           >
