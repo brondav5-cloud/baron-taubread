@@ -8,6 +8,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { UserEditModal } from "@/components/settings/users/UserEditModal";
 import toast from "react-hot-toast";
 
+interface TrackedUserActivity {
+  userId: string;
+  name: string;
+  email: string;
+  events24h: number;
+  lastSeenAt: string | null;
+  lastRoute: string | null;
+}
+
 export default function UsersSettingsPage() {
   const router = useRouter();
   const { allUsers, isLoading, removeUser, currentUser } = useUsers();
@@ -22,6 +31,10 @@ export default function UsersSettingsPage() {
   const [forceLogoutMinutes, setForceLogoutMinutes] = useState(5);
   const [sendingForceLogout, setSendingForceLogout] = useState(false);
   const [clearingForceLogout, setClearingForceLogout] = useState(false);
+  const [trackedEmail, setTrackedEmail] = useState("");
+  const [trackedUsers, setTrackedUsers] = useState<TrackedUserActivity[]>([]);
+  const [loadingTracked, setLoadingTracked] = useState(false);
+  const [savingTracked, setSavingTracked] = useState(false);
 
   const role =
     authState.status === "authed"
@@ -37,9 +50,78 @@ export default function UsersSettingsPage() {
     }
   }, [authState.status, canSendResetAll, router]);
 
-  if (authState.status === "loading" || !canSendResetAll) {
-    return null;
-  }
+  const loadTrackedUsers = async () => {
+    setLoadingTracked(true);
+    try {
+      const res = await fetch("/api/admin/activity/tracked-users", {
+        cache: "no-store",
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בטעינת משתמשים במעקב");
+        return;
+      }
+      setTrackedUsers(Array.isArray(data.users) ? data.users : []);
+    } catch {
+      toast.error("שגיאה בטעינת משתמשים במעקב");
+    } finally {
+      setLoadingTracked(false);
+    }
+  };
+
+  const handleAddTrackedUser = async () => {
+    const email = trackedEmail.trim().toLowerCase();
+    if (!email) return;
+    setSavingTracked(true);
+    try {
+      const res = await fetch("/api/admin/activity/tracked-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בהוספה למעקב");
+        return;
+      }
+      toast.success("המשתמש נוסף למעקב");
+      setTrackedEmail("");
+      await loadTrackedUsers();
+    } catch {
+      toast.error("שגיאה בהוספה למעקב");
+    } finally {
+      setSavingTracked(false);
+    }
+  };
+
+  const handleRemoveTrackedUser = async (userId: string) => {
+    if (!confirm("להסיר את המשתמש ממעקב?")) return;
+    setSavingTracked(true);
+    try {
+      const res = await fetch("/api/admin/activity/tracked-users", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast.error(data.error ?? "שגיאה בהסרה ממעקב");
+        return;
+      }
+      toast.success("המשתמש הוסר ממעקב");
+      await loadTrackedUsers();
+    } catch {
+      toast.error("שגיאה בהסרה ממעקב");
+    } finally {
+      setSavingTracked(false);
+    }
+  };
+
+  useEffect(() => {
+    if (canSendResetAll) {
+      void loadTrackedUsers();
+    }
+  }, [canSendResetAll]);
 
   const handleSendPasswordResetAll = async () => {
     if (!confirm("לשלוח אימייל איפוס סיסמה לכל המשתמשים? כל אחד יקבל לינק להגדרת סיסמה חדשה.")) return;
@@ -115,6 +197,10 @@ export default function UsersSettingsPage() {
       toast.error("שגיאה בהסרת משתמש");
     }
   };
+
+  if (authState.status === "loading" || !canSendResetAll) {
+    return null;
+  }
 
   return (
     <div className="space-y-6">
@@ -326,6 +412,79 @@ export default function UsersSettingsPage() {
           </div>
         </div>
       )}
+
+      <div className="bg-white rounded-2xl shadow-sm p-5 space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">ניטור משתמשים</h2>
+            <p className="text-sm text-gray-500">
+              מעקב קל על כניסות ופעילות בסיסית למשתמשים נבחרים
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void loadTrackedUsers()}
+            disabled={loadingTracked || savingTracked}
+            className="px-3 py-2 rounded-lg border border-gray-200 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+          >
+            {loadingTracked ? "טוען..." : "רענן"}
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <input
+            type="email"
+            value={trackedEmail}
+            onChange={(e) => setTrackedEmail(e.target.value)}
+            placeholder="הוסף משתמש למעקב לפי אימייל"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+            dir="ltr"
+          />
+          <button
+            type="button"
+            onClick={() => void handleAddTrackedUser()}
+            disabled={savingTracked || !trackedEmail.trim()}
+            className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm hover:bg-primary-600 disabled:opacity-50"
+          >
+            הוסף
+          </button>
+        </div>
+
+        {trackedUsers.length === 0 ? (
+          <p className="text-sm text-gray-500">אין משתמשים במעקב כרגע.</p>
+        ) : (
+          <div className="space-y-2">
+            {trackedUsers.map((u) => (
+              <div
+                key={u.userId}
+                className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-900 truncate">
+                    {u.name}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    פעילות 24ש׳: {u.events24h} · אחרון:{" "}
+                    {u.lastSeenAt
+                      ? new Date(u.lastSeenAt).toLocaleString("he-IL")
+                      : "אין"}
+                    {u.lastRoute ? ` · דף: ${u.lastRoute}` : ""}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveTrackedUser(u.userId)}
+                  disabled={savingTracked}
+                  className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 disabled:opacity-50"
+                >
+                  הסר
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

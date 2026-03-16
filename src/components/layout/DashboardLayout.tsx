@@ -7,6 +7,7 @@ import Header from "./Header";
 import MobileBottomNav from "./MobileBottomNav";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
+import { useUserActivityTracker } from "@/hooks/useUserActivityTracker";
 import type { WhoamiCompany } from "@/context/SupabaseAuthContext";
 import { Building2, Loader2 } from "lucide-react";
 import { ForceLogoutBanner } from "./ForceLogoutBanner";
@@ -23,6 +24,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const { selectCompany } = useSupabaseAuth();
   const router = useRouter();
   const pathname = usePathname();
+  useUserActivityTracker();
 
   useEffect(() => {
     if (auth.status === "anon") {
