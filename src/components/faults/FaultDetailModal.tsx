@@ -47,7 +47,11 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
     kind: "image" | "pdf";
     url: string;
     name: string;
+    downloadUrl: string;
+    isObjectUrl?: boolean;
   } | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   // Always get the LIVE fault from context — realtime updates are reflected automatically
   const fault = faults.find((f) => f.id === faultId) ?? null;
@@ -64,7 +68,12 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
   // Reset comment input when the modal opens for a different fault
   useEffect(() => {
     setCommentText("");
+    if (preview?.isObjectUrl) URL.revokeObjectURL(preview.url);
     setPreview(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+    // Intentionally depends on fault switch only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [faultId]);
 
   if (!faultId || !fault) return null;
@@ -120,6 +129,45 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
     const name = doc.name.toLowerCase();
     const type = doc.type.toLowerCase();
     return name.endsWith(".pdf") || type.includes("pdf");
+  };
+
+  const closePreview = () => {
+    if (preview?.isObjectUrl) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+  };
+
+  const openPdfPreview = async (doc: FaultDocument) => {
+    setPreviewError(null);
+    setPreviewLoading(true);
+    try {
+      const res = await fetch(doc.url, { cache: "no-store" });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      if (preview?.isObjectUrl) URL.revokeObjectURL(preview.url);
+      setPreview({
+        kind: "pdf",
+        url: blobUrl,
+        name: doc.name,
+        downloadUrl: doc.url,
+        isObjectUrl: true,
+      });
+    } catch (err) {
+      console.error("[FaultDetailModal] PDF preview failed:", err);
+      setPreview({
+        kind: "pdf",
+        url: doc.url,
+        name: doc.name,
+        downloadUrl: doc.url,
+      });
+      setPreviewError("לא ניתן להציג תצוגה מקדימה לקובץ הזה בדפדפן.");
+    } finally {
+      setPreviewLoading(false);
+    }
   };
 
   return (
@@ -196,6 +244,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
                       kind: "image",
                       url,
                       name: `photo-${i + 1}.jpg`,
+                      downloadUrl: url,
                     })
                   }
                   className="relative w-24 h-24 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100"
@@ -221,11 +270,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
                     key={doc.path}
                     onClick={() => {
                       if (isPdfDoc(doc)) {
-                        setPreview({
-                          kind: "pdf",
-                          url: doc.url,
-                          name: doc.name,
-                        });
+                        void openPdfPreview(doc);
                         return;
                       }
                       window.open(doc.url, "_blank", "noopener,noreferrer");
@@ -353,7 +398,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div
             className="absolute inset-0 bg-black/80"
-            onClick={() => setPreview(null)}
+            onClick={closePreview}
           />
           <div className="relative w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
@@ -362,7 +407,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
               </p>
               <div className="flex items-center gap-2">
                 <a
-                  href={preview.url}
+                  href={preview.downloadUrl}
                   download={preview.name}
                   className="inline-flex items-center gap-2 px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm hover:bg-primary-700 transition-colors"
                 >
@@ -371,7 +416,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
                 </a>
                 <button
                   type="button"
-                  onClick={() => setPreview(null)}
+                  onClick={closePreview}
                   className="p-2 hover:bg-gray-100 rounded-lg"
                 >
                   <X className="w-5 h-5 text-gray-500" />
@@ -379,9 +424,18 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
               </div>
             </div>
             <div className="bg-gray-100 h-[80vh]">
-              {preview.kind === "pdf" ? (
+              {previewError && (
+                <div className="px-4 py-3 text-sm text-amber-700 bg-amber-50 border-b border-amber-200">
+                  {previewError}
+                </div>
+              )}
+              {previewLoading ? (
+                <div className="w-full h-full flex items-center justify-center text-gray-500">
+                  טוען תצוגה מקדימה...
+                </div>
+              ) : preview.kind === "pdf" ? (
                 <iframe
-                  src={preview.url}
+                  src={`${preview.url}#toolbar=1&navpanes=0&view=FitH`}
                   title={preview.name}
                   className="w-full h-full"
                 />
