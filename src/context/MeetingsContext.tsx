@@ -271,29 +271,33 @@ async function _createPendingTasks(
   const trunc = (s: string, max: number) =>
     s.length > max ? s.slice(0, max - 1) + "…" : s;
 
-  // Send notifications to ALL assignees
+  // Send one digest notification per assignee (instead of SMS per task)
+  const byAssignee = new Map<string, { count: number; tasks: string[] }>();
+  for (const pt of newTasks) {
+    for (const uid of pt.assigneeUserIds.filter(Boolean)) {
+      const current = byAssignee.get(uid) ?? { count: 0, tasks: [] };
+      current.count += 1;
+      if (current.tasks.length < 2) current.tasks.push(trunc(pt.taskTitle, 40));
+      byAssignee.set(uid, current);
+    }
+  }
+
+  const meetingShort = trunc(meetingTitle, 25);
   await Promise.all(
-    newTasks.flatMap((pt) => {
-      const taskTitle = trunc(pt.taskTitle, 50);
-      const meetingShort = trunc(meetingTitle, 25);
-      const dueDateStr = pt.dueDate
-        ? `\nעד: ${new Date(pt.dueDate + "T00:00:00").toLocaleDateString("he-IL")}`
-        : "";
-      return pt.assigneeUserIds
-        .filter(Boolean)
-        .map((uid) =>
-          sendNotificationAsync({
-            recipientUserIds: [uid],
-            type: "task_assigned",
-            title: `📌 ${taskTitle}`,
-            body: `מישיבת: ${meetingShort}${dueDateStr}`,
-            url: `/dashboard/meetings/${meetingId}`,
-            referenceId: meetingId,
-            referenceType: "task",
-            sendEmail: true,
-            sendSms: true,
-          }),
-        );
+    Array.from(byAssignee.entries()).map(([uid, summary]) => {
+      const examples =
+        summary.tasks.length > 0 ? ` לדוגמה: ${summary.tasks.join(", ")}` : "";
+      return sendNotificationAsync({
+        recipientUserIds: [uid],
+        type: "task_assigned",
+        title: `הוקצו לך ${summary.count} משימות`,
+        body: `מישיבת: ${meetingShort}.${examples}`,
+        url: `/dashboard/meetings/${meetingId}`,
+        referenceId: meetingId,
+        referenceType: "task",
+        sendEmail: true,
+        sendSms: true,
+      });
     }),
   );
 

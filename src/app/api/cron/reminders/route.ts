@@ -18,8 +18,56 @@ export async function GET(request: NextRequest) {
   let taskReminders = 0;
   let workflowReminders = 0;
   let faultReminders = 0;
+  let userDigestsSent = 0;
 
   try {
+    type DailyDigest = {
+      companyId: string;
+      recipientUserId: string;
+      taskCount: number;
+      workflowCount: number;
+      faultCount: number;
+      taskSamples: string[];
+      workflowSamples: string[];
+      faultSamples: string[];
+    };
+
+    const digestByUser = new Map<string, DailyDigest>();
+    const addToDigest = (
+      companyId: string,
+      recipientUserId: string,
+      kind: "task" | "workflow" | "fault",
+      sampleTitle: string,
+    ) => {
+      const key = `${companyId}:${recipientUserId}`;
+      const current = digestByUser.get(key) ?? {
+        companyId,
+        recipientUserId,
+        taskCount: 0,
+        workflowCount: 0,
+        faultCount: 0,
+        taskSamples: [],
+        workflowSamples: [],
+        faultSamples: [],
+      };
+
+      if (kind === "task") {
+        current.taskCount += 1;
+        if (current.taskSamples.length < 2) current.taskSamples.push(sampleTitle);
+      }
+      if (kind === "workflow") {
+        current.workflowCount += 1;
+        if (current.workflowSamples.length < 2)
+          current.workflowSamples.push(sampleTitle);
+      }
+      if (kind === "fault") {
+        current.faultCount += 1;
+        if (current.faultSamples.length < 2) current.faultSamples.push(sampleTitle);
+      }
+
+      digestByUser.set(key, current);
+    };
+
     // --- Overdue Tasks ---
     const { data: overdueTasks } = await admin
       .from("tasks")
@@ -36,33 +84,10 @@ export async function GET(request: NextRequest) {
           .map((a) => a.userId);
 
         if (activeAssignees.length === 0) continue;
-
-        // Check if we already sent a reminder for this task today
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-
-        const { count } = await admin
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("reference_id", task.id)
-          .eq("type", "reminder")
-          .gte("created_at", todayStart.toISOString());
-
-        if (count && count > 0) continue;
-
-        await sendPushToUsers({
-          companyId: task.company_id,
-          recipientUserIds: activeAssignees,
-          type: "reminder",
-          title: "תזכורת: משימה באיחור",
-          body: `המשימה "${task.title}" עברה את תאריך היעד`,
-          url: "/dashboard/tasks",
-          referenceId: task.id,
-          referenceType: "task",
-          sendEmail: true,
-          sendSms: true,
-        });
-        taskReminders++;
+        for (const uid of activeAssignees) {
+          addToDigest(task.company_id, uid, "task", task.title);
+          taskReminders++;
+        }
       }
     }
 
@@ -85,31 +110,10 @@ export async function GET(request: NextRequest) {
           }
         }
 
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-
-        const { count } = await admin
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("reference_id", wf.id)
-          .eq("type", "reminder")
-          .gte("created_at", todayStart.toISOString());
-
-        if (count && count > 0) continue;
-
-        await sendPushToUsers({
-          companyId: wf.company_id,
-          recipientUserIds: Array.from(userIds),
-          type: "reminder",
-          title: "תזכורת: תכנון עבודה באיחור",
-          body: `"${wf.title}" עבר את תאריך היעד`,
-          url: "/dashboard/work-plan",
-          referenceId: wf.id,
-          referenceType: "task",
-          sendEmail: true,
-          sendSms: true,
-        });
-        workflowReminders++;
+        for (const uid of Array.from(userIds)) {
+          addToDigest(wf.company_id, uid, "workflow", wf.title);
+          workflowReminders++;
+        }
       }
     }
 
@@ -138,32 +142,59 @@ export async function GET(request: NextRequest) {
         ).filter(Boolean);
         if (recipients.length === 0) continue;
 
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-
-        const { count } = await admin
-          .from("notifications")
-          .select("id", { count: "exact", head: true })
-          .eq("reference_id", fault.id)
-          .eq("type", "reminder")
-          .gte("created_at", todayStart.toISOString());
-
-        if (count && count > 0) continue;
-
-        await sendPushToUsers({
-          companyId: fault.company_id,
-          recipientUserIds: recipients,
-          type: "reminder",
-          title: "תזכורת: תקלה פתוחה",
-          body: `התקלה "${fault.title}" פתוחה כבר מעל 3 ימים`,
-          url: "/dashboard/faults",
-          referenceId: fault.id,
-          referenceType: "fault",
-          sendEmail: true,
-          sendSms: true,
-        });
-        faultReminders++;
+        for (const uid of recipients) {
+          addToDigest(fault.company_id, uid, "fault", fault.title);
+          faultReminders++;
+        }
       }
+    }
+
+    // --- Send one daily digest per user ---
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const dailyRef = `daily-reminder:${todayStart.toISOString().slice(0, 10)}`;
+
+    for (const digest of Array.from(digestByUser.values())) {
+      const { count } = await admin
+        .from("notifications")
+        .select("id", { count: "exact", head: true })
+        .eq("recipient_user_id", digest.recipientUserId)
+        .eq("type", "reminder")
+        .eq("reference_id", dailyRef)
+        .gte("created_at", todayStart.toISOString());
+
+      if (count && count > 0) continue;
+
+      const totalOverdue =
+        digest.taskCount + digest.workflowCount + digest.faultCount;
+      const parts: string[] = [];
+      if (digest.taskCount > 0) parts.push(`${digest.taskCount} משימות`);
+      if (digest.workflowCount > 0)
+        parts.push(`${digest.workflowCount} פריטי תכנון`);
+      if (digest.faultCount > 0) parts.push(`${digest.faultCount} תקלות`);
+
+      const samples = [
+        ...digest.taskSamples,
+        ...digest.workflowSamples,
+        ...digest.faultSamples,
+      ]
+        .slice(0, 2)
+        .map((s) => `• ${s}`)
+        .join(" ");
+
+      await sendPushToUsers({
+        companyId: digest.companyId,
+        recipientUserIds: [digest.recipientUserId],
+        type: "reminder",
+        title: `תזכורת יומית: ${totalOverdue} באיחור`,
+        body: `${parts.join(", ")} באיחור. ${samples}`.trim(),
+        url: "/dashboard/tasks",
+        referenceId: dailyRef,
+        referenceType: "task",
+        sendEmail: true,
+        sendSms: true,
+      });
+      userDigestsSent++;
     }
 
     return NextResponse.json({
@@ -171,6 +202,7 @@ export async function GET(request: NextRequest) {
       taskReminders,
       workflowReminders,
       faultReminders,
+      userDigestsSent,
       checkedAt: now,
     });
   } catch (err) {

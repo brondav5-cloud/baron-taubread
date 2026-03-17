@@ -9,6 +9,20 @@ export interface SmsPayload {
   body: string;
 }
 
+const MAX_SMS_CHARS = 200;
+
+function toSmsSafeBody(text: string): string {
+  const normalized = text
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]+/g, " ")
+    .trim();
+
+  const chars = Array.from(normalized);
+  if (chars.length <= MAX_SMS_CHARS) return normalized;
+  return `${chars.slice(0, MAX_SMS_CHARS - 1).join("")}…`;
+}
+
 /**
  * Normalize phone number for Israeli format (05xxxxxxxx or 5xxxxxxxx)
  */
@@ -53,7 +67,7 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
     unsubscribe_text: string;
   } = {
     name: `op-${Date.now()}`,
-    content: payload.body,
+    content: toSmsSafeBody(payload.body),
     can_unsubscribe: false,
     unsubscribe_text: "",
   };
