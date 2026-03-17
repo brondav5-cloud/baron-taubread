@@ -1,3 +1,5 @@
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
 const API_TOKEN = process.env.SMSPLUS_API_TOKEN ?? "";
 const SENDER = process.env.SMSPLUS_SENDER || "BARON";
 const PROFILE_ID = process.env.SMSPLUS_PROFILE_ID;
@@ -10,6 +12,15 @@ export interface SmsPayload {
 }
 
 const MAX_SMS_CHARS = 200;
+const SMS_WINDOW_START_HOUR = 7;
+const SMS_WINDOW_END_HOUR = 20;
+
+interface SmsOutboxRow {
+  id: string;
+  to_phone: string;
+  body: string;
+  attempts: number;
+}
 
 function toSmsSafeBody(text: string): string {
   const normalized = text
@@ -21,6 +32,20 @@ function toSmsSafeBody(text: string): string {
   const chars = Array.from(normalized);
   if (chars.length <= MAX_SMS_CHARS) return normalized;
   return `${chars.slice(0, MAX_SMS_CHARS - 1).join("")}…`;
+}
+
+function getIsraelHour(now: Date = new Date()): number {
+  const hourText = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jerusalem",
+    hour: "2-digit",
+    hour12: false,
+  }).format(now);
+  return Number(hourText);
+}
+
+function isWithinSmsWindow(now: Date = new Date()): boolean {
+  const hour = getIsraelHour(now);
+  return hour >= SMS_WINDOW_START_HOUR && hour < SMS_WINDOW_END_HOUR;
 }
 
 /**
@@ -45,7 +70,27 @@ function normalizePhone(phone: string): string | null {
   return cleaned;
 }
 
-export async function sendSms(payload: SmsPayload): Promise<boolean> {
+async function queueSms(payload: SmsPayload): Promise<boolean> {
+  try {
+    const admin = getSupabaseAdmin();
+    const { error } = await admin.from("sms_outbox").insert({
+      to_phone: payload.to,
+      body: payload.body,
+      status: "pending",
+      attempts: 0,
+    });
+    if (error) {
+      console.error("[sendSms] failed to queue SMS:", error.message);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.error("[sendSms] failed to queue SMS:", err);
+    return false;
+  }
+}
+
+async function sendSmsNow(payload: SmsPayload): Promise<boolean> {
   if (!API_TOKEN) {
     console.warn("[sendSms] ActiveTrail not configured (SMSPLUS_API_TOKEN)");
     return false;
@@ -122,4 +167,96 @@ export async function sendSms(payload: SmsPayload): Promise<boolean> {
     console.error("[sendSms] error:", err);
     throw err;
   }
+}
+
+export async function sendSms(payload: SmsPayload): Promise<boolean> {
+  const normalizedPhone = normalizePhone(payload.to);
+  if (!normalizedPhone) {
+    console.warn("[sendSms] Invalid phone number:", payload.to);
+    return false;
+  }
+
+  const safePayload: SmsPayload = {
+    to: normalizedPhone,
+    body: toSmsSafeBody(payload.body),
+  };
+
+  if (!isWithinSmsWindow()) {
+    return queueSms(safePayload);
+  }
+
+  return sendSmsNow(safePayload);
+}
+
+export async function flushQueuedSms(maxBatch = 200): Promise<{
+  processed: number;
+  sent: number;
+  failed: number;
+  skippedByWindow: boolean;
+}> {
+  if (!isWithinSmsWindow()) {
+    return { processed: 0, sent: 0, failed: 0, skippedByWindow: true };
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data, error } = await admin
+    .from("sms_outbox")
+    .select("id, to_phone, body, attempts")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true })
+    .limit(maxBatch);
+
+  if (error) {
+    console.error("[flushQueuedSms] query failed:", error.message);
+    return { processed: 0, sent: 0, failed: 0, skippedByWindow: false };
+  }
+
+  const rows = (data ?? []) as SmsOutboxRow[];
+  let sent = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    try {
+      const ok = await sendSmsNow({ to: row.to_phone, body: row.body });
+      if (ok) {
+        sent++;
+        await admin
+          .from("sms_outbox")
+          .update({
+            status: "sent",
+            sent_at: new Date().toISOString(),
+            attempts: row.attempts + 1,
+            last_error: null,
+          })
+          .eq("id", row.id);
+      } else {
+        failed++;
+        await admin
+          .from("sms_outbox")
+          .update({
+            attempts: row.attempts + 1,
+            last_error: "provider returned false",
+          })
+          .eq("id", row.id);
+      }
+    } catch (err) {
+      failed++;
+      const nextAttempts = row.attempts + 1;
+      await admin
+        .from("sms_outbox")
+        .update({
+          status: nextAttempts >= 3 ? "failed" : "pending",
+          attempts: nextAttempts,
+          last_error: err instanceof Error ? err.message : "unknown error",
+        })
+        .eq("id", row.id);
+    }
+  }
+
+  return {
+    processed: rows.length,
+    sent,
+    failed,
+    skippedByWindow: false,
+  };
 }

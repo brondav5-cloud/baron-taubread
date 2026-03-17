@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sendPushToUsers } from "@/lib/notifications/sendPush";
+import { flushQueuedSms } from "@/lib/notifications/sendSms";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
@@ -19,6 +20,10 @@ export async function GET(request: NextRequest) {
   let workflowReminders = 0;
   let faultReminders = 0;
   let userDigestsSent = 0;
+  let smsQueueProcessed = 0;
+  let smsQueueSent = 0;
+  let smsQueueFailed = 0;
+  let smsQueueSkippedByWindow = false;
 
   try {
     type DailyDigest = {
@@ -197,12 +202,22 @@ export async function GET(request: NextRequest) {
       userDigestsSent++;
     }
 
+    const smsQueue = await flushQueuedSms(200);
+    smsQueueProcessed = smsQueue.processed;
+    smsQueueSent = smsQueue.sent;
+    smsQueueFailed = smsQueue.failed;
+    smsQueueSkippedByWindow = smsQueue.skippedByWindow;
+
     return NextResponse.json({
       ok: true,
       taskReminders,
       workflowReminders,
       faultReminders,
       userDigestsSent,
+      smsQueueProcessed,
+      smsQueueSent,
+      smsQueueFailed,
+      smsQueueSkippedByWindow,
       checkedAt: now,
     });
   } catch (err) {
