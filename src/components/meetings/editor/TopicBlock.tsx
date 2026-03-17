@@ -18,6 +18,7 @@ interface TopicBlockProps {
   onChangeRowType: (rowId: string, newType: RowType) => void;
   onRequestTaskEdit: (rowId: string) => void;
   onRequestConvert: (rowId: string, targetType: "decision" | "task") => void;
+  onAddTopic?: () => void;
 }
 
 export default function TopicBlock({
@@ -33,6 +34,7 @@ export default function TopicBlock({
   onChangeRowType,
   onRequestTaskEdit,
   onRequestConvert,
+  onAddTopic,
 }: TopicBlockProps) {
   const titleRef = useRef<HTMLInputElement>(null);
 
@@ -91,7 +93,7 @@ export default function TopicBlock({
       {/* Add row bar (desktop) */}
       {!readonly && (
         <div className="px-3 pb-3">
-          <AddRowBar onAdd={(type) => onAddRow(type)} />
+          <AddRowBar onAdd={(type) => onAddRow(type)} onAddTopic={onAddTopic} />
         </div>
       )}
     </div>

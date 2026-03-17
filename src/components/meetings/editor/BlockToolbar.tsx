@@ -39,11 +39,22 @@ export default function BlockToolbar({ onAdd }: BlockToolbarProps) {
 // Desktop inline add-row bar (shown inside each topic)
 interface AddRowBarProps {
   onAdd: (type: RowType) => void;
+  onAddTopic?: () => void;
 }
 
-export function AddRowBar({ onAdd }: AddRowBarProps) {
+export function AddRowBar({ onAdd, onAddTopic }: AddRowBarProps) {
   return (
     <div className="flex gap-2 mt-2 pt-2 border-t border-dashed border-gray-200">
+      {onAddTopic && (
+        <button
+          type="button"
+          onClick={onAddTopic}
+          className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors text-indigo-600 hover:bg-indigo-50 border-indigo-200"
+        >
+          <span>📋</span>
+          <span>+ נושא</span>
+        </button>
+      )}
       {(["text", "decision", "task"] as RowType[]).map((type) => {
         const cfg = {
           text: {
