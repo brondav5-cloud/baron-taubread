@@ -136,9 +136,10 @@ export default function GlobalSearch() {
 
       <div
         className={clsx(
-          "relative hidden sm:block",
-          isMobileExpanded &&
-            "fixed top-[calc(env(safe-area-inset-top)+0.5rem)] right-2 left-2 z-50 block sm:hidden",
+          "relative",
+          isMobileExpanded
+            ? "fixed top-[calc(env(safe-area-inset-top)+0.5rem)] right-2 left-2 z-50 sm:hidden"
+            : "hidden sm:block",
         )}
       >
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

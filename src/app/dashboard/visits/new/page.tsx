@@ -12,13 +12,15 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { clsx } from "clsx";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNewVisit } from "@/hooks/useNewVisit";
 import { VisitPhotosSection } from "@/components/visits/VisitPhotosSection";
 import { VisitCompetitorsSection } from "@/components/visits/VisitCompetitorsSection";
 
 export default function NewVisitPage() {
   const [storeSearch, setStoreSearch] = useState("");
+  const [showStoreSuggestions, setShowStoreSuggestions] = useState(false);
+  const storeSearchContainerRef = useRef<HTMLDivElement>(null);
   const {
     allStores,
     store,
@@ -48,13 +50,22 @@ export default function NewVisitPage() {
     goBack,
   } = useNewVisit();
 
+  const normalizeHebrew = (value: string) =>
+    value
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0591-\u05C7]/g, "")
+      .replace(/[\"'׳״`-]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
   const filteredStores = useMemo(() => {
-    const searchTerm = storeSearch.trim().toLowerCase();
+    const searchTerm = normalizeHebrew(storeSearch);
     if (!searchTerm) return allStores;
     return allStores.filter((s) => {
-      const name = s.name.toLowerCase();
-      const city = (s.city ?? "").toLowerCase();
-      const agent = (s.agent ?? "").toLowerCase();
+      const name = normalizeHebrew(s.name);
+      const city = normalizeHebrew(s.city ?? "");
+      const agent = normalizeHebrew(s.agent ?? "");
       return (
         name.includes(searchTerm) ||
         city.includes(searchTerm) ||
@@ -62,6 +73,30 @@ export default function NewVisitPage() {
       );
     });
   }, [allStores, storeSearch]);
+
+  const visibleStores = useMemo(
+    () => (storeSearch.trim() ? filteredStores : allStores.slice(0, 40)),
+    [allStores, filteredStores, storeSearch],
+  );
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        storeSearchContainerRef.current &&
+        !storeSearchContainerRef.current.contains(event.target as Node)
+      ) {
+        setShowStoreSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleStoreSelect = (storeId: string, storeLabel: string) => {
+    setSelectedStore(storeId);
+    setStoreSearch(storeLabel);
+    setShowStoreSuggestions(false);
+  };
 
   if (showSuccess) {
     return (
@@ -108,42 +143,64 @@ export default function NewVisitPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 בחר חנות *
               </label>
-              <div className="relative mb-2">
+              <div className="relative mb-2" ref={storeSearchContainerRef}>
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   value={storeSearch}
-                  onChange={(e) => setStoreSearch(e.target.value)}
+                  onChange={(e) => {
+                    setStoreSearch(e.target.value);
+                    setShowStoreSuggestions(true);
+                  }}
+                  onFocus={() => setShowStoreSuggestions(true)}
                   placeholder="חיפוש מהיר חנות..."
                   className="w-full pr-9 pl-9 py-2 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
                 />
                 {storeSearch && (
                   <button
                     type="button"
-                    onClick={() => setStoreSearch("")}
+                    onClick={() => {
+                      setStoreSearch("");
+                      setSelectedStore("");
+                      setShowStoreSuggestions(true);
+                    }}
                     className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     aria-label="נקה חיפוש"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 )}
+
+                {showStoreSuggestions && (
+                  <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">
+                    {visibleStores.length > 0 ? (
+                      visibleStores.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() =>
+                            handleStoreSelect(
+                              s.id.toString(),
+                              `${s.name}${s.city ? ` - ${s.city}` : ""}`,
+                            )
+                          }
+                          className="w-full px-3 py-2 text-sm text-right hover:bg-gray-50"
+                        >
+                          <span className="font-medium text-gray-900">{s.name}</span>
+                          {s.city && (
+                            <span className="text-gray-500"> - {s.city}</span>
+                          )}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-xs text-gray-500">
+                        לא נמצאו חנויות לחיפוש הזה
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-              <select
-                value={selectedStore}
-                onChange={(e) => setSelectedStore(e.target.value)}
-                required
-                className="w-full px-4 py-3 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
-              >
-                <option value="">בחר חנות...</option>
-                {filteredStores.map((s) => (
-                  <option key={s.id} value={s.id.toString()}>
-                    {s.name} - {s.city}
-                  </option>
-                ))}
-              </select>
-              {storeSearch && filteredStores.length === 0 && (
-                <p className="mt-2 text-xs text-gray-500">לא נמצאו חנויות לחיפוש הזה</p>
-              )}
+              <input type="hidden" value={selectedStore} required readOnly />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
