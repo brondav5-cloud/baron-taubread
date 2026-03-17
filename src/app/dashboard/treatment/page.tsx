@@ -78,7 +78,7 @@ export default function TreatmentPage() {
     reason: TreatmentReason,
     notes: string,
   ) => {
-    addStore(storeId, reason, notes);
+    return addStore(storeId, reason, notes);
   };
 
   const handleResolve = (storeId: number) => {

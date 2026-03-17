@@ -213,7 +213,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div>
               <span className="text-gray-500">דווח על ידי:</span>
               <p className="font-medium">{fault.reportedByName}</p>
@@ -395,12 +395,12 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
         </div>
       </div>
       {preview && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pt-[calc(1rem+env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto">
           <div
             className="absolute inset-0 bg-black/80"
             onClick={closePreview}
           />
-          <div className="relative w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl overflow-hidden shadow-2xl">
+          <div className="relative w-full max-w-5xl max-h-[min(92vh,calc(100dvh-2rem))] bg-white rounded-2xl overflow-hidden shadow-2xl">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
               <p className="text-sm font-medium text-gray-800 truncate">
                 {preview.name}
@@ -423,7 +423,7 @@ export function FaultDetailModal({ faultId, onClose }: FaultDetailModalProps) {
                 </button>
               </div>
             </div>
-            <div className="bg-gray-100 h-[80vh]">
+            <div className="bg-gray-100 h-[min(80vh,calc(100dvh-8rem))]">
               {previewError && (
                 <div className="px-4 py-3 text-sm text-amber-700 bg-amber-50 border-b border-amber-200">
                   {previewError}

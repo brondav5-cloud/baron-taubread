@@ -7,14 +7,18 @@ import {
   Link as LinkIcon,
   Clock,
   ListTodo,
+  Search,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { clsx } from "clsx";
+import { useMemo, useState } from "react";
 import { useNewVisit } from "@/hooks/useNewVisit";
 import { VisitPhotosSection } from "@/components/visits/VisitPhotosSection";
 import { VisitCompetitorsSection } from "@/components/visits/VisitCompetitorsSection";
 
 export default function NewVisitPage() {
+  const [storeSearch, setStoreSearch] = useState("");
   const {
     allStores,
     store,
@@ -43,6 +47,21 @@ export default function NewVisitPage() {
     handleSubmitAndCreateTask,
     goBack,
   } = useNewVisit();
+
+  const filteredStores = useMemo(() => {
+    const searchTerm = storeSearch.trim().toLowerCase();
+    if (!searchTerm) return allStores;
+    return allStores.filter((s) => {
+      const name = s.name.toLowerCase();
+      const city = (s.city ?? "").toLowerCase();
+      const agent = (s.agent ?? "").toLowerCase();
+      return (
+        name.includes(searchTerm) ||
+        city.includes(searchTerm) ||
+        agent.includes(searchTerm)
+      );
+    });
+  }, [allStores, storeSearch]);
 
   if (showSuccess) {
     return (
@@ -89,6 +108,26 @@ export default function NewVisitPage() {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 בחר חנות *
               </label>
+              <div className="relative mb-2">
+                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={storeSearch}
+                  onChange={(e) => setStoreSearch(e.target.value)}
+                  placeholder="חיפוש מהיר חנות..."
+                  className="w-full pr-9 pl-9 py-2 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
+                />
+                {storeSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setStoreSearch("")}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    aria-label="נקה חיפוש"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <select
                 value={selectedStore}
                 onChange={(e) => setSelectedStore(e.target.value)}
@@ -96,12 +135,15 @@ export default function NewVisitPage() {
                 className="w-full px-4 py-3 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
               >
                 <option value="">בחר חנות...</option>
-                {allStores.map((s) => (
+                {filteredStores.map((s) => (
                   <option key={s.id} value={s.id.toString()}>
                     {s.name} - {s.city}
                   </option>
                 ))}
               </select>
+              {storeSearch && filteredStores.length === 0 && (
+                <p className="mt-2 text-xs text-gray-500">לא נמצאו חנויות לחיפוש הזה</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

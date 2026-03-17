@@ -198,7 +198,7 @@ export function DateRangePicker({
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute top-full right-0 mt-2 bg-white border rounded-xl shadow-lg z-50 min-w-[280px]">
+          <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-[calc(env(safe-area-inset-top)+3.25rem)] sm:top-full sm:mt-2 bg-white border rounded-xl shadow-lg z-50 sm:min-w-[280px] sm:max-w-none max-h-[70dvh] overflow-y-auto">
             {/* Presets */}
             <div className="p-2 border-b">
               <div className="grid grid-cols-2 gap-1">

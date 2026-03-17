@@ -197,7 +197,7 @@ export default function TasksPage() {
         </button>
 
         {showAssigneeDropdown && (
-          <div className="absolute top-full mt-1 right-0 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2 min-w-52 max-h-64 overflow-y-auto">
+          <div className="fixed sm:absolute left-2 right-2 sm:left-auto sm:right-0 top-[calc(env(safe-area-inset-top)+3.25rem)] sm:top-full sm:mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg p-2 sm:min-w-52 max-h-64 overflow-y-auto">
             <div className="text-xs text-gray-400 px-2 py-1 mb-1">בחר מוקצים להצגה</div>
             {allUsers.filter((u) => u.id !== "anon").map((user) => (
               <label key={user.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 cursor-pointer">

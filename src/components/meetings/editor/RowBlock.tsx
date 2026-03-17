@@ -204,7 +204,7 @@ function TypeBadge({
       </button>
 
       {showMenu && (
-        <div className="absolute top-full mt-1 right-0 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden min-w-[140px]">
+        <div className="absolute top-full mt-1 right-0 bg-white rounded-xl shadow-xl border border-gray-200 z-20 overflow-hidden min-w-[140px] max-w-[calc(100vw-1rem)]">
           {isTextRow ? (
             /* Text row: show conversion options */
             <>

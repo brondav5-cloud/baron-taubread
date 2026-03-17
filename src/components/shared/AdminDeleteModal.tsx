@@ -75,10 +75,10 @@ export function AdminDeleteModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 overflow-y-auto">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleClose} />
 
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 space-y-4 max-h-[min(90vh,calc(100dvh-2rem))] overflow-y-auto">
         {/* Icon + Title */}
         <div className="flex flex-col items-center text-center gap-2">
           <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">

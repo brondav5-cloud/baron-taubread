@@ -113,7 +113,7 @@ export default function MeetingsPage() {
             <ChevronDown size={13} />
           </button>
           {showSortMenu && (
-            <div className="absolute left-0 top-full mt-1 bg-white rounded-xl shadow-lg border border-gray-100 z-20 min-w-[140px]">
+            <div className="fixed sm:absolute left-2 right-2 sm:left-0 sm:right-auto top-[calc(env(safe-area-inset-top)+3.25rem)] sm:top-full sm:mt-1 bg-white rounded-xl shadow-lg border border-gray-100 z-20 sm:min-w-[140px]">
               {SORT_OPTIONS.map((opt) => (
                 <button
                   key={opt.value}

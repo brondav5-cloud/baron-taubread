@@ -39,7 +39,9 @@ export default function CompanyPicker() {
   const badgeContent = (
     <>
       <Building2 className="w-4 h-4 text-primary-600 shrink-0" />
-      <span className="max-w-[160px] truncate">{displayName}</span>
+      <span className="max-w-[96px] sm:max-w-[160px] truncate text-xs sm:text-sm">
+        {displayName}
+      </span>
       {hasMultiple && (
         <ChevronDown
           className={clsx("w-4 h-4 text-primary-600 shrink-0 transition-transform", isOpen && "rotate-180")}
@@ -49,7 +51,7 @@ export default function CompanyPicker() {
   );
 
   const badgeClass =
-    "flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium bg-primary-50 text-primary-800 border border-primary-200";
+    "flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl text-sm font-medium bg-primary-50 text-primary-800 border border-primary-200";
 
   if (!hasMultiple) {
     return (
@@ -78,7 +80,7 @@ export default function CompanyPicker() {
             className="fixed inset-0 z-10"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-1 w-56 bg-white rounded-xl shadow-elevated border border-gray-100 z-20 animate-scale-in">
+          <div className="fixed left-2 right-2 top-[calc(env(safe-area-inset-top)+3.25rem)] sm:absolute sm:left-auto sm:right-0 sm:top-auto sm:mt-1 sm:w-56 bg-white rounded-xl shadow-elevated border border-gray-100 z-[35] sm:z-20 animate-scale-in">
             <div className="p-2 max-h-60 overflow-y-auto">
               {companies.map((company: WhoamiCompany) => (
                 <button
