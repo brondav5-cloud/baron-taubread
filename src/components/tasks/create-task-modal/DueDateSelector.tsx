@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { clsx } from "clsx";
 import type { DueOption } from "./useCreateTaskForm";
 
@@ -23,7 +24,31 @@ export function DueDateSelector({
   onDueOptionChange,
   onCustomDateChange,
 }: DueDateSelectorProps) {
+  const dateInputRef = useRef<HTMLInputElement>(null);
   const today = new Date().toISOString().split("T")[0];
+
+  useEffect(() => {
+    if (dueOption !== "custom") return;
+    const input = dateInputRef.current;
+    if (!input) return;
+
+    const openPicker = () => {
+      const pickerInput = input as HTMLInputElement & {
+        showPicker?: () => void;
+      };
+      if (typeof pickerInput.showPicker === "function") {
+        pickerInput.showPicker();
+      } else {
+        // Fallback for browsers without showPicker()
+        input.focus();
+        input.click();
+      }
+    };
+
+    // Delay allows DOM/state to settle before opening native picker.
+    const timer = window.setTimeout(openPicker, 40);
+    return () => window.clearTimeout(timer);
+  }, [dueOption]);
 
   return (
     <div>
@@ -49,11 +74,12 @@ export function DueDateSelector({
       </div>
       {dueOption === "custom" && (
         <input
+          ref={dateInputRef}
           type="date"
           value={customDueDate}
           onChange={(e) => onCustomDateChange(e.target.value)}
           min={today}
-          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+          className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 cursor-pointer"
         />
       )}
     </div>

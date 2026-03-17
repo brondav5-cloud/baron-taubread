@@ -140,8 +140,9 @@ function SendInviteButton({
 import { useMeetings } from "@/context/MeetingsContext";
 import { useAuth } from "@/hooks/useAuth";
 import { useTasks } from "@/context/TasksContext";
-import { DecisionsPanel } from "./SmartMeetingEditor";
+import { DecisionsPanel, TasksPanel } from "./SmartMeetingEditor";
 import type { ParsedDecision, ParsedTask } from "./meetingParser";
+import { parseContent } from "./meetingParser";
 
 interface MeetingDetailProps {
   meeting: Meeting;
@@ -205,6 +206,17 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
         lineIndex: i,
       }))
     : [];
+
+  const parsedFromRaw = parseContent(
+    rawContent,
+    meeting.participants
+      .filter((p) => !p.isExternal && !!p.name)
+      .map((p) => ({
+        id: p.userId || p.name,
+        name: p.name,
+      })),
+  );
+  const fallbackTasksFromText: ParsedTask[] = parsedFromRaw.tasks;
 
   const cfg = MEETING_TYPE_CONFIG[meeting.meetingType];
 
@@ -453,6 +465,13 @@ export default function MeetingDetail({ meeting, companyLogo }: MeetingDetailPro
               })}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Fallback tasks panel from raw summary text */}
+      {displayTasks.length === 0 && fallbackTasksFromText.length > 0 && (
+        <div className="mb-4">
+          <TasksPanel tasks={fallbackTasksFromText} />
         </div>
       )}
 

@@ -243,6 +243,18 @@ export default function SmartMeetingEditor({
           />
         ))}
 
+        {/* Add topic button (mobile) */}
+        {!readonly && (
+          <button
+            type="button"
+            onClick={editor.addTopic}
+            className="md:hidden flex items-center gap-2 px-4 py-2.5 rounded-xl border border-indigo-200 text-indigo-600 bg-indigo-50 text-sm hover:bg-indigo-100 transition-colors w-full justify-center"
+          >
+            <span>📋</span>
+            <span>+ הוסף נושא חדש</span>
+          </button>
+        )}
+
         {/* Add topic button (desktop) */}
         {!readonly && (
           <button
