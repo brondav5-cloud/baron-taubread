@@ -126,21 +126,110 @@ export default function GlobalSearch() {
 
       {/* Mobile backdrop */}
       {isMobileExpanded && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-black/30 sm:hidden"
-          onClick={closeMobileSearch}
-          aria-label="סגור חיפוש"
-        />
+        <div className="fixed inset-0 z-50 sm:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/30"
+            onClick={closeMobileSearch}
+            aria-label="סגור חיפוש"
+          />
+
+          <div className="absolute top-[calc(env(safe-area-inset-top)+0.5rem)] right-2 left-2">
+            <div className="relative bg-white rounded-xl shadow-elevated border border-gray-200">
+              <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                ref={inputRef}
+                type="text"
+                value={query}
+                onChange={(e) => handleSearch(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                placeholder="חיפוש חנות או מוצר..."
+                className="w-full pr-10 pl-10 py-2.5 bg-transparent border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                aria-label="חיפוש חנות או מוצר"
+                aria-controls="global-search-results"
+                aria-activedescendant={
+                  activeIndex >= 0 ? `global-search-result-${activeIndex}` : undefined
+                }
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={query ? clearSearch : closeMobileSearch}
+                className="absolute left-2 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full"
+                aria-label={query ? "נקה חיפוש" : "סגור חיפוש"}
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            {isOpen && (
+              <div className="mt-2 bg-white rounded-xl shadow-elevated border border-gray-100 overflow-hidden max-h-[50dvh] overflow-y-auto">
+                {results.length === 0 ? (
+                  <div className="p-4 text-center text-gray-500 text-sm">
+                    לא נמצאו תוצאות עבור &quot;{query}&quot;
+                  </div>
+                ) : (
+                  <div className="py-2" id="global-search-results" role="listbox">
+                    <div className="px-3 py-1 text-xs font-medium text-gray-400 uppercase">
+                      תוצאות ({results.length})
+                    </div>
+                    {results.map((result, index) => (
+                      <button
+                        key={`${result.type}-${result.id}`}
+                        id={`global-search-result-${index}`}
+                        onClick={() => handleResultClick(result.href)}
+                        onMouseEnter={() => setActiveIndex(index)}
+                        role="option"
+                        aria-selected={activeIndex === index}
+                        className={clsx(
+                          "w-full px-3 py-2 flex items-center gap-3 transition-colors text-right",
+                          activeIndex === index ? "bg-gray-100" : "hover:bg-gray-50",
+                        )}
+                      >
+                        <div
+                          className={clsx(
+                            "w-8 h-8 rounded-lg flex items-center justify-center",
+                            result.type === "store"
+                              ? "bg-blue-100 text-blue-600"
+                              : "bg-purple-100 text-purple-600",
+                          )}
+                        >
+                          {result.type === "store" ? (
+                            <Store className="w-4 h-4" />
+                          ) : (
+                            <Package className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {result.name}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {result.subtitle}
+                          </p>
+                        </div>
+                        <span
+                          className={clsx(
+                            "text-xs px-2 py-0.5 rounded-full",
+                            result.type === "store"
+                              ? "bg-blue-100 text-blue-600"
+                              : "bg-purple-100 text-purple-600",
+                          )}
+                        >
+                          {result.type === "store" ? "חנות" : "מוצר"}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       <div
-        className={clsx(
-          "relative",
-          isMobileExpanded
-            ? "fixed top-[calc(env(safe-area-inset-top)+0.5rem)] right-2 left-2 z-50 sm:hidden"
-            : "hidden sm:block",
-        )}
+        className="relative hidden sm:block"
       >
         <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
         <input
@@ -168,13 +257,11 @@ export default function GlobalSearch() {
       </div>
 
       {/* Results Dropdown */}
-      {isOpen && (
+      {isOpen && !isMobileExpanded && (
         <div
           className={clsx(
             "mt-2 bg-white rounded-xl shadow-elevated border border-gray-100 z-50 overflow-hidden animate-scale-in",
-            isMobileExpanded
-              ? "fixed top-[calc(env(safe-area-inset-top)+3.25rem)] right-2 left-2 max-h-[50dvh] overflow-y-auto"
-              : "absolute top-full right-0 w-[min(20rem,calc(100vw-2rem))] max-w-80",
+            "absolute top-full right-0 w-[min(20rem,calc(100vw-2rem))] max-w-80",
           )}
         >
           {results.length === 0 ? (
