@@ -55,7 +55,7 @@ export function TaskActions({
   onAddProgressUpdate,
 }: TaskActionsProps) {
   return (
-    <div className="border-t border-gray-100 p-4 bg-gray-50">
+    <div className="sticky bottom-0 z-10 border-t border-gray-100 p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-gray-50/95 backdrop-blur-sm">
       {/* In Progress - Response Field + Complete Button */}
       {canManageTreatment && (
         <div className="space-y-3 max-h-[40vh] overflow-y-auto">
@@ -103,6 +103,21 @@ export function TaskActions({
               </button>
             </div>
           </div>
+          {task.progressUpdates && task.progressUpdates.length > 0 && (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
+              <p className="text-xs font-semibold text-indigo-700 mb-2">דיווחים אחרונים</p>
+              <div className="space-y-1.5 max-h-24 overflow-y-auto">
+                {task.progressUpdates
+                  .slice(-3)
+                  .reverse()
+                  .map((u) => (
+                    <p key={u.id} className="text-xs text-indigo-900 truncate">
+                      {u.userName}: {u.text}
+                    </p>
+                  ))}
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               תגובה לסיום (מה עשית?)

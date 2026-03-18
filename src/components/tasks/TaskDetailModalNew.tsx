@@ -99,7 +99,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-white w-full h-[92vh] sm:h-auto sm:max-w-2xl sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="relative bg-white w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[90vh] rounded-none sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-4 border-b border-gray-100 bg-white">
           <div className="flex-1">
@@ -164,7 +164,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
+        <div className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+120px)]">
           {activeTab === "details" && (
             <DetailsTab
               task={currentTask}
