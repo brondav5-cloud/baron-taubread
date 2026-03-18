@@ -600,9 +600,9 @@ export function DistributionV2Table({
         </div>
       )}
       <div
-        className="max-h-[min(72vh,900px)] min-h-[220px] overflow-y-scroll overflow-x-auto overscroll-y-contain rounded-b-2xl [scrollbar-gutter:stable]"
+        className="overflow-x-auto rounded-b-2xl"
         role="region"
-        aria-label="טבלת נתוני חלוקה — גלילה אנכית עם כותרות קבועות"
+        aria-label="טבלת נתוני חלוקה"
       >
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
           <SortableContext items={visibleColumnOrder} strategy={horizontalListSortingStrategy}>

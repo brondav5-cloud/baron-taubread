@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type {
@@ -19,25 +19,72 @@ import type {
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
-/** YYYY-MM-DD for first/last day of the previous calendar month (completed month). */
-function getLastCompletedCalendarMonthRange(): { dateFrom: string; dateTo: string } {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const lastDay = new Date(y, m, 0);
-  const firstDay = new Date(y, m - 1, 1);
-  const pad = (n: number) => String(n).padStart(2, "0");
+function pad2(n: number): string {
+  return String(n).padStart(2, "0");
+}
+
+/** Calendar date in Asia/Jerusalem from an ISO timestamp (upload time). */
+function jerusalemYmdFromIso(iso: string): { y: number; m: number; d: number } | null {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(new Date(iso));
+  const y = parseInt(parts.find((p) => p.type === "year")?.value ?? "", 10);
+  const m = parseInt(parts.find((p) => p.type === "month")?.value ?? "", 10);
+  const d = parseInt(parts.find((p) => p.type === "day")?.value ?? "", 10);
+  if (!y || !m || !d) return null;
+  return { y, m, d };
+}
+
+function toDdMmYyyyFromParts(p: { y: number; m: number; d: number }): string {
+  return `${pad2(p.d)}/${pad2(p.m)}/${p.y}`;
+}
+
+function rawMonthKeyToYyyyMm(k: string): string {
+  const s = k.trim();
+  if (/^\d{6}$/.test(s)) return s;
+  const p = s.match(/^(\d{4})-(\d{1,2})$/);
+  if (p && p[1] && p[2]) return `${p[1]}${String(p[2]).padStart(2, "0")}`;
+  return "";
+}
+
+/** Max YYYYMM from monthly_qty keys where qty > 0 */
+function maxMonthKeyFromStoreProducts(sp: StoreProductRow[]): string | null {
+  let max = "";
+  for (const row of sp) {
+    const mq = row.monthly_qty ?? {};
+    for (const key of Object.keys(mq)) {
+      if ((mq[key] ?? 0) <= 0) continue;
+      const yyyymm = rawMonthKeyToYyyyMm(key);
+      if (yyyymm && yyyymm > max) max = yyyymm;
+    }
+  }
+  return max || null;
+}
+
+/** Fallback when updated_at missing: full latest month that has qty */
+function latestMonthRangeFromQty(sp: StoreProductRow[]): { dateFrom: string; dateTo: string } | null {
+  const max = maxMonthKeyFromStoreProducts(sp);
+  if (!max || max.length < 6) return null;
+  const y = parseInt(max.slice(0, 4), 10);
+  const m = parseInt(max.slice(4, 6), 10);
+  if (!y || !m) return null;
+  const lastDay = new Date(y, m, 0).getDate();
   return {
-    dateFrom: `${firstDay.getFullYear()}-${pad(firstDay.getMonth() + 1)}-${pad(firstDay.getDate())}`,
-    dateTo: `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`,
+    dateFrom: `${y}-${pad2(m)}-01`,
+    dateTo: `${y}-${pad2(m)}-${pad2(lastDay)}`,
   };
 }
 
-function createDefaultFilters(): DistributionV2Filters {
-  const { dateFrom, dateTo } = getLastCompletedCalendarMonthRange();
+/** Default filters before first load (no date filter until data seeds). */
+function emptyFilters(): DistributionV2Filters {
   return {
-    dateFrom,
-    dateTo,
+    dateFrom: "",
+    dateTo: "",
     cities: [],
     networks: [],
     drivers: [],
@@ -123,6 +170,7 @@ interface StoreProductRow {
   monthly_qty: Record<string, number>;
   monthly_sales: Record<string, number>;
   monthly_returns: Record<string, number>;
+  updated_at?: string | null;
 }
 
 function buildRows(
@@ -304,6 +352,7 @@ function buildGroupBlocks(rows: DistributionV2Row[], mode: GroupByMode): Distrib
 export function useDistributionV2Data(): UseDistributionV2Return {
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const seededDateFilterRef = useRef(false);
 
   const [stores, setStores] = useState<StoreLite[]>([]);
   const [storeProducts, setStoreProducts] = useState<StoreProductRow[]>([]);
@@ -315,7 +364,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   });
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFiltersState] = useState<DistributionV2Filters>(createDefaultFilters);
+  const [filters, setFiltersState] = useState<DistributionV2Filters>(emptyFilters);
   const [columnFilters, setColumnFiltersState] = useState<ColumnFiltersState>({});
   const [columnPicklists, setColumnPicklistsState] = useState<ColumnPicklistsState>({});
   const [groupBy, setGroupBy] = useState<GroupByMode>("products");
@@ -331,6 +380,10 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   useEffect(() => {
     setCurrentPage(1);
   }, [groupBy]);
+
+  useEffect(() => {
+    seededDateFilterRef.current = false;
+  }, [companyId]);
 
   const setColumnFilter = useCallback((column: DistributionV2ColumnKey, value: string) => {
     setColumnFiltersState((prev) => (value.trim() ? { ...prev, [column]: value.trim() } : { ...prev, [column]: undefined }));
@@ -361,6 +414,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       setLoading(false);
       setStores([]);
       setStoreProducts([]);
+      setFiltersState(emptyFilters());
       setFilterOptions({ cities: [], networks: [], drivers: [], agents: [] });
       setError(null);
       return;
@@ -381,7 +435,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
         supabase
           .from("store_products")
           .select(
-            "store_external_id, product_external_id, product_name, product_category, monthly_qty, monthly_sales, monthly_returns",
+            "store_external_id, product_external_id, product_name, product_category, monthly_qty, monthly_sales, monthly_returns, updated_at",
           )
           .eq("company_id", companyId),
         supabase.from("filters").select("cities, networks, drivers, agents").eq("company_id", companyId).single(),
@@ -390,8 +444,34 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       if (storesRes.error) throw new Error(storesRes.error.message);
       if (spRes.error) throw new Error(spRes.error.message);
 
+      const products = (spRes.data ?? []) as StoreProductRow[];
+
+      if (!seededDateFilterRef.current && products.length > 0) {
+        let maxTs = 0;
+        for (const p of products) {
+          if (!p.updated_at) continue;
+          const t = new Date(p.updated_at).getTime();
+          if (!Number.isNaN(t) && t > maxTs) maxTs = t;
+        }
+        if (maxTs > 0) {
+          const jp = jerusalemYmdFromIso(new Date(maxTs).toISOString());
+          if (jp) {
+            const dateTo = `${jp.y}-${pad2(jp.m)}-${pad2(jp.d)}`;
+            const dateFrom = `${jp.y}-${pad2(jp.m)}-01`;
+            setFiltersState((prev) => ({ ...prev, dateFrom, dateTo }));
+          } else {
+            const fb = latestMonthRangeFromQty(products);
+            if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
+          }
+        } else {
+          const fb = latestMonthRangeFromQty(products);
+          if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
+        }
+        seededDateFilterRef.current = true;
+      }
+
       setStores((storesRes.data ?? []) as StoreLite[]);
-      setStoreProducts((spRes.data ?? []) as StoreProductRow[]);
+      setStoreProducts(products);
 
       const st = (storesRes.data ?? []) as StoreLite[];
       const filtersData = filtersRes.data as { cities?: string[]; networks?: string[]; drivers?: string[]; agents?: string[] } | null;
@@ -549,25 +629,26 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     };
   }, [summaryStats]);
 
-  /** Latest period end date in current (filtered) data — DD/MM/YYYY */
+  /**
+   * Last data touch: max(updated_at) across store_products (upload time),
+   * else end of latest month that has qty. Independent of current filters.
+   */
   const dataLastDate = useMemo(() => {
-    if (rows.length === 0) return null;
-    let maxKey = "";
-    for (const r of rows) {
-      const p = r.periodDate;
-      if (!p || typeof p !== "string") continue;
-      const parts = p.trim().split("/");
-      if (parts.length !== 3) continue;
-      const [d, m, y] = parts;
-      const key = `${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}`;
-      if (key > maxKey) maxKey = key;
+    if (storeProducts.length === 0) return null;
+    let maxTs = 0;
+    for (const p of storeProducts) {
+      if (!p.updated_at) continue;
+      const t = new Date(p.updated_at).getTime();
+      if (!Number.isNaN(t) && t > maxTs) maxTs = t;
     }
-    if (!maxKey || maxKey.length < 8) return null;
-    const y = maxKey.slice(0, 4);
-    const m = maxKey.slice(4, 6);
-    const d = maxKey.slice(6, 8);
-    return `${d}/${m}/${y}`;
-  }, [rows]);
+    if (maxTs > 0) {
+      const jp = jerusalemYmdFromIso(new Date(maxTs).toISOString());
+      if (jp) return toDdMmYyyyFromParts(jp);
+    }
+    const maxKey = maxMonthKeyFromStoreProducts(storeProducts);
+    if (!maxKey) return null;
+    return monthKeyToPeriodEndDisplay(maxKey);
+  }, [storeProducts]);
 
   return {
     isLoading,

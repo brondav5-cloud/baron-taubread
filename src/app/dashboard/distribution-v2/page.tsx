@@ -98,7 +98,9 @@ export default function DistributionV2Page() {
         <div className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 text-sm font-medium text-slate-700 shadow-sm">
           <span className="text-slate-500">הנתונים כולל עד תאריך</span>
           <span className="font-bold text-slate-900 tabular-nums">{hook.dataLastDate}</span>
-          <span className="text-slate-400 text-xs hidden sm:inline">(תאריך אחרון בנתונים)</span>
+          <span className="text-slate-400 text-xs hidden sm:inline">
+            (יום העדכון האחרון בהעלאה — או סוף החודש האחרון עם נתונים)
+          </span>
         </div>
       )}
       <DistributionV2Header
