@@ -4,6 +4,12 @@ import { useCallback } from "react";
 import type { Task } from "@/types/task";
 
 export function useTaskQueries(tasks: Task[]) {
+  const isTaskVisibleForUser = useCallback((task: Task, userId: string) => {
+    if (task.createdBy === userId) return true;
+    if (!task.startsAt) return true;
+    return new Date(task.startsAt) <= new Date();
+  }, []);
+
   const getTaskById = useCallback(
     (id: string) => tasks.find((t) => t.id === id),
     [tasks],
@@ -16,8 +22,12 @@ export function useTaskQueries(tasks: Task[]) {
 
   const getTasksAssignedTo = useCallback(
     (userId: string) =>
-      tasks.filter((t) => t.assignees.some((a) => a.userId === userId)),
-    [tasks],
+      tasks.filter(
+        (t) =>
+          t.assignees.some((a) => a.userId === userId) &&
+          isTaskVisibleForUser(t, userId),
+      ),
+    [isTaskVisibleForUser, tasks],
   );
 
   const getTasksForStore = useCallback(
@@ -39,9 +49,10 @@ export function useTaskQueries(tasks: Task[]) {
           t.createdBy === userId ||
           t.assignees.some((a) => a.userId === userId);
         if (!isInvolved) return false;
+        if (!isTaskVisibleForUser(t, userId)) return false;
         return new Date(t.dueDate) < new Date();
       }),
-    [tasks],
+    [isTaskVisibleForUser, tasks],
   );
 
   const getUnreadCount = useCallback(
@@ -49,10 +60,12 @@ export function useTaskQueries(tasks: Task[]) {
       tasks.filter((t) =>
         t.assignees.some(
           (a) =>
-            a.userId === userId && (a.status === "new" || a.status === "seen"),
+            a.userId === userId &&
+            (a.status === "new" || a.status === "seen") &&
+            isTaskVisibleForUser(t, userId),
         ),
       ).length,
-    [tasks],
+    [isTaskVisibleForUser, tasks],
   );
 
   const getPendingApprovalCount = useCallback(

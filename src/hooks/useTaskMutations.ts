@@ -33,6 +33,7 @@ export interface CreateTaskInput {
   notifyEmail?: boolean;
   notifySms?: boolean;
   isPrivate?: boolean;
+  startsAt?: string;
 }
 
 export function useTaskMutations(
@@ -87,6 +88,9 @@ export function useTaskMutations(
         handlerPhotos: [],
         dueDate: input.dueDate || calculateDueDate(input.priority),
         isPrivate: input.isPrivate ?? false,
+        startsAt: input.startsAt,
+        expectedCompletionAt: undefined,
+        progressUpdates: [],
       };
       if (companyId) {
         const insertRow = taskToDbTask(newTask, companyId);
@@ -98,7 +102,9 @@ export function useTaskMutations(
             const recipientIds = input.assignees
               .map((a) => a.userId)
               .filter((id) => id !== createdBy);
-            if (recipientIds.length > 0) {
+            const shouldNotifyNow =
+              !created.startsAt || new Date(created.startsAt) <= new Date();
+            if (recipientIds.length > 0 && shouldNotifyNow) {
               sendNotification({
                 recipientUserIds: recipientIds,
                 type: "task_assigned",
@@ -116,6 +122,112 @@ export function useTaskMutations(
         return { ...newTask, id: `pending_${Date.now()}` } as Task;
       }
       return newTask as Task;
+    },
+    [companyId, setTasks],
+  );
+
+  const updateExpectedCompletion = useCallback(
+    (taskId: string, userId: string, userName: string, expectedCompletionAt: string) => {
+      const now = new Date().toISOString();
+      setTasks((prev) =>
+        prev.map((task) => {
+          if (task.id !== taskId) return task;
+          const assignee = task.assignees.find((a) => a.userId === userId);
+          if (!assignee) return task;
+
+          const originalTask = task;
+          const updated = {
+            ...task,
+            expectedCompletionAt,
+            updatedAt: now,
+            history: [
+              ...task.history,
+              {
+                id: generateHistoryId(),
+                action: "eta_updated" as const,
+                userId,
+                userName,
+                timestamp: now,
+                details: "עודכן יעד סיום",
+              },
+            ],
+          };
+          if (companyId) {
+            const u = taskToDbTask(updated, companyId);
+            updateTask(taskId, {
+              expected_completion_at: u.expected_completion_at,
+              updated_at: now,
+              history: u.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
+            });
+          }
+          return updated;
+        }),
+      );
+    },
+    [companyId, setTasks],
+  );
+
+  const addProgressUpdate = useCallback(
+    (
+      taskId: string,
+      userId: string,
+      userName: string,
+      text: string,
+      expectedCompletionAt?: string,
+    ) => {
+      const now = new Date().toISOString();
+      setTasks((prev) =>
+        prev.map((task) => {
+          if (task.id !== taskId) return task;
+          const assignee = task.assignees.find((a) => a.userId === userId);
+          if (!assignee) return task;
+
+          const originalTask = task;
+          const updated = {
+            ...task,
+            expectedCompletionAt: expectedCompletionAt || task.expectedCompletionAt,
+            progressUpdates: [
+              ...task.progressUpdates,
+              {
+                id: `progress_${Date.now()}`,
+                userId,
+                userName,
+                text,
+                createdAt: now,
+                expectedCompletionAt: expectedCompletionAt || task.expectedCompletionAt,
+              },
+            ],
+            updatedAt: now,
+            history: [
+              ...task.history,
+              {
+                id: generateHistoryId(),
+                action: "progress_updated" as const,
+                userId,
+                userName,
+                timestamp: now,
+                details: "עודכן סטטוס התקדמות",
+              },
+            ],
+          };
+          if (companyId) {
+            const u = taskToDbTask(updated, companyId);
+            updateTask(taskId, {
+              expected_completion_at: u.expected_completion_at,
+              progress_updates: u.progress_updates,
+              updated_at: now,
+              history: u.history,
+            }).then((success) => {
+              if (!success)
+                setTasks((tasks) => tasks.map((t) => (t.id === taskId ? originalTask : t)));
+            });
+          }
+          return updated;
+        }),
+      );
     },
     [companyId, setTasks],
   );
@@ -687,5 +799,7 @@ export function useTaskMutations(
     reassignTask,
     addAssignee,
     removeAssignee,
+    updateExpectedCompletion,
+    addProgressUpdate,
   };
 }

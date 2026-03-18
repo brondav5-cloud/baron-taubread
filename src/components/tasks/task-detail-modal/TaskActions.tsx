@@ -11,13 +11,19 @@ interface TaskActionsProps {
   showRejectForm: boolean;
   completeResponse: string;
   rejectReason: string;
+  expectedCompletionAtInput: string;
+  progressUpdateText: string;
   onCompleteResponseChange: (value: string) => void;
   onRejectReasonChange: (value: string) => void;
+  onExpectedCompletionAtInputChange: (value: string) => void;
+  onProgressUpdateTextChange: (value: string) => void;
   onShowRejectForm: (show: boolean) => void;
   onStartTask: () => void;
   onCompleteTask: () => void;
   onApproveTask: () => void;
   onRejectTask: () => void;
+  onUpdateExpectedCompletion: () => void;
+  onAddProgressUpdate: () => void;
 }
 
 export function TaskActions({
@@ -28,13 +34,19 @@ export function TaskActions({
   showRejectForm,
   completeResponse,
   rejectReason,
+  expectedCompletionAtInput,
+  progressUpdateText,
   onCompleteResponseChange,
   onRejectReasonChange,
+  onExpectedCompletionAtInputChange,
+  onProgressUpdateTextChange,
   onShowRejectForm,
   onStartTask,
   onCompleteTask,
   onApproveTask,
   onRejectTask,
+  onUpdateExpectedCompletion,
+  onAddProgressUpdate,
 }: TaskActionsProps) {
   // האם המשתמש בטיפול פעיל
   const isInProgress = isAssignee && myStatus === "in_progress";
@@ -44,6 +56,49 @@ export function TaskActions({
       {/* In Progress - Response Field + Complete Button */}
       {isInProgress && (
         <div className="space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              יעד סיום מעודכן
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="datetime-local"
+                value={expectedCompletionAtInput}
+                onChange={(e) =>
+                  onExpectedCompletionAtInputChange(e.target.value)
+                }
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+              <button
+                onClick={onUpdateExpectedCompletion}
+                disabled={!expectedCompletionAtInput}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50"
+              >
+                עדכן
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              עדכון התקדמות
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={progressUpdateText}
+                onChange={(e) => onProgressUpdateTextChange(e.target.value)}
+                placeholder="למשל: טופלה תקלה בחלק א׳, ממשיך לחלק ב׳"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+              <button
+                onClick={onAddProgressUpdate}
+                disabled={!progressUpdateText.trim()}
+                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50"
+              >
+                שמור
+              </button>
+            </div>
+          </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               תגובה לסיום (מה עשית?)

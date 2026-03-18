@@ -103,6 +103,51 @@ export function CreateTaskModal({
               onCustomDateChange={form.setCustomDueDate}
             />
 
+            {/* Schedule */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                זמן פרסום למוקצים
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => form.setScheduleOption("immediate")}
+                  className={`py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                    form.scheduleOption === "immediate"
+                      ? "border-primary-500 bg-primary-50 text-primary-700"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  מיידי
+                </button>
+                <button
+                  type="button"
+                  onClick={() => form.setScheduleOption("future")}
+                  className={`py-2 px-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                    form.scheduleOption === "future"
+                      ? "border-primary-500 bg-primary-50 text-primary-700"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  עתידי
+                </button>
+              </div>
+              {form.scheduleOption === "future" && (
+                <input
+                  type="datetime-local"
+                  value={form.futureStartAt}
+                  onChange={(e) => form.setFutureStartAt(e.target.value)}
+                  min={new Date().toISOString().slice(0, 16)}
+                  className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg"
+                />
+              )}
+              {form.scheduleOption === "future" && (
+                <p className="mt-1 text-xs text-gray-500">
+                  המשימה תישמר עכשיו, ותוצג למוקצים רק בזמן שבחרת.
+                </p>
+              )}
+            </div>
+
             {/* Assignees */}
             <AssigneesSelector
               selectedAssignees={form.selectedAssignees}

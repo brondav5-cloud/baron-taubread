@@ -32,6 +32,16 @@ export interface TaskComment {
   createdAt: string;
 }
 
+// עדכון התקדמות שוטף בזמן טיפול
+export interface TaskProgressUpdate {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: string;
+  expectedCompletionAt?: string;
+}
+
 // היסטוריית פעולות
 export interface TaskHistoryItem {
   id: string;
@@ -46,7 +56,9 @@ export interface TaskHistoryItem {
     | "checklist"
     | "reassigned"
     | "assigned"
-    | "removed";
+    | "removed"
+    | "eta_updated"
+    | "progress_updated";
   userId: string;
   userName: string;
   timestamp: string;
@@ -99,6 +111,7 @@ export interface Task {
   handlerResponse?: string;
   handlerPhotos: string[];
   handledAt?: string;
+  expectedCompletionAt?: string;
 
   // אישור/דחייה
   approvedAt?: string;
@@ -108,8 +121,14 @@ export interface Task {
   // דדליין (מחושב לפי דחיפות)
   dueDate: string;
 
+  // תזמון הופעת המשימה למוקצים (ריק = מיידי)
+  startsAt?: string;
+
   // נראות פרטית — רק היוצר, המוקצה ו-admin רואים
   isPrivate?: boolean;
+
+  // עדכוני התקדמות בזמן "בטיפול"
+  progressUpdates: TaskProgressUpdate[];
 }
 
 // מוקצה למשימה

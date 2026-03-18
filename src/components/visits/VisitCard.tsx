@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   Calendar,
+  AlertTriangle,
   CheckCircle,
   Clock,
   Image as ImageIcon,
@@ -69,6 +70,16 @@ export function VisitCard({ visit, onViewDetails }: VisitCardProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {visit.syncStatus === "pending" && (
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+              ממתין לסנכרון
+            </span>
+          )}
+          {visit.syncStatus === "failed" && (
+            <span className="px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 bg-red-100 text-red-700">
+              <AlertTriangle className="w-3 h-3" /> שגיאת סנכרון
+            </span>
+          )}
           <span
             className={clsx(
               "px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1",

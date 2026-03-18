@@ -21,6 +21,8 @@ const ACTION_LABELS: Record<string, string> = {
   reassigned: "העביר את המשימה",
   assigned: "הוסיף משתמש למשימה",
   removed: "הסיר משתמש מהמשימה",
+  eta_updated: "עדכן יעד סיום",
+  progress_updated: "עדכן התקדמות",
 };
 
 export function HistoryTab({ task }: HistoryTabProps) {

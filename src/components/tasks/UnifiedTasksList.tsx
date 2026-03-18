@@ -44,6 +44,8 @@ interface UnifiedItem {
   storeName?: string;
   createdByName: string;
   isOverdue: boolean;
+  isScheduled: boolean;
+  startsAt?: string;
   // Task specific
   task?: Task;
   // Workflow specific
@@ -76,6 +78,16 @@ export function UnifiedTasksList({
 
   const isAdmin = currentUser.role === "admin";
 
+  const isTaskVisibleToCurrentUser = useCallback(
+    (task: Task) => {
+      if (isAdmin) return true;
+      if (task.createdBy === currentUser.id) return true;
+      if (!task.startsAt) return true;
+      return new Date(task.startsAt) <= new Date();
+    },
+    [currentUser.id, isAdmin],
+  );
+
   // מיזוג והמרה לפורמט אחיד
   const unifiedItems = useMemo(() => {
     const items: UnifiedItem[] = [];
@@ -97,6 +109,8 @@ export function UnifiedTasksList({
         storeName: task.storeName,
         createdByName: task.createdByName,
         isOverdue,
+        isScheduled: !!task.startsAt && new Date(task.startsAt) > new Date(),
+        startsAt: task.startsAt,
         task,
       });
     });
@@ -122,6 +136,7 @@ export function UnifiedTasksList({
         storeName: workflow.storeName,
         createdByName: workflow.createdByName,
         isOverdue,
+        isScheduled: false,
         workflow,
         progress: Math.round((completedSteps / totalSteps) * 100),
         totalSteps,
@@ -135,6 +150,13 @@ export function UnifiedTasksList({
   // סינון לפי הפילטר הנבחר
   const filteredItems = useMemo(() => {
     let filtered = [...unifiedItems];
+
+    filtered = filtered.filter((item) => {
+      if (item.type === "task" && item.task) {
+        return isTaskVisibleToCurrentUser(item.task);
+      }
+      return true;
+    });
 
     switch (filter) {
       case "my_new":
@@ -269,7 +291,7 @@ export function UnifiedTasksList({
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [unifiedItems, filter, currentUser.id, isAdmin, assigneeFilter]);
+  }, [assigneeFilter, currentUser.id, filter, isAdmin, isTaskVisibleToCurrentUser, unifiedItems]);
 
   if (filteredItems.length === 0) {
     return (
@@ -414,6 +436,11 @@ function ItemCard({ item, onClick, currentUserId, isAdmin }: ItemCardProps) {
             {item.isOverdue && (
               <span className="inline-flex items-center gap-1 rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-medium">
                 ⏰ באיחור
+              </span>
+            )}
+            {item.isScheduled && item.startsAt && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-100 text-indigo-700 px-2 py-0.5 text-xs font-medium">
+                🕒 מתוזמנת
               </span>
             )}
           </div>

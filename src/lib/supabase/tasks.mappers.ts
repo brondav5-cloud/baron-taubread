@@ -36,11 +36,14 @@ export function dbTaskToTask(db: DbTask): Task {
     handlerResponse: db.handler_response ?? undefined,
     handlerPhotos: db.handler_photos || [],
     handledAt: db.handled_at ?? undefined,
+    expectedCompletionAt: db.expected_completion_at ?? undefined,
     approvedAt: db.approved_at ?? undefined,
     rejectedAt: db.rejected_at ?? undefined,
     rejectionReason: db.rejection_reason ?? undefined,
     dueDate: db.due_date,
+    startsAt: db.starts_at ?? undefined,
     isPrivate: db.is_private ?? false,
+    progressUpdates: (db.progress_updates || []) as Task["progressUpdates"],
   };
 }
 
@@ -71,11 +74,14 @@ export function taskToDbTask(
     handler_response: task.handlerResponse ?? null,
     handler_photos: task.handlerPhotos || [],
     handled_at: task.handledAt ?? null,
+    expected_completion_at: task.expectedCompletionAt ?? null,
     approved_at: task.approvedAt ?? null,
     rejected_at: task.rejectedAt ?? null,
     rejection_reason: task.rejectionReason ?? null,
     due_date: task.dueDate,
+    starts_at: task.startsAt ?? null,
     is_private: task.isPrivate ?? false,
+    progress_updates: task.progressUpdates || [],
   };
 }
 

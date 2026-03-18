@@ -14,6 +14,7 @@ export interface SelectedAssignee {
 }
 
 export type DueOption = "today" | "tomorrow" | "week" | "custom";
+export type ScheduleOption = "immediate" | "future";
 
 export interface CreateTaskFormState {
   taskType: "store" | "general";
@@ -117,6 +118,9 @@ export function useCreateTaskForm({
   const [notifyEmail, setNotifyEmail] = useState(false);
   const [notifySms, setNotifySms] = useState(false);
   const [isPrivate, setIsPrivate] = useState(false);
+  const [scheduleOption, setScheduleOption] =
+    useState<ScheduleOption>("immediate");
+  const [futureStartAt, setFutureStartAt] = useState("");
 
   // Reset form when modal opens
   useEffect(() => {
@@ -136,6 +140,8 @@ export function useCreateTaskForm({
       setNotifyEmail(false);
       setNotifySms(false);
       setIsPrivate(false);
+      setScheduleOption("immediate");
+      setFutureStartAt("");
     }
   }, [isOpen, initialStoreId, initialStoreName]);
 
@@ -219,6 +225,10 @@ export function useCreateTaskForm({
           notifyEmail,
           notifySms,
           isPrivate,
+          startsAt:
+            scheduleOption === "future" && futureStartAt
+              ? new Date(futureStartAt).toISOString()
+              : undefined,
         },
         currentUser.id,
         currentUser.name,
@@ -243,6 +253,8 @@ export function useCreateTaskForm({
       notifyEmail,
       notifySms,
       isPrivate,
+      scheduleOption,
+      futureStartAt,
       currentUser,
       createTask,
       onClose,
@@ -257,7 +269,11 @@ export function useCreateTaskForm({
   );
   const hasPrimary = selectedAssignees.some((a) => a.role === "primary");
   const isValid =
-    categoryId && selectedAssignees.length > 0 && title.trim() && hasPrimary;
+    categoryId &&
+    selectedAssignees.length > 0 &&
+    title.trim() &&
+    hasPrimary &&
+    (scheduleOption === "immediate" || !!futureStartAt);
   const activeCategories = categories.filter((c) => c.isActive);
 
   return {
@@ -277,6 +293,8 @@ export function useCreateTaskForm({
     showAddCategoryModal,
     notifyEmail,
     notifySms,
+    scheduleOption,
+    futureStartAt,
 
     // Setters
     setTaskType: handleTaskTypeChange,
@@ -294,6 +312,8 @@ export function useCreateTaskForm({
     setNotifySms,
     isPrivate,
     setIsPrivate,
+    setScheduleOption,
+    setFutureStartAt,
 
     // Handlers
     handleAddAssignee,

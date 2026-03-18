@@ -340,8 +340,11 @@ async function _createPendingTasks(
           },
         ],
         handlerPhotos: [],
+        expectedCompletionAt: undefined,
         dueDate,
+        startsAt: undefined,
         isPrivate,
+        progressUpdates: [],
       };
 
       const dbTask = taskToDbTask(taskInput, companyId);

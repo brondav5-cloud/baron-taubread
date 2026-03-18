@@ -16,6 +16,8 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
   const [completeResponse, setCompleteResponse] = useState("");
   const [rejectReason, setRejectReason] = useState("");
   const [showRejectForm, setShowRejectForm] = useState(false);
+  const [expectedCompletionAtInput, setExpectedCompletionAtInput] = useState("");
+  const [progressUpdateText, setProgressUpdateText] = useState("");
 
   const { currentUser } = useUsers();
   const {
@@ -30,6 +32,8 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     addAssignee,
     removeAssignee,
     deleteTask,
+    updateExpectedCompletion,
+    addProgressUpdate,
   } = useTasks();
 
   // Get fresh task from context
@@ -44,6 +48,20 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
   const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
   const canEditAssignees = isCreator || isAdmin;
   const canDelete = isCreator || isAdmin;
+
+  useEffect(() => {
+    if (!currentTask?.expectedCompletionAt) {
+      setExpectedCompletionAtInput("");
+      return;
+    }
+    const local = new Date(currentTask.expectedCompletionAt);
+    const y = local.getFullYear();
+    const m = String(local.getMonth() + 1).padStart(2, "0");
+    const d = String(local.getDate()).padStart(2, "0");
+    const hh = String(local.getHours()).padStart(2, "0");
+    const mm = String(local.getMinutes()).padStart(2, "0");
+    setExpectedCompletionAtInput(`${y}-${m}-${d}T${hh}:${mm}`);
+  }, [currentTask?.expectedCompletionAt]);
 
   // Mark as seen when assignee opens
   useEffect(() => {
@@ -155,6 +173,43 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     onClose();
   }, [currentTask, deleteTask, onClose]);
 
+  const handleUpdateExpectedCompletion = useCallback(() => {
+    if (!currentTask || !expectedCompletionAtInput) return;
+    updateExpectedCompletion(
+      currentTask.id,
+      currentUser.id,
+      currentUser.name,
+      new Date(expectedCompletionAtInput).toISOString(),
+    );
+  }, [
+    currentTask,
+    currentUser.id,
+    currentUser.name,
+    expectedCompletionAtInput,
+    updateExpectedCompletion,
+  ]);
+
+  const handleAddProgressUpdate = useCallback(() => {
+    if (!currentTask || !progressUpdateText.trim()) return;
+    addProgressUpdate(
+      currentTask.id,
+      currentUser.id,
+      currentUser.name,
+      progressUpdateText.trim(),
+      expectedCompletionAtInput
+        ? new Date(expectedCompletionAtInput).toISOString()
+        : undefined,
+    );
+    setProgressUpdateText("");
+  }, [
+    addProgressUpdate,
+    currentTask,
+    currentUser.id,
+    currentUser.name,
+    expectedCompletionAtInput,
+    progressUpdateText,
+  ]);
+
   return {
     // State
     activeTab,
@@ -162,6 +217,8 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     completeResponse,
     rejectReason,
     showRejectForm,
+    expectedCompletionAtInput,
+    progressUpdateText,
 
     // Setters
     setActiveTab,
@@ -169,6 +226,8 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     setCompleteResponse,
     setRejectReason,
     setShowRejectForm,
+    setExpectedCompletionAtInput,
+    setProgressUpdateText,
 
     // Computed
     currentTask,
@@ -189,5 +248,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     handleAddAssignee,
     handleRemoveAssignee,
     handleDeleteTask,
+    handleUpdateExpectedCompletion,
+    handleAddProgressUpdate,
   };
 }

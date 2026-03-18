@@ -43,6 +43,8 @@ interface TasksContextType {
   reassignTask: (taskId: string, fromUserId: string, toUserId: string, toUserName: string, byUserId: string, byUserName: string) => void;
   addAssignee: (taskId: string, userId: string, userName: string, role: "primary" | "secondary", byUserId: string, byUserName: string) => void;
   removeAssignee: (taskId: string, userId: string, byUserId: string, byUserName: string) => void;
+  updateExpectedCompletion: (taskId: string, userId: string, userName: string, expectedCompletionAt: string) => void;
+  addProgressUpdate: (taskId: string, userId: string, userName: string, text: string, expectedCompletionAt?: string) => void;
 }
 
 const TasksContext = createContext<TasksContextType | null>(null);

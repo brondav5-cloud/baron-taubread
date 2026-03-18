@@ -39,6 +39,10 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
     setRejectReason,
     showRejectForm,
     setShowRejectForm,
+    expectedCompletionAtInput,
+    setExpectedCompletionAtInput,
+    progressUpdateText,
+    setProgressUpdateText,
     currentTask,
     isAssignee,
     isCreator,
@@ -55,6 +59,8 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
     handleAddAssignee,
     handleRemoveAssignee,
     handleDeleteTask,
+    handleUpdateExpectedCompletion,
+    handleAddProgressUpdate,
   } = useTaskDetail({ task, onClose });
 
   if (!currentTask) return null;
@@ -191,13 +197,19 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
           showRejectForm={showRejectForm}
           completeResponse={completeResponse}
           rejectReason={rejectReason}
+          expectedCompletionAtInput={expectedCompletionAtInput}
+          progressUpdateText={progressUpdateText}
           onCompleteResponseChange={setCompleteResponse}
           onRejectReasonChange={setRejectReason}
+          onExpectedCompletionAtInputChange={setExpectedCompletionAtInput}
+          onProgressUpdateTextChange={setProgressUpdateText}
           onShowRejectForm={setShowRejectForm}
           onStartTask={handleStartTask}
           onCompleteTask={handleCompleteTask}
           onApproveTask={handleApproveTask}
           onRejectTask={handleRejectTask}
+          onUpdateExpectedCompletion={handleUpdateExpectedCompletion}
+          onAddProgressUpdate={handleAddProgressUpdate}
         />
       </div>
 

@@ -7,6 +7,7 @@ import {
   useCallback,
   useMemo,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { useStoresAndProducts } from "@/context/StoresAndProductsContext";
@@ -20,6 +21,13 @@ import {
 import { toast } from "@/providers/ToastProvider";
 import type { DbVisit } from "@/types/supabase";
 import { useRealtimeTable } from "@/hooks/useRealtimeTable";
+import {
+  enqueueOfflineVisit,
+  listOfflineVisitsByCompany,
+  removeOfflineVisit,
+  updateOfflineVisit,
+  type OfflineVisitQueueItem,
+} from "@/lib/offline/visitQueue";
 
 // ============================================
 // TYPES
@@ -57,6 +65,8 @@ export interface Visit {
   photos: VisitPhoto[];
   status: "completed" | "draft";
   createdAt: string;
+  syncStatus?: "synced" | "pending" | "failed";
+  syncError?: string;
 }
 
 export interface StoreVisitInfo {
@@ -117,7 +127,48 @@ function dbToVisit(db: DbVisit): Visit {
     photos: db.photos ?? [],
     status: db.status,
     createdAt: db.created_at,
+    syncStatus: "synced",
   };
+}
+
+function isLikelyNetworkError(message: string): boolean {
+  const text = message.toLowerCase();
+  return (
+    text.includes("failed to fetch") ||
+    text.includes("fetch failed") ||
+    text.includes("network") ||
+    text.includes("timeout") ||
+    text.includes("offline")
+  );
+}
+
+function queuedToVisit(item: OfflineVisitQueueItem): Visit {
+  return {
+    id: item.tempId,
+    storeId: item.payload.store_external_id,
+    storeName: item.payload.store_name,
+    storeCity: item.payload.store_city,
+    agentName: item.payload.agent_name,
+    date: item.payload.date,
+    time: item.payload.time ?? undefined,
+    notes: item.payload.notes,
+    checklist: item.payload.checklist ?? [],
+    competitors: item.payload.competitors ?? [],
+    photos: item.payload.photos ?? [],
+    status: item.payload.status,
+    createdAt: item.createdAt,
+    syncStatus: "pending",
+  };
+}
+
+function mergeServerAndQueuedVisits(
+  serverVisits: Visit[],
+  queued: OfflineVisitQueueItem[],
+): Visit[] {
+  const queuedVisits = queued.map(queuedToVisit);
+  const queuedIds = new Set(queuedVisits.map((v) => v.id));
+  const filteredServer = serverVisits.filter((v) => !queuedIds.has(v.id));
+  return [...queuedVisits, ...filteredServer];
 }
 
 // ============================================
@@ -137,6 +188,7 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
 
   const [visits, setVisits] = useState<Visit[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const isSyncingQueueRef = useRef(false);
 
   // Load visits from Supabase
   useEffect(() => {
@@ -147,10 +199,12 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
     }
     let cancelled = false;
     setIsLoading(true);
-    getVisits(companyId)
-      .then((dbVisits) => {
+    Promise.all([getVisits(companyId), listOfflineVisitsByCompany(companyId)])
+      .then(([dbVisits, queuedVisits]) => {
         if (!cancelled) {
-          setVisits(dbVisits.map(dbToVisit));
+          setVisits(
+            mergeServerAndQueuedVisits(dbVisits.map(dbToVisit), queuedVisits),
+          );
         }
       })
       .catch((err) => {
@@ -167,12 +221,91 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
 
   const refetchVisits = useCallback(() => {
     if (!companyId) return;
-    getVisits(companyId)
-      .then((dbVisits) => setVisits(dbVisits.map(dbToVisit)))
+    Promise.all([getVisits(companyId), listOfflineVisitsByCompany(companyId)])
+      .then(([dbVisits, queuedVisits]) =>
+        setVisits(mergeServerAndQueuedVisits(dbVisits.map(dbToVisit), queuedVisits)),
+      )
       .catch((err) => console.error("[VisitsContext] realtime refetch error:", err));
   }, [companyId]);
 
   useRealtimeTable("visits", companyId ? [companyId] : [], refetchVisits);
+
+  const syncQueuedVisits = useCallback(async () => {
+    if (!companyId) return;
+    if (isSyncingQueueRef.current) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    isSyncingQueueRef.current = true;
+    try {
+      const queued = await listOfflineVisitsByCompany(companyId);
+      if (queued.length === 0) return;
+
+      let syncedCount = 0;
+      let failedCount = 0;
+
+      for (const item of queued) {
+        const { data, error } = await insertVisit(item.payload);
+        if (error) {
+          if (isLikelyNetworkError(error.message)) {
+            await updateOfflineVisit({
+              ...item,
+              attempts: item.attempts + 1,
+              lastError: error.message,
+            });
+            break;
+          }
+          failedCount += 1;
+          await removeOfflineVisit(item.id);
+          setVisits((prev) =>
+            prev.map((v) =>
+              v.id === item.tempId
+                ? {
+                    ...v,
+                    syncStatus: "failed",
+                    syncError: error.message,
+                  }
+                : v,
+            ),
+          );
+          continue;
+        }
+
+        if (data) {
+          syncedCount += 1;
+          await removeOfflineVisit(item.id);
+          const syncedVisit = dbToVisit(data);
+          setVisits((prev) =>
+            prev.map((v) => (v.id === item.tempId ? syncedVisit : v)),
+          );
+        }
+      }
+
+      if (syncedCount > 0) {
+        toast.success(`סונכרנו ${syncedCount} ביקורים ממתינים`);
+      }
+      if (failedCount > 0) {
+        toast.error(`${failedCount} ביקורים לא סונכרנו (שגיאת נתונים)`);
+      }
+    } catch (error) {
+      console.error("[VisitsContext] queue sync error:", error);
+    } finally {
+      isSyncingQueueRef.current = false;
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    void syncQueuedVisits();
+  }, [companyId, syncQueuedVisits]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    const onOnline = () => {
+      void syncQueuedVisits();
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, [companyId, syncQueuedVisits]);
 
   const stores = useMemo(
     () =>
@@ -193,6 +326,7 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
         ...visitData,
         id: tempId,
         createdAt: new Date().toISOString(),
+        syncStatus: "pending",
       };
       setVisits((prev) => [optimistic, ...prev]);
 
@@ -216,21 +350,46 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
         status: visitData.status,
       };
 
-      insertVisit(payload).then(({ data, error }) => {
+      void (async () => {
+        const { data, error } = await insertVisit(payload);
+
         if (error) {
+          if (isLikelyNetworkError(error.message)) {
+            try {
+              await enqueueOfflineVisit({
+                companyId,
+                tempId,
+                createdAt: optimistic.createdAt,
+                payload,
+              });
+              toast.success("אין קליטה - הביקור נשמר בתור וייסונכרן אוטומטית");
+              return;
+            } catch (queueError) {
+              console.error("[VisitsContext] queue enqueue error:", queueError);
+            }
+          }
+
           const hint = error.message.includes("does not exist")
             ? " הרץ את המיגרציה: supabase db push או SQL מ-MIGRATION_VISITS.md"
             : "";
+          setVisits((prev) =>
+            prev.map((v) =>
+              v.id === tempId
+                ? { ...v, syncStatus: "failed", syncError: error.message }
+                : v,
+            ),
+          );
           toast.error(`שגיאה בשמירת ביקור: ${error.message}${hint}`);
           return;
         }
+
         if (data) {
           const newVisit = dbToVisit(data);
           setVisits((prev) =>
             prev.map((v) => (v.id === tempId ? newVisit : v)),
           );
         }
-      });
+      })();
 
       return optimistic;
     },

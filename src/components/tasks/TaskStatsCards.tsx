@@ -80,9 +80,17 @@ export function TaskStatsCards({
   const isAdmin = currentUser.role === "admin";
 
   const stats = useMemo(() => {
+    const isTaskVisibleToCurrentUser = (task: (typeof tasks)[number]) => {
+      if (isAdmin) return true;
+      if (task.createdBy === currentUser.id) return true;
+      if (!task.startsAt) return true;
+      return new Date(task.startsAt) <= new Date();
+    };
+
     // משימות רגילות
     const myNewTasks = getUnreadCount(currentUser.id);
     const myInProgress = tasks.filter((t) =>
+      isTaskVisibleToCurrentUser(t) &&
       t.assignees.some(
         (a) => a.userId === currentUser.id && a.status === "in_progress",
       ),
@@ -95,7 +103,7 @@ export function TaskStatsCards({
       const isOverdue =
         new Date(t.dueDate) < new Date() && t.status !== "approved";
       const isMyTask = t.assignees.some((a) => a.userId === currentUser.id);
-      return isOverdue && isMyTask;
+      return isOverdue && isMyTask && isTaskVisibleToCurrentUser(t);
     }).length;
 
     // משימות מורכבות

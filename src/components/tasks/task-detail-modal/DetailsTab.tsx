@@ -79,6 +79,28 @@ export function DetailsTab({
             {format(new Date(task.dueDate), "dd/MM/yyyy HH:mm", { locale: he })}
           </span>
         </div>
+        {task.startsAt && (
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-500">מתפרסם למוקצים:</span>
+            <span>
+              {format(new Date(task.startsAt), "dd/MM/yyyy HH:mm", {
+                locale: he,
+              })}
+            </span>
+          </div>
+        )}
+        {task.expectedCompletionAt && (
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="w-4 h-4 text-gray-400" />
+            <span className="text-gray-500">יעד סיום מעודכן:</span>
+            <span>
+              {format(new Date(task.expectedCompletionAt), "dd/MM/yyyy HH:mm", {
+                locale: he,
+              })}
+            </span>
+          </div>
+        )}
       </div>
 
       {task.handlerResponse && (

@@ -38,12 +38,19 @@ export default function TasksPage() {
   const { currentUser, allUsers } = useUsers();
   const { tasks } = useTasks();
   const { createWorkflow, workflows } = useWorkflow();
+  const isAdmin = currentUser.role === "admin";
 
   // Count only tasks/workflows that involve the current user
   const myTasksCount = tasks.filter(
-    (t) =>
-      t.createdBy === currentUser.id ||
-      t.assignees.some((a) => a.userId === currentUser.id),
+    (t) => {
+      const involved =
+        t.createdBy === currentUser.id ||
+        t.assignees.some((a) => a.userId === currentUser.id);
+      if (!involved) return false;
+      if (isAdmin || t.createdBy === currentUser.id) return true;
+      if (!t.startsAt) return true;
+      return new Date(t.startsAt) <= new Date();
+    },
   ).length;
   const myWorkflowsCount = workflows.filter(
     (w) =>

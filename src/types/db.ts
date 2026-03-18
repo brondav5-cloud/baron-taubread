@@ -311,11 +311,21 @@ export interface DbTask {
   handler_response: string | null;
   handler_photos: string[];
   handled_at: string | null;
+  expected_completion_at: string | null;
   approved_at: string | null;
   rejected_at: string | null;
   rejection_reason: string | null;
   due_date: string;
+  starts_at: string | null;
   is_private: boolean;
+  progress_updates: Array<{
+    id: string;
+    userId: string;
+    userName: string;
+    text: string;
+    createdAt: string;
+    expectedCompletionAt?: string;
+  }>;
 }
 
 export interface DbWorkflow {
