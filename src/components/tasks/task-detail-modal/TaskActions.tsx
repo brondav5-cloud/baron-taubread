@@ -56,6 +56,7 @@ export function TaskActions({
       {/* In Progress - Response Field + Complete Button */}
       {isInProgress && (
         <div className="space-y-3">
+          <div className="text-xs font-semibold text-gray-500">ניהול בזמן טיפול</div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               יעד סיום מעודכן
@@ -161,7 +162,7 @@ export function TaskActions({
               className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700"
             >
               <TrendingUp className="w-4 h-4" />
-              התחל טיפול
+              נכנס לטיפול
             </button>
           )}
 

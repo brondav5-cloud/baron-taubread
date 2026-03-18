@@ -93,12 +93,12 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
 
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+      <div className="relative bg-white w-full h-[92vh] sm:h-auto sm:max-w-2xl sm:max-h-[90vh] rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between p-4 border-b border-gray-100">
+        <div className="flex items-start justify-between p-4 border-b border-gray-100 bg-white">
           <div className="flex-1">
             <div className="flex items-center gap-2 flex-wrap mb-2">
               <TaskStatusBadge status={currentTask.status} />
@@ -137,13 +137,13 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-100">
+        <div className="flex border-b border-gray-100 overflow-x-auto bg-white">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={clsx(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium",
+                "flex-1 min-w-max flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium",
                 activeTab === tab.id
                   ? "text-primary-600 border-b-2 border-primary-600"
                   : "text-gray-500 hover:text-gray-700",
@@ -161,7 +161,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+16px)]">
           {activeTab === "details" && (
             <DetailsTab
               task={currentTask}
