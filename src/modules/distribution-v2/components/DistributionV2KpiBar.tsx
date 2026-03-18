@@ -130,49 +130,55 @@ export function DistributionV2KpiBar({ summaryStats }: DistributionV2KpiBarProps
             כל השורות שעוברות את הפילטרים (לא רק העמוד הנוכחי)
           </p>
         </div>
-        <button
-          ref={btnRef}
-          type="button"
-          onClick={() => setPickerOpen((v) => !v)}
-          className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors"
-        >
-          <LayoutGrid className="w-4 h-4 text-slate-500" />
-          בחר מדדים
-        </button>
-      </div>
-
-      {pickerOpen && (
-        <div
-          ref={popoverRef}
-          className="absolute left-4 top-full mt-2 z-50 w-[min(100%,22rem)] rounded-2xl border border-slate-200 bg-white shadow-elevated p-4 max-h-[min(70vh,420px)] overflow-y-auto"
-          dir="rtl"
-        >
-          <p className="text-xs text-slate-500 mb-3 font-medium">מדדים להצגה</p>
-          <ul className="space-y-1 mb-4">
-            {DISTRIBUTION_V2_SUMMARY_METRIC_ORDER.map((m) => (
-              <li key={m.key}>
-                <label className="flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 hover:bg-slate-50 rounded-lg px-2 py-2">
-                  <input
-                    type="checkbox"
-                    checked={selectedKeys.includes(m.key)}
-                    onChange={() => toggleMetric(m.key)}
-                    className="rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
-                  />
-                  <span>{m.label}</span>
-                </label>
-              </li>
-            ))}
-          </ul>
-          <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-100">
-            <button type="button" onClick={selectAll} className="text-xs font-semibold text-primary-600 hover:text-primary-700">
-              הכל
-            </button>
-            <button type="button" onClick={selectDefaults} className="text-xs font-medium text-slate-500 hover:text-slate-700">
-              ברירת מחדל
-            </button>
-          </div>
+        {/* Popover must be positioned relative to the button, not the whole card — otherwise top-full lands below the entire KPI block */}
+        <div className="relative shrink-0 z-20">
+          <button
+            ref={btnRef}
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-semibold rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors"
+            aria-expanded={pickerOpen}
+            aria-haspopup="dialog"
+          >
+            <LayoutGrid className="w-4 h-4 text-slate-500" />
+            בחר מדדים
+          </button>
+          {pickerOpen && (
+            <div
+              ref={popoverRef}
+              className="absolute end-0 top-full mt-2 w-[min(calc(100vw-2rem),22rem)] min-w-[16rem] rounded-2xl border border-slate-200 bg-white shadow-elevated p-4 max-h-[min(70vh,420px)] overflow-y-auto"
+              dir="rtl"
+              role="dialog"
+              aria-label="מדדים להצגה"
+            >
+              <p className="text-xs text-slate-500 mb-3 font-medium">מדדים להצגה</p>
+              <ul className="space-y-1 mb-4">
+                {DISTRIBUTION_V2_SUMMARY_METRIC_ORDER.map((m) => (
+                  <li key={m.key}>
+                    <label className="flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 hover:bg-slate-50 rounded-lg px-2 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedKeys.includes(m.key)}
+                        onChange={() => toggleMetric(m.key)}
+                        className="rounded border-slate-300 text-primary-600 focus:ring-primary-500/30"
+                      />
+                      <span>{m.label}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-100">
+                <button type="button" onClick={selectAll} className="text-xs font-semibold text-primary-600 hover:text-primary-700">
+                  הכל
+                </button>
+                <button type="button" onClick={selectDefaults} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+                  ברירת מחדל
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <div className="p-4 sm:p-5">
         {orderedDisplay.length === 0 ? (

@@ -19,15 +19,32 @@ import type {
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
-const DEFAULT_FILTERS: DistributionV2Filters = {
-  dateFrom: "",
-  dateTo: "",
-  cities: [],
-  networks: [],
-  drivers: [],
-  agents: [],
-  search: "",
-};
+/** YYYY-MM-DD for first/last day of the previous calendar month (completed month). */
+function getLastCompletedCalendarMonthRange(): { dateFrom: string; dateTo: string } {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const lastDay = new Date(y, m, 0);
+  const firstDay = new Date(y, m - 1, 1);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    dateFrom: `${firstDay.getFullYear()}-${pad(firstDay.getMonth() + 1)}-${pad(firstDay.getDate())}`,
+    dateTo: `${lastDay.getFullYear()}-${pad(lastDay.getMonth() + 1)}-${pad(lastDay.getDate())}`,
+  };
+}
+
+function createDefaultFilters(): DistributionV2Filters {
+  const { dateFrom, dateTo } = getLastCompletedCalendarMonthRange();
+  return {
+    dateFrom,
+    dateTo,
+    cities: [],
+    networks: [],
+    drivers: [],
+    agents: [],
+    search: "",
+  };
+}
 
 /** Month key in DB can be YYYYMM or YYYY-MM. Convert to display "1 - 2026". */
 function monthKeyToLabel(key: string): string {
@@ -298,7 +315,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   });
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [filters, setFiltersState] = useState<DistributionV2Filters>(DEFAULT_FILTERS);
+  const [filters, setFiltersState] = useState<DistributionV2Filters>(createDefaultFilters);
   const [columnFilters, setColumnFiltersState] = useState<ColumnFiltersState>({});
   const [columnPicklists, setColumnPicklistsState] = useState<ColumnPicklistsState>({});
   const [groupBy, setGroupBy] = useState<GroupByMode>("products");

@@ -1,6 +1,15 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
+import {
+  Fragment,
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  startTransition,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   DndContext,
@@ -12,7 +21,7 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, Filter, GripVertical, X } from "lucide-react";
+import { ChevronDown, Filter, GripVertical, Table2, X } from "lucide-react";
 import type {
   DistributionV2Row,
   DistributionV2ColumnKey,
@@ -43,6 +52,31 @@ function loadColumnOrder(): DistributionV2ColumnKey[] {
   }
 }
 
+const COLUMN_HIDDEN_STORAGE_KEY = "distribution-v2-column-hidden";
+
+function loadHiddenColumns(): DistributionV2ColumnKey[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(COLUMN_HIDDEN_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const valid = new Set(DISTRIBUTION_V2_COLUMNS);
+    const out: DistributionV2ColumnKey[] = [];
+    const seen = new Set<string>();
+    for (const c of parsed) {
+      if (typeof c === "string" && valid.has(c as DistributionV2ColumnKey) && !seen.has(c)) {
+        seen.add(c);
+        out.push(c as DistributionV2ColumnKey);
+      }
+    }
+    if (out.length >= DISTRIBUTION_V2_COLUMNS.length) return [];
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 const COLUMN_LABELS: Record<DistributionV2ColumnKey, string> = {
   month: "חודש",
   periodDate: "תאריך",
@@ -68,15 +102,29 @@ function getCellValue(row: DistributionV2Row, column: DistributionV2ColumnKey): 
   return String(v);
 }
 
+/** Text columns: single line + ellipsis; wider on large screens (professional table UX). */
+const TRUNCATE_TEXT_COLS: DistributionV2ColumnKey[] = [
+  "customer",
+  "product",
+  "network",
+  "city",
+  "driver",
+  "agent",
+  "productCategory",
+];
+
 function getTdClassForColumn(col: DistributionV2ColumnKey, noAccent?: boolean): string {
-  const base = "px-3 py-2.5 text-slate-700 align-middle border-s border-slate-100 first:border-s-0 text-[13px] leading-snug";
+  const base =
+    "px-2.5 py-1.5 text-slate-700 align-middle border-s border-slate-100 first:border-s-0 text-[12px] leading-tight max-h-[2.25rem]";
   const accent = noAccent ? "font-medium text-slate-800" : "border-s-[3px] border-s-primary-400/25 font-medium text-slate-800";
+  const truncateWide =
+    "min-w-0 max-w-[9rem] sm:max-w-[12rem] md:max-w-[15rem] lg:max-w-[18rem] xl:max-w-[22rem] 2xl:max-w-[26rem]";
   if (col === "month") return `${base} ${accent}`;
   if (col === "periodDate" || col === "customerId" || col === "productId") return `${base} tabular-nums whitespace-nowrap`;
-  if (col === "customer" || col === "product") return `${base} max-w-[14rem]`;
-  if (col === "quantity") return `${base} font-medium tabular-nums`;
-  if (col === "returns") return `${base} tabular-nums`;
-  if (col === "sales") return `${base} tabular-nums font-semibold text-slate-900`;
+  if (TRUNCATE_TEXT_COLS.includes(col)) return `${base} ${truncateWide}`;
+  if (col === "quantity") return `${base} font-medium tabular-nums whitespace-nowrap`;
+  if (col === "returns") return `${base} tabular-nums whitespace-nowrap`;
+  if (col === "sales") return `${base} tabular-nums font-semibold text-slate-900 whitespace-nowrap`;
   return base;
 }
 
@@ -85,6 +133,64 @@ const GROUP_BY_HINT: Record<GroupByMode, string> = {
   customers: "חנות / לקוח",
   drivers: "נהג",
 };
+
+const ColumnsVisibilityPanel = forwardRef<
+  HTMLDivElement,
+  {
+    columnOrder: DistributionV2ColumnKey[];
+    hiddenSet: Set<DistributionV2ColumnKey>;
+    visibleColumnOrder: DistributionV2ColumnKey[];
+    onToggle: (key: DistributionV2ColumnKey) => void;
+    onShowAll: () => void;
+  }
+>(function ColumnsVisibilityPanel(
+  { columnOrder, hiddenSet, visibleColumnOrder, onToggle, onShowAll },
+  ref,
+) {
+  return (
+    <div
+      ref={ref}
+      className="absolute end-0 top-full mt-2 z-[60] w-[min(100vw-2rem,18rem)] rounded-2xl border border-slate-200 bg-white shadow-elevated p-3 max-h-[min(60vh,380px)] overflow-y-auto"
+      dir="rtl"
+      role="dialog"
+      aria-label="בחירת עמודות להצגה"
+    >
+      <p className="text-xs font-bold text-slate-700 mb-2">הצג עמודות</p>
+      <ul className="space-y-0.5 mb-3">
+        {columnOrder.map((col) => {
+          const visible = !hiddenSet.has(col);
+          const onlyOne = visibleColumnOrder.length === 1 && visible;
+          return (
+            <li key={col}>
+              <label
+                className={[
+                  "flex items-center gap-2.5 cursor-pointer text-sm text-slate-700 rounded-lg px-2 py-1.5",
+                  onlyOne ? "opacity-60 cursor-not-allowed" : "hover:bg-slate-50",
+                ].join(" ")}
+              >
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  disabled={onlyOne}
+                  onChange={() => onToggle(col)}
+                  className="rounded border-slate-300 text-primary-600 focus:ring-primary-500/30 shrink-0"
+                />
+                <span>{COLUMN_LABELS[col]}</span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <button
+        type="button"
+        onClick={onShowAll}
+        className="text-xs font-semibold text-primary-600 hover:text-primary-700"
+      >
+        הצג את כל העמודות
+      </button>
+    </div>
+  );
+});
 
 function SortableTh({
   col,
@@ -112,8 +218,8 @@ function SortableTh({
       ref={setNodeRef}
       style={style}
       className={[
-        "px-3 py-3 text-xs font-bold text-slate-600 tracking-wide whitespace-nowrap border-s border-slate-200/80 first:border-s-0",
-        isDragging && "opacity-60 bg-slate-200 z-10",
+        "sticky top-0 z-[15] box-border min-h-[2.75rem] bg-[#f4f6f9] px-2.5 py-2 text-xs font-bold text-slate-600 tracking-wide whitespace-nowrap border-s border-slate-200/80 first:border-s-0 shadow-[0_1px_0_0_rgb(226,232,240)]",
+        isDragging && "z-[60] opacity-95 bg-slate-100 ring-2 ring-primary-400/40",
       ]
         .filter(Boolean)
         .join(" ")}
@@ -171,12 +277,23 @@ export function DistributionV2Table({
   hasActiveColumnFilters,
 }: DistributionV2TableProps) {
   const [columnOrder, setColumnOrder] = useState<DistributionV2ColumnKey[]>(loadColumnOrder);
+  const [hiddenColumns, setHiddenColumns] = useState<DistributionV2ColumnKey[]>(loadHiddenColumns);
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
   const [openColumn, setOpenColumn] = useState<DistributionV2ColumnKey | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [expandAllBlocked, setExpandAllBlocked] = useState(false);
   const [isExpanding, setIsExpanding] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null!);
   const expandingRef = useRef(false);
+  const columnsMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const columnsMenuRef = useRef<HTMLDivElement>(null);
+
+  const hiddenSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns]);
+
+  const visibleColumnOrder = useMemo(() => {
+    const v = columnOrder.filter((c) => !hiddenSet.has(c));
+    return v.length > 0 ? v : [...columnOrder];
+  }, [columnOrder, hiddenSet]);
 
   useEffect(() => {
     try {
@@ -186,16 +303,65 @@ export function DistributionV2Table({
     }
   }, [columnOrder]);
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    setColumnOrder((prev) => {
-      const a = prev.indexOf(active.id as DistributionV2ColumnKey);
-      const b = prev.indexOf(over.id as DistributionV2ColumnKey);
-      if (a === -1 || b === -1) return prev;
-      return arrayMove(prev, a, b);
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMN_HIDDEN_STORAGE_KEY, JSON.stringify(hiddenColumns));
+    } catch {
+      /* ignore */
+    }
+  }, [hiddenColumns]);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      setColumnOrder((prev) => {
+        const h = new Set(hiddenColumns);
+        const visible = prev.filter((c) => !h.has(c));
+        const a = visible.indexOf(active.id as DistributionV2ColumnKey);
+        const b = visible.indexOf(over.id as DistributionV2ColumnKey);
+        if (a === -1 || b === -1) return prev;
+        const newVisible = arrayMove(visible, a, b);
+        const tail = prev.filter((c) => h.has(c));
+        return [...newVisible, ...tail];
+      });
+    },
+    [hiddenColumns],
+  );
+
+  const toggleColumnVisible = useCallback((key: DistributionV2ColumnKey) => {
+    setHiddenColumns((prev) => {
+      const s = new Set(prev);
+      if (s.has(key)) {
+        s.delete(key);
+        return Array.from(s);
+      }
+      const vis = columnOrder.filter((c) => !s.has(c));
+      if (vis.length <= 1) return prev;
+      s.add(key);
+      return Array.from(s);
     });
-  }, []);
+  }, [columnOrder]);
+
+  const showAllColumns = useCallback(() => setHiddenColumns([]), []);
+
+  useEffect(() => {
+    if (!columnsMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (columnsMenuRef.current?.contains(t) || columnsMenuBtnRef.current?.contains(t)) return;
+      setColumnsMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setColumnsMenuOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [columnsMenuOpen]);
 
   const dndSensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -345,6 +511,30 @@ export function DistributionV2Table({
               סגור הכל
             </button>
             <span className="text-slate-200">|</span>
+            <div className="relative shrink-0">
+              <button
+                ref={columnsMenuBtnRef}
+                type="button"
+                onClick={() => setColumnsMenuOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-xs font-semibold"
+                aria-expanded={columnsMenuOpen}
+                aria-haspopup="dialog"
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                עמודות
+              </button>
+              {columnsMenuOpen && (
+                <ColumnsVisibilityPanel
+                  ref={columnsMenuRef}
+                  columnOrder={columnOrder}
+                  hiddenSet={hiddenSet}
+                  visibleColumnOrder={visibleColumnOrder}
+                  onToggle={toggleColumnVisible}
+                  onShowAll={showAllColumns}
+                />
+              )}
+            </div>
+            <span className="text-slate-200">|</span>
             <button
               type="button"
               onClick={() => setColumnOrder([...DISTRIBUTION_V2_COLUMNS])}
@@ -362,14 +552,39 @@ export function DistributionV2Table({
             <span className="text-slate-400 mx-1.5">·</span>
             כל שורה בנפרד (ממוין לפי הקיבוץ שנבחר)
           </p>
-          <button
-            type="button"
-            onClick={() => setColumnOrder([...DISTRIBUTION_V2_COLUMNS])}
-            className="text-slate-500 hover:text-slate-800 text-xs shrink-0"
-            title="החזר סדר עמודות לברירת מחדל"
-          >
-            איפוס סדר עמודות
-          </button>
+          <div className="flex flex-wrap items-center gap-3 shrink-0">
+            <div className="relative">
+              <button
+                ref={columnsMenuBtnRef}
+                type="button"
+                onClick={() => setColumnsMenuOpen((v) => !v)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 text-xs font-semibold"
+                aria-expanded={columnsMenuOpen}
+                aria-haspopup="dialog"
+              >
+                <Table2 className="w-3.5 h-3.5" />
+                עמודות
+              </button>
+              {columnsMenuOpen && (
+                <ColumnsVisibilityPanel
+                  ref={columnsMenuRef}
+                  columnOrder={columnOrder}
+                  hiddenSet={hiddenSet}
+                  visibleColumnOrder={visibleColumnOrder}
+                  onToggle={toggleColumnVisible}
+                  onShowAll={showAllColumns}
+                />
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setColumnOrder([...DISTRIBUTION_V2_COLUMNS])}
+              className="text-slate-500 hover:text-slate-800 text-xs"
+              title="החזר סדר עמודות לברירת מחדל"
+            >
+              איפוס סדר עמודות
+            </button>
+          </div>
         </div>
       )}
       {hasActiveColumnFilters && (
@@ -384,19 +599,26 @@ export function DistributionV2Table({
           </button>
         </div>
       )}
-      <div className="overflow-x-auto" role="region" aria-label="טבלת נתוני חלוקה">
+      <div
+        className="max-h-[min(72vh,900px)] min-h-[220px] overflow-y-scroll overflow-x-auto overscroll-y-contain rounded-b-2xl [scrollbar-gutter:stable]"
+        role="region"
+        aria-label="טבלת נתוני חלוקה — גלילה אנכית עם כותרות קבועות"
+      >
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
-          <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
+          <SortableContext items={visibleColumnOrder} strategy={horizontalListSortingStrategy}>
             <table className="w-full text-[13px] text-right border-collapse min-w-[960px]" role="table">
-              <thead className="sticky top-0 z-[8]">
-                <tr className="bg-[#f4f6f9] border-b border-slate-200">
-                  {columnOrder.map((col) => (
+              <thead>
+                <tr className="border-b border-slate-200">
+                  {visibleColumnOrder.map((col) => (
                     <SortableTh key={col} col={col} label={COLUMN_LABELS[col]} />
                   ))}
                 </tr>
-                <tr className="bg-[#fafbfc] border-b border-slate-200">
-                  {columnOrder.map((col) => (
-                    <th key={col} className="p-2 border-s border-slate-100 first:border-s-0 align-middle">
+                <tr className="border-b border-slate-200">
+                  {visibleColumnOrder.map((col) => (
+                    <th
+                      key={col}
+                      className="sticky top-[2.75rem] z-[13] bg-[#fafbfc] p-1.5 border-s border-slate-100 first:border-s-0 align-middle shadow-[0_4px_6px_-2px_rgba(15,23,42,0.06)]"
+                    >
                       <ColumnFilterCell
                         col={col}
                         label={COLUMN_LABELS[col]}
@@ -419,15 +641,15 @@ export function DistributionV2Table({
           <tbody>
             {summaryStats &&
               (() => {
-                const firstCol = columnOrder[0];
+                const firstCol = visibleColumnOrder[0];
                 return (
                   <tr className="bg-slate-800 text-white border-b-2 border-slate-600" aria-label="שורת סיכום כללי">
-                    {columnOrder.map((col) => {
+                    {visibleColumnOrder.map((col) => {
                       if (col === firstCol) {
                         return (
-                          <td key={col} className="px-4 py-3 text-sm font-bold">
-                            <span className="text-white">סיכום כללי</span>
-                            <span className="text-slate-300 font-normal mr-3 text-xs">
+                          <td key={col} className="px-3 py-1.5 text-xs font-bold align-middle">
+                            <span className="text-white whitespace-nowrap">סיכום כללי</span>
+                            <span className="text-slate-400 font-normal mr-2 text-[11px] hidden sm:inline">
                               · {summaryStats.storeCount.toLocaleString("he-IL")} חנויות · {summaryStats.periodCount} חודשים · {summaryStats.productCount} מוצרים
                             </span>
                           </td>
@@ -435,27 +657,27 @@ export function DistributionV2Table({
                       }
                       if (col === "quantity") {
                         return (
-                          <td key={col} className="px-3 py-3 text-sm font-bold tabular-nums text-white">
+                          <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-white whitespace-nowrap">
                             {summaryStats.totalQuantity.toLocaleString("he-IL")}
                           </td>
                         );
                       }
                       if (col === "returns") {
                         return (
-                          <td key={col} className="px-3 py-3 text-sm font-bold tabular-nums text-white">
+                          <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-white whitespace-nowrap">
                             {summaryStats.totalReturns.toLocaleString("he-IL")}
                           </td>
                         );
                       }
                       if (col === "sales") {
                         return (
-                          <td key={col} className="px-3 py-3 text-sm font-bold tabular-nums text-emerald-200">
+                          <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-emerald-200 whitespace-nowrap">
                             ₪{summaryStats.totalSales.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         );
                       }
                       return (
-                        <td key={col} className="px-3 py-3 text-slate-400 text-xs">
+                        <td key={col} className="px-2.5 py-1.5 text-slate-500 text-[11px] whitespace-nowrap">
                           —
                         </td>
                       );
@@ -472,7 +694,7 @@ export function DistributionV2Table({
                       i % 2 === 1 ? "bg-[#fafbfc]" : "bg-white",
                     ].join(" ")}
                   >
-                    <DetailCells row={row} columnOrder={columnOrder} noAccent />
+                    <DetailCells row={row} columnOrder={visibleColumnOrder} noAccent />
                   </tr>
                 ))
               : groupBlocks.map((block) => {
@@ -480,7 +702,7 @@ export function DistributionV2Table({
               return (
                 <Fragment key={block.id}>
                   <tr className="bg-gradient-to-l from-slate-100/95 to-slate-50/90 border-b border-slate-200 hover:from-slate-100 hover:to-slate-50 transition-colors">
-                    <td colSpan={columnOrder.length} className="px-4 py-3 align-middle border-s-4 border-s-primary-500/35">
+                    <td colSpan={visibleColumnOrder.length} className="px-4 py-3 align-middle border-s-4 border-s-primary-500/35">
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <button
                           type="button"
@@ -533,7 +755,7 @@ export function DistributionV2Table({
                           i % 2 === 1 ? "bg-[#fafbfc]" : "bg-white",
                         ].join(" ")}
                       >
-                        <DetailCells row={row} columnOrder={columnOrder} />
+                        <DetailCells row={row} columnOrder={visibleColumnOrder} />
                       </tr>
                     ))}
                 </Fragment>
@@ -553,7 +775,7 @@ function Td({ children, className }: { children: React.ReactNode; className?: st
   return (
     <td
       className={[
-        "px-3 py-2.5 text-slate-700 align-middle border-s border-slate-100 first:border-s-0 text-[13px] leading-snug",
+        "px-2.5 py-1.5 text-slate-700 align-middle border-s border-slate-100 first:border-s-0 text-[12px] leading-tight",
         className,
       ]
         .filter(Boolean)
@@ -587,11 +809,22 @@ function DetailCells({
 }) {
   return (
     <>
-      {columnOrder.map((col) => (
-        <Td key={col} className={getTdClassForColumn(col, noAccent)}>
-          {formatCellValue(row, col)}
-        </Td>
-      ))}
+      {columnOrder.map((col) => {
+        const content = formatCellValue(row, col);
+        const raw = getCellValue(row, col);
+        const useTruncate = TRUNCATE_TEXT_COLS.includes(col) && raw.length > 0;
+        return (
+          <Td key={col} className={getTdClassForColumn(col, noAccent)}>
+            {useTruncate ? (
+              <span className="block truncate whitespace-nowrap" title={raw} dir="auto">
+                {content}
+              </span>
+            ) : (
+              content
+            )}
+          </Td>
+        );
+      })}
     </>
   );
 }
