@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 function mapAuthError(message: string): string {
   if (message.includes("Invalid login")) return "פרטי התחברות שגויים";
@@ -18,6 +19,7 @@ function mapAuthError(message: string): string {
 }
 
 export default function LoginPage() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -27,6 +29,27 @@ export default function LoginPage() {
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const redirectIfAlreadySignedIn = async () => {
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (mounted && user) {
+        router.replace("/dashboard");
+      }
+    };
+
+    void redirectIfAlreadySignedIn();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
