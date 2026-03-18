@@ -12,6 +12,7 @@ import type {
   GroupByMode,
   DistributionV2ColumnKey,
   ColumnFiltersState,
+  ColumnPicklistsState,
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
@@ -41,6 +42,27 @@ function monthKeyToLabel(key: string): string {
     return key;
   }
   return `${month} - ${year}`;
+}
+
+/** Raw month key → end-of-month as DD/MM/YYYY */
+function monthKeyToPeriodEndDisplay(monthKeyRaw: string): string {
+  const k = monthKeyRaw.trim();
+  let y: number;
+  let m: number;
+  if (k.includes("-")) {
+    const [ys, ms] = k.split("-");
+    y = parseInt(String(ys ?? "0"), 10);
+    m = parseInt(String(ms ?? "0"), 10);
+  } else if (k.length >= 6) {
+    y = parseInt(k.slice(0, 4), 10);
+    m = parseInt(k.slice(4, 6), 10);
+  } else {
+    return "";
+  }
+  if (!y || !m || m < 1 || m > 12) return "";
+  const last = new Date(y, m, 0);
+  const d = last.getDate();
+  return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
 }
 
 /** Normalize month key to YYYYMM for comparison. */
@@ -113,6 +135,7 @@ function buildRows(
       rows.push({
         id: String(++id),
         month: monthKeyToLabel(monthKey),
+        periodDate: monthKeyToPeriodEndDisplay(monthKey),
         customerId: store.external_id,
         customer: store.name,
         network: store.network ?? undefined,
@@ -142,14 +165,16 @@ function getCellValue(row: DistributionV2Row, column: DistributionV2ColumnKey): 
 function applyColumnFilters(
   rows: DistributionV2Row[],
   columnFilters: ColumnFiltersState,
+  columnPicklists: ColumnPicklistsState,
 ): DistributionV2Row[] {
-  const keys = DISTRIBUTION_V2_COLUMNS.filter((k) => columnFilters[k]);
-  if (keys.length === 0) return rows;
   return rows.filter((row) =>
-    keys.every((col) => {
-      const cell = getCellValue(row, col).toLowerCase();
-      const q = (columnFilters[col] ?? "").toLowerCase();
-      return cell.includes(q);
+    DISTRIBUTION_V2_COLUMNS.every((col) => {
+      const cell = getCellValue(row, col);
+      const pick = columnPicklists[col];
+      if (pick && pick.length > 0 && !pick.includes(cell)) return false;
+      const q = columnFilters[col]?.trim();
+      if (q && !cell.toLowerCase().includes(q.toLowerCase())) return false;
+      return true;
     }),
   );
 }
@@ -202,6 +227,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const [error, setError] = useState<string | null>(null);
   const [filters, setFiltersState] = useState<DistributionV2Filters>(DEFAULT_FILTERS);
   const [columnFilters, setColumnFiltersState] = useState<ColumnFiltersState>({});
+  const [columnPicklists, setColumnPicklistsState] = useState<ColumnPicklistsState>({});
   const [groupBy, setGroupBy] = useState<GroupByMode>("products");
   const [pageSize, setPageSize] = useState(50);
   const [currentPage, setCurrentPage] = useState(1);
@@ -210,7 +236,20 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     setColumnFiltersState((prev) => (value.trim() ? { ...prev, [column]: value.trim() } : { ...prev, [column]: undefined }));
   }, []);
 
-  const clearColumnFilters = useCallback(() => setColumnFiltersState({}), []);
+  const setColumnPicklist = useCallback((column: DistributionV2ColumnKey, values: string[]) => {
+    setColumnPicklistsState((prev) => {
+      const next = { ...prev };
+      if (values.length === 0) delete next[column];
+      else next[column] = values;
+      return next;
+    });
+    setCurrentPage(1);
+  }, []);
+
+  const clearColumnFilters = useCallback(() => {
+    setColumnFiltersState({});
+    setColumnPicklistsState({});
+  }, []);
 
   const setPageSizeWithReset = useCallback((size: number) => {
     setPageSize(size);
@@ -291,9 +330,14 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     [stores, storeProducts],
   );
 
+  const rowsBeforeColumnFilter = useMemo(
+    () => applyFiltersFixed(allRows, filters),
+    [allRows, filters],
+  );
+
   const rows = useMemo(
-    () => applyColumnFilters(applyFiltersFixed(allRows, filters), columnFilters),
-    [allRows, filters, columnFilters],
+    () => applyColumnFilters(rowsBeforeColumnFilter, columnFilters, columnPicklists),
+    [rowsBeforeColumnFilter, columnFilters, columnPicklists],
   );
 
   const totalRows = rows.length;
@@ -356,7 +400,10 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     filterOptions,
     columnFilters,
     setColumnFilter,
+    columnPicklists,
+    setColumnPicklist,
     clearColumnFilters,
+    rowsBeforeColumnFilter,
     groupBy,
     setGroupBy,
     rows,

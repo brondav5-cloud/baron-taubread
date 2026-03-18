@@ -119,12 +119,16 @@ export default function DistributionV2Page() {
 
       <DistributionV2Table
         rows={hook.displayRows}
+        rowsBeforeColumnFilter={hook.rowsBeforeColumnFilter}
         columnFilters={hook.columnFilters}
+        columnPicklists={hook.columnPicklists}
         onColumnFilter={hook.setColumnFilter}
+        onColumnPicklist={hook.setColumnPicklist}
         onClearColumnFilters={hook.clearColumnFilters}
-        hasActiveColumnFilters={Object.values(hook.columnFilters).some(
-          (v) => v != null && String(v).trim() !== "",
-        )}
+        hasActiveColumnFilters={
+          Object.values(hook.columnFilters).some((v) => v != null && String(v).trim() !== "") ||
+          Object.values(hook.columnPicklists).some((arr) => (arr?.length ?? 0) > 0)
+        }
       />
 
       {hook.totalRows > 0 && (

@@ -16,6 +16,7 @@ export async function exportDistributionV2ToExcel(
 
   const data = rows.map((row) => ({
     חודש: row.month ?? "",
+    תאריך: row.periodDate ?? "",
     "מזהה לקוח": row.customerId ?? "",
     לקוח: row.customer ?? "",
     רשת: row.network ?? "",
@@ -35,6 +36,7 @@ export async function exportDistributionV2ToExcel(
   const ws = XLSX.utils.json_to_sheet(data);
 
   ws["!cols"] = [
+    { wch: 12 },
     { wch: 12 },
     { wch: 10 },
     { wch: 28 },

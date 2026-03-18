@@ -27,6 +27,8 @@ export interface DistributionV2Kpi {
 export interface DistributionV2Row {
   id: string;
   month?: string;
+  /** End-of-month date for the period (DD/MM/YYYY) */
+  periodDate?: string;
   customerId?: number;
   customer?: string;
   network?: string;
@@ -52,6 +54,7 @@ export interface DistributionV2FilterOptions {
 /** Column keys for table and per-column filter */
 export const DISTRIBUTION_V2_COLUMNS = [
   "month",
+  "periodDate",
   "customerId",
   "customer",
   "network",
@@ -70,6 +73,9 @@ export type DistributionV2ColumnKey = (typeof DISTRIBUTION_V2_COLUMNS)[number];
 
 export type ColumnFiltersState = Partial<Record<DistributionV2ColumnKey, string>>;
 
+/** Multi-select exact match per column (smart filter) */
+export type ColumnPicklistsState = Partial<Record<DistributionV2ColumnKey, string[]>>;
+
 export interface UseDistributionV2Return {
   isLoading: boolean;
   error: string | null;
@@ -79,7 +85,11 @@ export interface UseDistributionV2Return {
   filterOptions: DistributionV2FilterOptions;
   columnFilters: ColumnFiltersState;
   setColumnFilter: (column: DistributionV2ColumnKey, value: string) => void;
+  columnPicklists: ColumnPicklistsState;
+  setColumnPicklist: (column: DistributionV2ColumnKey, values: string[]) => void;
   clearColumnFilters: () => void;
+  /** Rows after panel filters only — for building column filter value lists */
+  rowsBeforeColumnFilter: DistributionV2Row[];
   groupBy: GroupByMode;
   setGroupBy: (mode: GroupByMode) => void;
   rows: DistributionV2Row[];
