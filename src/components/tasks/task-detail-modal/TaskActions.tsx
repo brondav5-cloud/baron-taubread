@@ -13,20 +13,14 @@ interface TaskActionsProps {
   confirmComplete: boolean;
   completeResponse: string;
   rejectReason: string;
-  expectedCompletionAtInput: string;
-  progressUpdateText: string;
   onCompleteResponseChange: (value: string) => void;
   onRejectReasonChange: (value: string) => void;
-  onExpectedCompletionAtInputChange: (value: string) => void;
-  onProgressUpdateTextChange: (value: string) => void;
   onConfirmCompleteChange: (value: boolean) => void;
   onShowRejectForm: (show: boolean) => void;
   onStartTask: () => void;
   onCompleteTask: () => void;
   onApproveTask: () => void;
   onRejectTask: () => void;
-  onUpdateExpectedCompletion: () => void;
-  onAddProgressUpdate: () => void;
 }
 
 export function TaskActions({
@@ -39,85 +33,40 @@ export function TaskActions({
   confirmComplete,
   completeResponse,
   rejectReason,
-  expectedCompletionAtInput,
-  progressUpdateText,
   onCompleteResponseChange,
   onRejectReasonChange,
-  onExpectedCompletionAtInputChange,
-  onProgressUpdateTextChange,
   onConfirmCompleteChange,
   onShowRejectForm,
   onStartTask,
   onCompleteTask,
   onApproveTask,
   onRejectTask,
-  onUpdateExpectedCompletion,
-  onAddProgressUpdate,
 }: TaskActionsProps) {
+  const showAnything =
+    (isAssignee && (myStatus === "new" || myStatus === "seen")) ||
+    canManageTreatment ||
+    (isCreator && task.status === "done") ||
+    task.status === "approved" ||
+    showRejectForm;
+
+  if (!showAnything) return null;
+
   return (
-    <div className="sticky bottom-0 z-10 border-t border-gray-100 p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-gray-50/95 backdrop-blur-sm">
-      {/* In Progress - Response Field + Complete Button */}
+    <div className="border-t border-gray-100 p-4 pb-[calc(env(safe-area-inset-bottom)+12px)] bg-white">
+      {/* נכנס לטיפול */}
+      {isAssignee && (myStatus === "new" || myStatus === "seen") && (
+        <button
+          onClick={onStartTask}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700"
+        >
+          <TrendingUp className="w-4 h-4" />
+          נכנס לטיפול
+        </button>
+      )}
+
+      {/* בטיפול: כפתור סיים משימה */}
       {canManageTreatment && (
-        <div className="space-y-3 max-h-[40vh] overflow-y-auto">
-          <div className="text-xs font-semibold text-gray-500">ניהול בזמן טיפול</div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              יעד סיום מעודכן
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="datetime-local"
-                value={expectedCompletionAtInput}
-                onChange={(e) =>
-                  onExpectedCompletionAtInputChange(e.target.value)
-                }
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-              <button
-                onClick={onUpdateExpectedCompletion}
-                disabled={!expectedCompletionAtInput}
-                className="px-3 py-2 bg-blue-600 text-white rounded-lg text-sm disabled:opacity-50"
-              >
-                עדכן
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              עדכון התקדמות
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={progressUpdateText}
-                onChange={(e) => onProgressUpdateTextChange(e.target.value)}
-                placeholder="למשל: טופלה תקלה בחלק א׳, ממשיך לחלק ב׳"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm"
-              />
-              <button
-                onClick={onAddProgressUpdate}
-                disabled={!progressUpdateText.trim()}
-                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50"
-              >
-                דווח בטיפול
-              </button>
-            </div>
-          </div>
-          {task.progressUpdates && task.progressUpdates.length > 0 && (
-            <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
-              <p className="text-xs font-semibold text-indigo-700 mb-2">דיווחים אחרונים</p>
-              <div className="space-y-1.5 max-h-24 overflow-y-auto">
-                {task.progressUpdates
-                  .slice(-3)
-                  .reverse()
-                  .map((u) => (
-                    <p key={u.id} className="text-xs text-indigo-900 truncate">
-                      {u.userName}: {u.text}
-                    </p>
-                  ))}
-              </div>
-            </div>
-          )}
+        <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               תגובה לסיום (מה עשית?)
@@ -134,7 +83,7 @@ export function TaskActions({
             <button
               onClick={() => onConfirmCompleteChange(true)}
               disabled={!completeResponse.trim()}
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle className="w-4 h-4" />
               סיים משימה
@@ -147,13 +96,13 @@ export function TaskActions({
               <div className="flex gap-2">
                 <button
                   onClick={onCompleteTask}
-                  className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700"
+                  className="flex-1 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700"
                 >
                   כן, סיימתי
                 </button>
                 <button
                   onClick={() => onConfirmCompleteChange(false)}
-                  className="flex-1 py-2 border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100"
+                  className="flex-1 py-2.5 border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100"
                 >
                   עדיין בטיפול
                 </button>
@@ -163,9 +112,9 @@ export function TaskActions({
         </div>
       )}
 
-      {/* Reject Form */}
+      {/* טופס דחייה */}
       {showRejectForm && (
-        <div className="mb-4 p-3 bg-red-50 rounded-xl">
+        <div className="mb-3 p-3 bg-red-50 rounded-xl">
           <p className="text-sm font-medium text-red-800 mb-2">סיבת הדחייה:</p>
           <textarea
             value={rejectReason}
@@ -192,46 +141,30 @@ export function TaskActions({
         </div>
       )}
 
-      {/* Action Buttons */}
-      {!canManageTreatment && (
+      {/* אישור יוצר */}
+      {isCreator && task.status === "done" && !showRejectForm && (
         <div className="flex gap-2">
-          {/* Start Task Button */}
-          {isAssignee && (myStatus === "new" || myStatus === "seen") && (
-            <button
-              onClick={onStartTask}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700"
-            >
-              <TrendingUp className="w-4 h-4" />
-              נכנס לטיפול
-            </button>
-          )}
+          <button
+            onClick={() => onShowRejectForm(true)}
+            className="flex-1 flex items-center justify-center gap-2 py-3 border border-red-300 text-red-600 rounded-xl font-medium hover:bg-red-50"
+          >
+            <XCircle className="w-4 h-4" />
+            דחה
+          </button>
+          <button
+            onClick={onApproveTask}
+            className="flex-1 flex items-center justify-center gap-2 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700"
+          >
+            <CheckCircle className="w-4 h-4" />
+            אשר וסגור
+          </button>
+        </div>
+      )}
 
-          {/* Creator Approval Buttons */}
-          {isCreator && task.status === "done" && !showRejectForm && (
-            <>
-              <button
-                onClick={() => onShowRejectForm(true)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-red-300 text-red-600 rounded-xl font-medium hover:bg-red-50"
-              >
-                <XCircle className="w-4 h-4" />
-                דחה
-              </button>
-              <button
-                onClick={onApproveTask}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700"
-              >
-                <CheckCircle className="w-4 h-4" />
-                אשר וסגור
-              </button>
-            </>
-          )}
-
-          {/* Closed Task */}
-          {task.status === "approved" && (
-            <div className="flex-1 text-center py-2.5 bg-gray-100 rounded-xl text-gray-500">
-              ✅ משימה נסגרה
-            </div>
-          )}
+      {/* נסגרה */}
+      {task.status === "approved" && (
+        <div className="text-center py-3 bg-gray-100 rounded-xl text-gray-500">
+          ✅ משימה נסגרה
         </div>
       )}
     </div>

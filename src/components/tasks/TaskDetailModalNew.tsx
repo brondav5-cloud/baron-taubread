@@ -164,11 +164,18 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 pb-[calc(env(safe-area-inset-bottom)+120px)]">
+        <div className="flex-1 overflow-y-auto p-4 pb-4">
           {activeTab === "details" && (
             <DetailsTab
               task={currentTask}
               canEdit={canEditAssignees}
+              canManageTreatment={canManageTreatment}
+              expectedCompletionAtInput={expectedCompletionAtInput}
+              progressUpdateText={progressUpdateText}
+              onExpectedCompletionAtInputChange={setExpectedCompletionAtInput}
+              onProgressUpdateTextChange={setProgressUpdateText}
+              onUpdateExpectedCompletion={handleUpdateExpectedCompletion}
+              onAddProgressUpdate={handleAddProgressUpdate}
               onAddAssignee={handleAddAssignee}
               onRemoveAssignee={handleRemoveAssignee}
             />
@@ -191,7 +198,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
           {activeTab === "history" && <HistoryTab task={currentTask} />}
         </div>
 
-        {/* Actions */}
+        {/* Actions — slim bar, buttons only */}
         <TaskActions
           task={currentTask}
           isAssignee={isAssignee}
@@ -200,22 +207,16 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
           showRejectForm={showRejectForm}
           completeResponse={completeResponse}
           rejectReason={rejectReason}
-          expectedCompletionAtInput={expectedCompletionAtInput}
-          progressUpdateText={progressUpdateText}
           confirmComplete={confirmComplete}
           canManageTreatment={canManageTreatment}
           onCompleteResponseChange={setCompleteResponse}
           onRejectReasonChange={setRejectReason}
-          onExpectedCompletionAtInputChange={setExpectedCompletionAtInput}
-          onProgressUpdateTextChange={setProgressUpdateText}
           onConfirmCompleteChange={setConfirmComplete}
           onShowRejectForm={setShowRejectForm}
           onStartTask={handleStartTask}
           onCompleteTask={handleCompleteTask}
           onApproveTask={handleApproveTask}
           onRejectTask={handleRejectTask}
-          onUpdateExpectedCompletion={handleUpdateExpectedCompletion}
-          onAddProgressUpdate={handleAddProgressUpdate}
         />
       </div>
 
