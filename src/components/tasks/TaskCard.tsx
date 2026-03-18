@@ -77,7 +77,7 @@ export function TaskCard({
               פרטי
             </span>
           )}
-          <OverdueBadge dueDate={task.dueDate} status={task.status} />
+          <OverdueBadge dueDate={task.dueDate} status={task.status} expectedCompletionAt={task.expectedCompletionAt} />
         </div>
         <TaskStatusBadge status={task.status} size="sm" />
       </div>

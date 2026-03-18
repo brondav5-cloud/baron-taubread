@@ -100,10 +100,15 @@ export function TaskStatsCards({
       (t) => t.createdBy === currentUser.id,
     ).length;
     const overdueTasks = tasks.filter((t) => {
-      const isOverdue =
-        new Date(t.dueDate) < new Date() && t.status !== "approved";
+      if (t.status === "approved") return false;
       const isMyTask = t.assignees.some((a) => a.userId === currentUser.id);
-      return isOverdue && isMyTask && isTaskVisibleToCurrentUser(t);
+      if (!isMyTask || !isTaskVisibleToCurrentUser(t)) return false;
+      const effectiveDeadline =
+        t.expectedCompletionAt &&
+        new Date(t.expectedCompletionAt) > new Date(t.dueDate)
+          ? t.expectedCompletionAt
+          : t.dueDate;
+      return new Date(effectiveDeadline) < new Date();
     }).length;
 
     // משימות מורכבות

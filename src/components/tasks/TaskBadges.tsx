@@ -104,12 +104,19 @@ export function TaskCategoryBadge({
 interface OverdueBadgeProps {
   dueDate: string;
   status: TaskStatus;
+  expectedCompletionAt?: string;
 }
 
-export function OverdueBadge({ dueDate, status }: OverdueBadgeProps) {
+export function OverdueBadge({ dueDate, status, expectedCompletionAt }: OverdueBadgeProps) {
   if (status === "approved") return null;
 
-  const isOverdue = new Date(dueDate) < new Date();
+  // If the assignee set a future expected completion date, respect it
+  const effectiveDeadline =
+    expectedCompletionAt && new Date(expectedCompletionAt) > new Date(dueDate)
+      ? expectedCompletionAt
+      : dueDate;
+
+  const isOverdue = new Date(effectiveDeadline) < new Date();
   if (!isOverdue) return null;
 
   return (

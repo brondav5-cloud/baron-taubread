@@ -50,7 +50,12 @@ export function useTaskQueries(tasks: Task[]) {
           t.assignees.some((a) => a.userId === userId);
         if (!isInvolved) return false;
         if (!isTaskVisibleForUser(t, userId)) return false;
-        return new Date(t.dueDate) < new Date();
+        const effectiveDeadline =
+          t.expectedCompletionAt &&
+          new Date(t.expectedCompletionAt) > new Date(t.dueDate)
+            ? t.expectedCompletionAt
+            : t.dueDate;
+        return new Date(effectiveDeadline) < new Date();
       }),
     [isTaskVisibleForUser, tasks],
   );

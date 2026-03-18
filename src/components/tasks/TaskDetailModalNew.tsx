@@ -113,6 +113,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
               <OverdueBadge
                 dueDate={currentTask.dueDate}
                 status={currentTask.status}
+                expectedCompletionAt={currentTask.expectedCompletionAt}
               />
             </div>
             <h2 className="text-lg font-bold text-gray-900">
@@ -217,6 +218,7 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
           onCompleteTask={handleCompleteTask}
           onApproveTask={handleApproveTask}
           onRejectTask={handleRejectTask}
+          onClose={onClose}
         />
       </div>
 

@@ -21,6 +21,7 @@ interface TaskActionsProps {
   onCompleteTask: () => void;
   onApproveTask: () => void;
   onRejectTask: () => void;
+  onClose: () => void;
 }
 
 export function TaskActions({
@@ -41,6 +42,7 @@ export function TaskActions({
   onCompleteTask,
   onApproveTask,
   onRejectTask,
+  onClose,
 }: TaskActionsProps) {
   const showAnything =
     (isAssignee && (myStatus === "new" || myStatus === "seen")) ||
@@ -64,30 +66,45 @@ export function TaskActions({
         </button>
       )}
 
-      {/* בטיפול: כפתור סיים משימה */}
+      {/* בטיפול: תגובה + כפתורים */}
       {canManageTreatment && (
         <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              תגובה לסיום (מה עשית?)
+              תגובה לסיום{" "}
+              <span className="text-red-500 font-normal text-xs">(חובה לסיום משימה)</span>
             </label>
             <textarea
               value={completeResponse}
               onChange={(e) => onCompleteResponseChange(e.target.value)}
-              placeholder="תאר בקצרה את הפעולות שביצעת..."
+              placeholder="תאר מה עשית בדיוק לפני שסוגר את המשימה..."
               rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
             />
+            {!completeResponse.trim() && (
+              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                <span>⚠️</span>
+                כדי לסיים משימה יש לכתוב תגובה כאן
+              </p>
+            )}
           </div>
           {!confirmComplete ? (
-            <button
-              onClick={() => onConfirmCompleteChange(true)}
-              disabled={!completeResponse.trim()}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <CheckCircle className="w-4 h-4" />
-              סיים משימה
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={onClose}
+                className="flex-1 flex items-center justify-center gap-2 py-3 border border-gray-300 text-gray-600 rounded-xl font-medium hover:bg-gray-50"
+              >
+                המשך טיפול
+              </button>
+              <button
+                onClick={() => onConfirmCompleteChange(true)}
+                disabled={!completeResponse.trim()}
+                className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <CheckCircle className="w-4 h-4" />
+                סיים משימה
+              </button>
+            </div>
           ) : (
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
               <p className="text-sm font-medium text-emerald-800">
