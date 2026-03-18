@@ -1,17 +1,47 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Filter, X } from "lucide-react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { ChevronDown, Filter, GripVertical, X } from "lucide-react";
 import type {
   DistributionV2Row,
   DistributionV2ColumnKey,
   ColumnFiltersState,
   ColumnPicklistsState,
   DistributionV2GroupBlock,
+  DistributionV2SummaryStats,
   GroupByMode,
+  DistributionViewMode,
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
+
+const COLUMN_ORDER_STORAGE_KEY = "distribution-v2-column-order";
+
+function loadColumnOrder(): DistributionV2ColumnKey[] {
+  if (typeof window === "undefined") return [...DISTRIBUTION_V2_COLUMNS];
+  try {
+    const raw = localStorage.getItem(COLUMN_ORDER_STORAGE_KEY);
+    if (!raw) return [...DISTRIBUTION_V2_COLUMNS];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [...DISTRIBUTION_V2_COLUMNS];
+    const set = new Set(DISTRIBUTION_V2_COLUMNS);
+    const ordered = parsed.filter((c: unknown) => typeof c === "string" && set.has(c as DistributionV2ColumnKey));
+    if (ordered.length !== set.size) return [...DISTRIBUTION_V2_COLUMNS];
+    return ordered as DistributionV2ColumnKey[];
+  } catch {
+    return [...DISTRIBUTION_V2_COLUMNS];
+  }
+}
 
 const COLUMN_LABELS: Record<DistributionV2ColumnKey, string> = {
   month: "חודש",
@@ -38,16 +68,84 @@ function getCellValue(row: DistributionV2Row, column: DistributionV2ColumnKey): 
   return String(v);
 }
 
+function getTdClassForColumn(col: DistributionV2ColumnKey, noAccent?: boolean): string {
+  const base = "px-3 py-2.5 text-slate-700 align-middle border-s border-slate-100 first:border-s-0 text-[13px] leading-snug";
+  const accent = noAccent ? "font-medium text-slate-800" : "border-s-[3px] border-s-primary-400/25 font-medium text-slate-800";
+  if (col === "month") return `${base} ${accent}`;
+  if (col === "periodDate" || col === "customerId" || col === "productId") return `${base} tabular-nums whitespace-nowrap`;
+  if (col === "customer" || col === "product") return `${base} max-w-[14rem]`;
+  if (col === "quantity") return `${base} font-medium tabular-nums`;
+  if (col === "returns") return `${base} tabular-nums`;
+  if (col === "sales") return `${base} tabular-nums font-semibold text-slate-900`;
+  return base;
+}
+
 const GROUP_BY_HINT: Record<GroupByMode, string> = {
   products: "מוצר",
   customers: "חנות / לקוח",
   drivers: "נהג",
 };
 
+function SortableTh({
+  col,
+  label,
+  children,
+}: {
+  col: DistributionV2ColumnKey;
+  label: string;
+  children?: React.ReactNode;
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: col });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+  return (
+    <th
+      ref={setNodeRef}
+      style={style}
+      className={[
+        "px-3 py-3 text-xs font-bold text-slate-600 tracking-wide whitespace-nowrap border-s border-slate-200/80 first:border-s-0",
+        isDragging && "opacity-60 bg-slate-200 z-10",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <div className="flex items-center justify-end gap-1.5">
+        {children}
+        <span className="flex-1 min-w-0 truncate">{label}</span>
+        <span
+          {...attributes}
+          {...listeners}
+          className="cursor-grab active:cursor-grabbing touch-none p-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
+          aria-label="גרור לשינוי סדר עמודה"
+        >
+          <GripVertical className="w-4 h-4 shrink-0" />
+        </span>
+      </div>
+    </th>
+  );
+}
+
+/** Max detail rows to show when expanding all — beyond this we batch or cap */
+const MAX_EXPANDED_ROWS = 500;
+/** Groups to add per frame when expanding progressively */
+const EXPAND_BATCH_GROUPS = 4;
+
 interface DistributionV2TableProps {
+  viewMode: DistributionViewMode;
+  displayRows: DistributionV2Row[];
   groupBlocks: DistributionV2GroupBlock[];
   groupBy: GroupByMode;
   filteredRowCount: number;
+  summaryStats: DistributionV2SummaryStats | null;
   rowsBeforeColumnFilter: DistributionV2Row[];
   columnFilters: ColumnFiltersState;
   columnPicklists: ColumnPicklistsState;
@@ -58,9 +156,12 @@ interface DistributionV2TableProps {
 }
 
 export function DistributionV2Table({
+  viewMode,
+  displayRows,
   groupBlocks,
   groupBy,
   filteredRowCount,
+  summaryStats,
   rowsBeforeColumnFilter,
   columnFilters,
   columnPicklists,
@@ -69,13 +170,61 @@ export function DistributionV2Table({
   onClearColumnFilters,
   hasActiveColumnFilters,
 }: DistributionV2TableProps) {
+  const [columnOrder, setColumnOrder] = useState<DistributionV2ColumnKey[]>(loadColumnOrder);
   const [openColumn, setOpenColumn] = useState<DistributionV2ColumnKey | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [expandAllBlocked, setExpandAllBlocked] = useState(false);
+  const [isExpanding, setIsExpanding] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null!);
+  const expandingRef = useRef(false);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(columnOrder));
+    } catch {
+      /* ignore */
+    }
+  }, [columnOrder]);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setColumnOrder((prev) => {
+      const a = prev.indexOf(active.id as DistributionV2ColumnKey);
+      const b = prev.indexOf(over.id as DistributionV2ColumnKey);
+      if (a === -1 || b === -1) return prev;
+      return arrayMove(prev, a, b);
+    });
+  }, []);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor)
+  );
 
   useEffect(() => {
     setExpandedIds(new Set());
+    setExpandAllBlocked(false);
   }, [groupBy]);
+
+  /** Lock body scroll when any column filter popover is open (modal behavior) */
+  useEffect(() => {
+    if (!openColumn) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevPaddingRight = document.body.style.paddingRight;
+    document.body.style.overflow = "hidden";
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.paddingRight = prevPaddingRight;
+    };
+  }, [openColumn]);
+
+  const totalRowsOnPage = useMemo(
+    () => groupBlocks.reduce((s, g) => s + g.rowCount, 0),
+    [groupBlocks],
+  );
 
   const toggleGroup = (id: string) => {
     setExpandedIds((prev) => {
@@ -86,11 +235,45 @@ export function DistributionV2Table({
     });
   };
 
-  const expandAllOnPage = () => {
-    setExpandedIds(new Set(groupBlocks.map((g) => g.id)));
-  };
+  const expandAllOnPage = useCallback(() => {
+    if (expandingRef.current) return;
+    const ids = groupBlocks.map((g) => g.id);
+    if (ids.length === 0) return;
 
-  const collapseAllOnPage = () => setExpandedIds(new Set());
+    if (totalRowsOnPage > MAX_EXPANDED_ROWS) {
+      setExpandAllBlocked(true);
+      return;
+    }
+
+    expandingRef.current = true;
+    setIsExpanding(true);
+    let index = 0;
+
+    const runBatch = () => {
+      const batch = ids.slice(index, index + EXPAND_BATCH_GROUPS);
+      index += EXPAND_BATCH_GROUPS;
+      setExpandedIds((prev) => {
+        const next = new Set(prev);
+        batch.forEach((id) => next.add(id));
+        return next;
+      });
+      if (index < ids.length) {
+        requestAnimationFrame(runBatch);
+      } else {
+        expandingRef.current = false;
+        setIsExpanding(false);
+      }
+    };
+    requestAnimationFrame(runBatch);
+  }, [groupBlocks, totalRowsOnPage]);
+
+  const collapseAllOnPage = useCallback(() => {
+    if (expandedIds.size === 0) return;
+    setExpandAllBlocked(false);
+    startTransition(() => {
+      setExpandedIds(new Set());
+    });
+  }, [expandedIds.size]);
 
   useEffect(() => {
     if (!openColumn) return;
@@ -136,26 +319,59 @@ export function DistributionV2Table({
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-soft overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-2xl">
-          <span className="font-bold text-slate-800">קבוצה לפי {GROUP_BY_HINT[groupBy]}</span>
-          <span className="text-slate-400 mx-1.5">·</span>
-          שורה אחת לכל קבוצה — לחץ להרחבה
-        </p>
-        <div className="flex items-center gap-3 shrink-0 text-xs font-semibold">
+      {viewMode === "grouped" ? (
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-2xl">
+            <span className="font-bold text-slate-800">קבוצה לפי {GROUP_BY_HINT[groupBy]}</span>
+            <span className="text-slate-400 mx-1.5">·</span>
+            שורה אחת לכל קבוצה — לחץ להרחבה
+          </p>
+          <div className="flex flex-wrap items-center gap-3 shrink-0 text-xs font-semibold">
+            {expandAllBlocked && (
+              <span className="text-amber-700 bg-amber-50 px-2 py-1 rounded-lg">
+                בעמוד זה {totalRowsOnPage.toLocaleString("he-IL")} שורות — הרחב קבוצות בודדות
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={expandAllOnPage}
+              disabled={isExpanding}
+              className="text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-wait"
+            >
+              {isExpanding ? "פותח…" : "פתח הכל"}
+            </button>
+            <span className="text-slate-200">|</span>
+            <button type="button" onClick={collapseAllOnPage} className="text-slate-500 hover:text-slate-800">
+              סגור הכל
+            </button>
+            <span className="text-slate-200">|</span>
+            <button
+              type="button"
+              onClick={() => setColumnOrder([...DISTRIBUTION_V2_COLUMNS])}
+              className="text-slate-500 hover:text-slate-800 text-xs"
+              title="החזר סדר עמודות לברירת מחדל"
+            >
+              איפוס סדר עמודות
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="px-5 py-3.5 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs sm:text-sm text-slate-600">
+            <span className="font-bold text-slate-800">תצוגה רגילה</span>
+            <span className="text-slate-400 mx-1.5">·</span>
+            כל שורה בנפרד (ממוין לפי הקיבוץ שנבחר)
+          </p>
           <button
             type="button"
-            onClick={expandAllOnPage}
-            className="text-primary-600 hover:text-primary-700"
+            onClick={() => setColumnOrder([...DISTRIBUTION_V2_COLUMNS])}
+            className="text-slate-500 hover:text-slate-800 text-xs shrink-0"
+            title="החזר סדר עמודות לברירת מחדל"
           >
-            פתח הכל
-          </button>
-          <span className="text-slate-200">|</span>
-          <button type="button" onClick={collapseAllOnPage} className="text-slate-500 hover:text-slate-800">
-            סגור הכל
+            איפוס סדר עמודות
           </button>
         </div>
-      </div>
+      )}
       {hasActiveColumnFilters && (
         <div className="px-5 py-2.5 bg-amber-50/90 border-b border-amber-100/80 flex items-center gap-3 flex-wrap">
           <span className="text-xs font-bold text-amber-900">פילטר עמודות</span>
@@ -168,48 +384,103 @@ export function DistributionV2Table({
           </button>
         </div>
       )}
-      <div className="overflow-x-auto">
-        <table className="w-full text-[13px] text-right border-collapse min-w-[960px]">
-          <thead className="sticky top-0 z-[8]">
-            <tr className="bg-[#f4f6f9] border-b border-slate-200">
-              {DISTRIBUTION_V2_COLUMNS.map((col) => (
-                <th
-                  key={col}
-                  className="px-3 py-3 text-xs font-bold text-slate-600 tracking-wide whitespace-nowrap border-s border-slate-200/80 first:border-s-0"
-                >
-                  {COLUMN_LABELS[col]}
-                </th>
-              ))}
-            </tr>
-            <tr className="bg-[#fafbfc] border-b border-slate-200">
-              {DISTRIBUTION_V2_COLUMNS.map((col) => (
-                <th key={col} className="p-2 border-s border-slate-100 first:border-s-0 align-middle">
-                  <ColumnFilterCell
-                    col={col}
-                    label={COLUMN_LABELS[col]}
-                    isOpen={openColumn === col}
-                    onOpen={() => setOpenColumn(col)}
-                    hasPicklist={(columnPicklists[col]?.length ?? 0) > 0}
-                    hasText={Boolean(columnFilters[col]?.trim())}
-                    allValues={uniquesByColumn.get(col) ?? []}
-                    columnFilters={columnFilters}
-                    columnPicklists={columnPicklists}
-                    onColumnFilter={onColumnFilter}
-                    onColumnPicklist={onColumnPicklist}
-                    onClose={() => setOpenColumn(null)}
-                    popoverRef={openColumn === col ? popoverRef : undefined}
-                  />
-                </th>
-              ))}
-            </tr>
-          </thead>
+      <div className="overflow-x-auto" role="region" aria-label="טבלת נתוני חלוקה">
+        <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
+          <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
+            <table className="w-full text-[13px] text-right border-collapse min-w-[960px]" role="table">
+              <thead className="sticky top-0 z-[8]">
+                <tr className="bg-[#f4f6f9] border-b border-slate-200">
+                  {columnOrder.map((col) => (
+                    <SortableTh key={col} col={col} label={COLUMN_LABELS[col]} />
+                  ))}
+                </tr>
+                <tr className="bg-[#fafbfc] border-b border-slate-200">
+                  {columnOrder.map((col) => (
+                    <th key={col} className="p-2 border-s border-slate-100 first:border-s-0 align-middle">
+                      <ColumnFilterCell
+                        col={col}
+                        label={COLUMN_LABELS[col]}
+                        isOpen={openColumn === col}
+                        onOpen={() => setOpenColumn(col)}
+                        hasPicklist={(columnPicklists[col]?.length ?? 0) > 0}
+                        hasText={Boolean(columnFilters[col]?.trim())}
+                        allValues={uniquesByColumn.get(col) ?? []}
+                        columnFilters={columnFilters}
+                        columnPicklists={columnPicklists}
+                        onColumnFilter={onColumnFilter}
+                        onColumnPicklist={onColumnPicklist}
+                        onClose={() => setOpenColumn(null)}
+                        popoverRef={openColumn === col ? popoverRef : undefined}
+                      />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
           <tbody>
-            {groupBlocks.map((block) => {
+            {summaryStats &&
+              (() => {
+                const firstCol = columnOrder[0];
+                return (
+                  <tr className="bg-slate-800 text-white border-b-2 border-slate-600" aria-label="שורת סיכום כללי">
+                    {columnOrder.map((col) => {
+                      if (col === firstCol) {
+                        return (
+                          <td key={col} className="px-4 py-3 text-sm font-bold">
+                            <span className="text-white">סיכום כללי</span>
+                            <span className="text-slate-300 font-normal mr-3 text-xs">
+                              · {summaryStats.storeCount.toLocaleString("he-IL")} חנויות · {summaryStats.periodCount} חודשים · {summaryStats.productCount} מוצרים
+                            </span>
+                          </td>
+                        );
+                      }
+                      if (col === "quantity") {
+                        return (
+                          <td key={col} className="px-3 py-3 text-sm font-bold tabular-nums text-white">
+                            {summaryStats.totalQuantity.toLocaleString("he-IL")}
+                          </td>
+                        );
+                      }
+                      if (col === "returns") {
+                        return (
+                          <td key={col} className="px-3 py-3 text-sm font-bold tabular-nums text-white">
+                            {summaryStats.totalReturns.toLocaleString("he-IL")}
+                          </td>
+                        );
+                      }
+                      if (col === "sales") {
+                        return (
+                          <td key={col} className="px-3 py-3 text-sm font-bold tabular-nums text-emerald-200">
+                            ₪{summaryStats.totalSales.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
+                        );
+                      }
+                      return (
+                        <td key={col} className="px-3 py-3 text-slate-400 text-xs">
+                          —
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })()}
+            {viewMode === "flat"
+              ? displayRows.map((row, i) => (
+                  <tr
+                    key={row.id}
+                    className={[
+                      "border-b border-slate-100/90 transition-colors hover:bg-slate-50/80",
+                      i % 2 === 1 ? "bg-[#fafbfc]" : "bg-white",
+                    ].join(" ")}
+                  >
+                    <DetailCells row={row} columnOrder={columnOrder} noAccent />
+                  </tr>
+                ))
+              : groupBlocks.map((block) => {
               const expanded = expandedIds.has(block.id);
               return (
                 <Fragment key={block.id}>
                   <tr className="bg-gradient-to-l from-slate-100/95 to-slate-50/90 border-b border-slate-200 hover:from-slate-100 hover:to-slate-50 transition-colors">
-                    <td colSpan={DISTRIBUTION_V2_COLUMNS.length} className="px-4 py-3 align-middle border-s-4 border-s-primary-500/35">
+                    <td colSpan={columnOrder.length} className="px-4 py-3 align-middle border-s-4 border-s-primary-500/35">
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <button
                           type="button"
@@ -262,14 +533,17 @@ export function DistributionV2Table({
                           i % 2 === 1 ? "bg-[#fafbfc]" : "bg-white",
                         ].join(" ")}
                       >
-                        <DetailCells row={row} />
+                        <DetailCells row={row} columnOrder={columnOrder} />
                       </tr>
                     ))}
                 </Fragment>
               );
-            })}
+            })
+            }
           </tbody>
         </table>
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );
@@ -290,27 +564,34 @@ function Td({ children, className }: { children: React.ReactNode; className?: st
   );
 }
 
-function DetailCells({ row }: { row: DistributionV2Row }) {
+function formatCellValue(row: DistributionV2Row, col: DistributionV2ColumnKey): React.ReactNode {
+  const v = row[col];
+  if (v === undefined || v === null) return "—";
+  if (col === "sales" && typeof v === "number") {
+    return `₪${v.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+  if ((col === "quantity" || col === "returns") && typeof v === "number") {
+    return v.toLocaleString("he-IL");
+  }
+  return String(v);
+}
+
+function DetailCells({
+  row,
+  columnOrder,
+  noAccent,
+}: {
+  row: DistributionV2Row;
+  columnOrder: DistributionV2ColumnKey[];
+  noAccent?: boolean;
+}) {
   return (
     <>
-      <Td className="border-s-[3px] border-s-primary-400/25 font-medium text-slate-800">{row.month ?? "—"}</Td>
-      <Td className="tabular-nums whitespace-nowrap">{row.periodDate ?? "—"}</Td>
-      <Td className="tabular-nums">{row.customerId ?? "—"}</Td>
-      <Td className="max-w-[14rem]">{row.customer ?? "—"}</Td>
-      <Td>{row.network ?? "—"}</Td>
-      <Td>{row.city ?? "—"}</Td>
-      <Td className="tabular-nums">{row.productId ?? "—"}</Td>
-      <Td className="max-w-[14rem]">{row.product ?? "—"}</Td>
-      <Td>{row.productCategory ?? "—"}</Td>
-      <Td className="font-medium tabular-nums">{row.quantity.toLocaleString("he-IL")}</Td>
-      <Td className="tabular-nums">{row.returns.toLocaleString("he-IL")}</Td>
-      <Td className="tabular-nums font-semibold text-slate-900">
-        {row.sales != null
-          ? `₪${row.sales.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-          : "—"}
-      </Td>
-      <Td>{row.driver ?? "—"}</Td>
-      <Td>{row.agent ?? "—"}</Td>
+      {columnOrder.map((col) => (
+        <Td key={col} className={getTdClassForColumn(col, noAccent)}>
+          {formatCellValue(row, col)}
+        </Td>
+      ))}
     </>
   );
 }
@@ -470,19 +751,30 @@ function ColumnFilterCell({
         popoverRef &&
         typeof document !== "undefined" &&
         createPortal(
-          <div
-            ref={popoverRef}
-            data-column-filter-popover
-            className="fixed z-[200] rounded-xl border border-slate-200 bg-white shadow-xl flex flex-col min-h-0 overflow-hidden"
-            style={{
-              top: position.top,
-              left: position.left,
-              width: position.width,
-              maxHeight: position.maxHeight,
-            }}
-            dir="rtl"
-          >
-          <div className="shrink-0 px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
+          <>
+            <div
+              role="presentation"
+              aria-hidden
+              className="fixed inset-0 z-[199] bg-black/40 backdrop-blur-[2px]"
+              onClick={onClose}
+            />
+            <div
+              ref={popoverRef}
+              data-column-filter-popover
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="column-filter-title"
+              className="fixed z-[200] rounded-xl border border-slate-200 bg-white shadow-2xl flex flex-col min-h-0 overflow-hidden"
+              style={{
+                top: position.top,
+                left: position.left,
+                width: position.width,
+                maxHeight: position.maxHeight,
+              }}
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+            >
+          <div id="column-filter-title" className="shrink-0 px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-slate-800">סינון: {label}</span>
             <button
               type="button"
@@ -566,7 +858,8 @@ function ColumnFilterCell({
               החל
             </button>
           </div>
-        </div>,
+        </div>
+          </>,
           document.body,
         )}
     </>

@@ -15,6 +15,7 @@ import type {
   ColumnFiltersState,
   ColumnPicklistsState,
   DistributionV2GroupBlock,
+  DistributionViewMode,
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
@@ -301,8 +302,14 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const [columnFilters, setColumnFiltersState] = useState<ColumnFiltersState>({});
   const [columnPicklists, setColumnPicklistsState] = useState<ColumnPicklistsState>({});
   const [groupBy, setGroupBy] = useState<GroupByMode>("products");
+  const [viewMode, setViewModeState] = useState<DistributionViewMode>("flat");
   const [pageSize, setPageSize] = useState(50);
   const [currentPage, setCurrentPage] = useState(1);
+
+  const setViewMode = useCallback((mode: DistributionViewMode) => {
+    setViewModeState(mode);
+    setCurrentPage(1);
+  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -448,12 +455,24 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   );
   const groupCount = groupBlocks.length;
 
-  const totalPages = Math.max(1, Math.ceil(groupCount / pageSize));
+  const totalItems = viewMode === "flat" ? totalRows : groupCount;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
   const effectivePage = totalPages < 1 ? 1 : Math.min(currentPage, totalPages);
 
+  const displayRows = useMemo(
+    () =>
+      viewMode === "flat"
+        ? sortedRows.slice((effectivePage - 1) * pageSize, effectivePage * pageSize)
+        : [],
+    [viewMode, sortedRows, effectivePage, pageSize],
+  );
+
   const displayGroupBlocks = useMemo(
-    () => groupBlocks.slice((effectivePage - 1) * pageSize, effectivePage * pageSize),
-    [groupBlocks, effectivePage, pageSize],
+    () =>
+      viewMode === "grouped"
+        ? groupBlocks.slice((effectivePage - 1) * pageSize, effectivePage * pageSize)
+        : [],
+    [viewMode, groupBlocks, effectivePage, pageSize],
   );
 
   const summaryStats: DistributionV2SummaryStats | null = useMemo(() => {
@@ -513,6 +532,26 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     };
   }, [summaryStats]);
 
+  /** Latest period end date in current (filtered) data — DD/MM/YYYY */
+  const dataLastDate = useMemo(() => {
+    if (rows.length === 0) return null;
+    let maxKey = "";
+    for (const r of rows) {
+      const p = r.periodDate;
+      if (!p || typeof p !== "string") continue;
+      const parts = p.trim().split("/");
+      if (parts.length !== 3) continue;
+      const [d, m, y] = parts;
+      const key = `${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}`;
+      if (key > maxKey) maxKey = key;
+    }
+    if (!maxKey || maxKey.length < 8) return null;
+    const y = maxKey.slice(0, 4);
+    const m = maxKey.slice(4, 6);
+    const d = maxKey.slice(6, 8);
+    return `${d}/${m}/${y}`;
+  }, [rows]);
+
   return {
     isLoading,
     error,
@@ -529,6 +568,9 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     groupBy,
     setGroupBy,
     rows,
+    viewMode,
+    setViewMode,
+    displayRows,
     displayGroupBlocks,
     groupCount,
     summaryStats,
@@ -539,5 +581,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     currentPage: effectivePage,
     setCurrentPage,
     totalPages,
+    totalItems,
+    dataLastDate,
   };
 }

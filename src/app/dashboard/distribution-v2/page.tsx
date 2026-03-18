@@ -65,28 +65,42 @@ export default function DistributionV2Page() {
 
   if (hook.isLoading && hook.rows.length === 0) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <LoadingState message="טוען נתונים..." />
+      <div className="flex items-center justify-center min-h-[420px] font-assistant">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-soft px-10 py-12 text-center max-w-md">
+          <LoadingState message="טוען נתונים..." />
+          <p className="text-slate-500 text-sm mt-4">מכין את רשימת החלוקה</p>
+        </div>
       </div>
     );
   }
 
   if (hook.error) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center">
-        <p className="text-red-500 mb-4">{hook.error}</p>
-        <button
-          onClick={hook.refetch}
-          className="px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600"
-        >
-          נסה שוב
-        </button>
+      <div className="flex flex-col items-center justify-center min-h-[420px] text-center font-assistant">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-soft px-10 py-12 max-w-md">
+          <p className="text-red-600 font-semibold mb-2">שגיאה בטעינת הנתונים</p>
+          <p className="text-slate-600 text-sm mb-6">{hook.error}</p>
+          <button
+            type="button"
+            onClick={hook.refetch}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold bg-primary-600 text-white hover:bg-primary-700 shadow-sm transition-colors"
+          >
+            נסה שוב
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-5 max-w-[1920px] mx-auto pb-2 font-assistant antialiased" dir="rtl">
+      {hook.dataLastDate && (
+        <div className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 text-sm font-medium text-slate-700 shadow-sm">
+          <span className="text-slate-500">הנתונים כולל עד תאריך</span>
+          <span className="font-bold text-slate-900 tabular-nums">{hook.dataLastDate}</span>
+          <span className="text-slate-400 text-xs hidden sm:inline">(תאריך אחרון בנתונים)</span>
+        </div>
+      )}
       <DistributionV2Header
         hook={hook}
         onToggleFilters={() => setFiltersOpen((v) => !v)}
@@ -118,9 +132,12 @@ export default function DistributionV2Page() {
       <DistributionV2KpiBar summaryStats={hook.summaryStats} />
 
       <DistributionV2Table
+        viewMode={hook.viewMode}
+        displayRows={hook.displayRows}
         groupBlocks={hook.displayGroupBlocks}
         groupBy={hook.groupBy}
         filteredRowCount={hook.totalRows}
+        summaryStats={hook.summaryStats}
         rowsBeforeColumnFilter={hook.rowsBeforeColumnFilter}
         columnFilters={hook.columnFilters}
         columnPicklists={hook.columnPicklists}
@@ -138,8 +155,8 @@ export default function DistributionV2Page() {
           currentPage={hook.currentPage}
           totalPages={hook.totalPages}
           pageSize={hook.pageSize}
-          totalItems={hook.groupCount}
-          pageUnitLabel="קבוצות"
+          totalItems={hook.totalItems}
+          pageUnitLabel={hook.viewMode === "flat" ? "שורות" : "קבוצות"}
           onPageChange={hook.setCurrentPage}
           onPageSizeChange={hook.setPageSize}
         />

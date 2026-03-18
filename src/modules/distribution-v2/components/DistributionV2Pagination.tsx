@@ -48,7 +48,8 @@ export function DistributionV2Pagination({
             type="button"
             onClick={() => onPageChange(1)}
             disabled={currentPage <= 1}
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm"
+            aria-label="עמוד ראשון"
+            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             ראשון
           </button>
@@ -56,18 +57,20 @@ export function DistributionV2Pagination({
             type="button"
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm"
+            aria-label="עמוד קודם"
+            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             הקודם
           </button>
-          <span className="px-3 py-1.5 text-xs font-bold text-slate-800 tabular-nums min-w-[5.5rem] text-center">
+          <span className="px-3 py-1.5 text-xs font-bold text-slate-800 tabular-nums min-w-[5.5rem] text-center" aria-live="polite">
             {currentPage} / {totalPages}
           </span>
           <button
             type="button"
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm"
+            aria-label="עמוד הבא"
+            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             הבא
           </button>
@@ -75,7 +78,8 @@ export function DistributionV2Pagination({
             type="button"
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage >= totalPages}
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm"
+            aria-label="עמוד אחרון"
+            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             אחרון
           </button>

@@ -86,7 +86,7 @@ export function DistributionV2FiltersBar({
           })}
         </div>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4" role="group" aria-label="סינון לפי תאריך וערכים">
         <div className="space-y-2">
           <label className="block text-xs font-semibold text-slate-500">מתאריך</label>
           <input

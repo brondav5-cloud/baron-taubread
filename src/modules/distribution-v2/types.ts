@@ -5,6 +5,9 @@
 
 export type GroupByMode = "products" | "customers" | "drivers";
 
+/** Table display: flat list of rows or grouped by product/customer/driver */
+export type DistributionViewMode = "flat" | "grouped";
+
 /** One collapsible group in the table (by product / customer / driver) */
 export interface DistributionV2GroupBlock {
   id: string;
@@ -159,18 +162,25 @@ export interface UseDistributionV2Return {
   groupBy: GroupByMode;
   setGroupBy: (mode: GroupByMode) => void;
   rows: DistributionV2Row[];
-  /** Paginated group blocks for the table (one row per group until expanded) */
+  /** "flat" = list of rows; "grouped" = one row per group with expand */
+  viewMode: DistributionViewMode;
+  setViewMode: (mode: DistributionViewMode) => void;
+  /** Paginated rows for flat view */
+  displayRows: DistributionV2Row[];
+  /** Paginated group blocks for grouped view */
   displayGroupBlocks: DistributionV2GroupBlock[];
-  /** Total groups after filters (for pagination) */
   groupCount: number;
-  /** Full summary for current filter selection */
   summaryStats: DistributionV2SummaryStats | null;
   kpi: DistributionV2Kpi | null;
   totalRows: number;
-  /** Pagination */
+  /** Pagination: applies to rows (flat) or groups (grouped) */
   pageSize: number;
   setPageSize: (size: number) => void;
   currentPage: number;
   setCurrentPage: (page: number) => void;
   totalPages: number;
+  /** For pagination label: rows vs groups */
+  totalItems: number;
+  /** Latest period end date in current data (DD/MM/YYYY), for "data inclusive until" banner */
+  dataLastDate: string | null;
 }
