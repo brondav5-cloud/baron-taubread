@@ -14,9 +14,9 @@ interface DistributionV2HeaderProps {
 }
 
 const GROUP_LABELS: Record<GroupByMode, string> = {
-  products: "קבץ לפי מוצרים",
-  customers: "קבץ לפי לקוחות",
-  drivers: "קבץ לפי נהגים",
+  products: "לפי מוצרים",
+  customers: "לפי לקוחות",
+  drivers: "לפי נהגים",
 };
 
 export function DistributionV2Header({
@@ -25,7 +25,7 @@ export function DistributionV2Header({
   filtersOpen,
   activeFiltersCount,
 }: DistributionV2HeaderProps) {
-  const { totalRows, groupBy, setGroupBy, isLoading, refetch, rows } = hook;
+  const { totalRows, groupCount, groupBy, setGroupBy, isLoading, refetch, rows } = hook;
   const [exporting, setExporting] = useState(false);
 
   const handleExportExcel = async () => {
@@ -39,39 +39,53 @@ export function DistributionV2Header({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">
-          נתוני חלוקה
-          <span className="text-lg font-normal text-gray-500 mr-2">
-            ({totalRows} שורות)
-          </span>
-        </h1>
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-col gap-5">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+          <h1 className="text-[1.65rem] font-bold text-slate-900 tracking-tight leading-tight">
+            נתוני חלוקה
+          </h1>
+          <p className="mt-1.5 text-sm text-slate-500 font-medium tabular-nums">
+            <span className="text-slate-700">{totalRows.toLocaleString("he-IL")}</span>
+            {" שורות"}
+            <span className="text-slate-300 mx-2">·</span>
+            <span className="text-slate-700">{groupCount.toLocaleString("he-IL")}</span>
+            {" קבוצות"}
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 p-1.5 bg-white rounded-2xl border border-slate-200/90 shadow-soft">
           <button
+            type="button"
             onClick={refetch}
             disabled={isLoading}
             className={clsx(
-              "p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors",
-              isLoading && "animate-spin",
+              "p-2.5 rounded-xl text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors",
+              isLoading && "animate-spin text-primary-600",
             )}
             title="רענון נתונים"
           >
-            <RefreshCw className="w-5 h-5" />
+            <RefreshCw className="w-[1.125rem] h-[1.125rem]" />
           </button>
           <button
+            type="button"
             onClick={onToggleFilters}
             className={clsx(
-              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors",
+              "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all",
               filtersOpen
-                ? "bg-primary-600 text-white"
-                : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-50",
+                ? "bg-slate-900 text-white shadow-sm"
+                : "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 hover:border-slate-300",
             )}
           >
-            <Filter className="w-4 h-4" />
+            <Filter className="w-4 h-4 opacity-90" />
             סינון
             {activeFiltersCount > 0 && (
-              <span className="w-5 h-5 bg-white/20 text-inherit rounded-full flex items-center justify-center text-xs font-bold">
+              <span
+                className={clsx(
+                  "min-w-[1.25rem] h-5 px-1 rounded-md text-xs font-bold flex items-center justify-center",
+                  filtersOpen ? "bg-white/20" : "bg-primary-600 text-white",
+                )}
+              >
                 {activeFiltersCount}
               </span>
             )}
@@ -80,7 +94,7 @@ export function DistributionV2Header({
             type="button"
             onClick={handleExportExcel}
             disabled={rows.length === 0 || exporting}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-emerald-600 text-white shadow-sm hover:bg-emerald-700 disabled:opacity-45 disabled:cursor-not-allowed transition-colors"
           >
             {exporting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -91,16 +105,19 @@ export function DistributionV2Header({
           </button>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold text-slate-400 pl-1 hidden sm:inline">קבץ</span>
         {(Object.keys(GROUP_LABELS) as GroupByMode[]).map((mode) => (
           <button
             key={mode}
+            type="button"
             onClick={() => setGroupBy(mode)}
             className={clsx(
-              "px-3 py-1.5 rounded-full text-sm font-medium transition-colors",
+              "px-4 py-2 rounded-xl text-sm font-semibold border transition-all",
               groupBy === mode
-                ? "bg-primary-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200",
+                ? "bg-primary-600 border-primary-600 text-white shadow-sm"
+                : "bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:bg-slate-50/80",
             )}
           >
             {GROUP_LABELS[mode]}

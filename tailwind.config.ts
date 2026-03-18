@@ -23,6 +23,7 @@ const config: Config = {
       },
       fontFamily: {
         heebo: ['Heebo', 'sans-serif'],
+        assistant: ['Assistant', 'Heebo', 'sans-serif'],
       },
       backgroundImage: {
         'gradient-main': 'linear-gradient(135deg, #f8fafc 0%, #eff6ff 50%, #faf5ff 100%)',

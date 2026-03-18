@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Filter, X } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { ChevronDown, Filter, X } from "lucide-react";
 import type {
   DistributionV2Row,
   DistributionV2ColumnKey,
   ColumnFiltersState,
   ColumnPicklistsState,
+  DistributionV2GroupBlock,
+  GroupByMode,
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
@@ -35,8 +38,16 @@ function getCellValue(row: DistributionV2Row, column: DistributionV2ColumnKey): 
   return String(v);
 }
 
+const GROUP_BY_HINT: Record<GroupByMode, string> = {
+  products: "מוצר",
+  customers: "חנות / לקוח",
+  drivers: "נהג",
+};
+
 interface DistributionV2TableProps {
-  rows: DistributionV2Row[];
+  groupBlocks: DistributionV2GroupBlock[];
+  groupBy: GroupByMode;
+  filteredRowCount: number;
   rowsBeforeColumnFilter: DistributionV2Row[];
   columnFilters: ColumnFiltersState;
   columnPicklists: ColumnPicklistsState;
@@ -47,7 +58,9 @@ interface DistributionV2TableProps {
 }
 
 export function DistributionV2Table({
-  rows,
+  groupBlocks,
+  groupBy,
+  filteredRowCount,
   rowsBeforeColumnFilter,
   columnFilters,
   columnPicklists,
@@ -57,7 +70,27 @@ export function DistributionV2Table({
   hasActiveColumnFilters,
 }: DistributionV2TableProps) {
   const [openColumn, setOpenColumn] = useState<DistributionV2ColumnKey | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const popoverRef = useRef<HTMLDivElement>(null!);
+
+  useEffect(() => {
+    setExpandedIds(new Set());
+  }, [groupBy]);
+
+  const toggleGroup = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const expandAllOnPage = () => {
+    setExpandedIds(new Set(groupBlocks.map((g) => g.id)));
+  };
+
+  const collapseAllOnPage = () => setExpandedIds(new Set());
 
   useEffect(() => {
     if (!openColumn) return;
@@ -92,44 +125,65 @@ export function DistributionV2Table({
     return map;
   }, [rowsBeforeColumnFilter]);
 
-  if (rows.length === 0) {
+  if (filteredRowCount === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center text-slate-500">
-        אין נתונים להצגה. התאם סינון או טווח תאריכים.
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-soft p-14 text-center">
+        <p className="text-slate-500 text-sm font-medium">אין נתונים להצגה</p>
+        <p className="text-slate-400 text-xs mt-2">התאם סינון או טווח תאריכים</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-soft overflow-hidden">
+      <div className="px-5 py-3.5 border-b border-slate-100 bg-gradient-to-b from-slate-50/80 to-white flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-2xl">
+          <span className="font-bold text-slate-800">קבוצה לפי {GROUP_BY_HINT[groupBy]}</span>
+          <span className="text-slate-400 mx-1.5">·</span>
+          שורה אחת לכל קבוצה — לחץ להרחבה
+        </p>
+        <div className="flex items-center gap-3 shrink-0 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={expandAllOnPage}
+            className="text-primary-600 hover:text-primary-700"
+          >
+            פתח הכל
+          </button>
+          <span className="text-slate-200">|</span>
+          <button type="button" onClick={collapseAllOnPage} className="text-slate-500 hover:text-slate-800">
+            סגור הכל
+          </button>
+        </div>
+      </div>
       {hasActiveColumnFilters && (
-        <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-wrap">
-          <span className="text-sm text-amber-900 font-medium">סינון עמודות פעיל</span>
+        <div className="px-5 py-2.5 bg-amber-50/90 border-b border-amber-100/80 flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-bold text-amber-900">פילטר עמודות</span>
           <button
             type="button"
             onClick={onClearColumnFilters}
-            className="text-sm text-amber-800 hover:text-amber-950 underline"
+            className="text-xs font-semibold text-amber-800 hover:text-amber-950 underline underline-offset-2"
           >
-            איפוס כל פילטרי העמודות
+            איפוס
           </button>
         </div>
       )}
-      <div className="overflow-x-auto max-h-[min(70vh,900px)] overflow-y-auto">
-        <table className="w-full text-sm text-right border-collapse">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-slate-100 border-b border-slate-300">
+      <div className="overflow-x-auto">
+        <table className="w-full text-[13px] text-right border-collapse min-w-[960px]">
+          <thead className="sticky top-0 z-[8]">
+            <tr className="bg-[#f4f6f9] border-b border-slate-200">
               {DISTRIBUTION_V2_COLUMNS.map((col) => (
                 <th
                   key={col}
-                  className="px-3 py-2.5 font-semibold text-slate-800 whitespace-nowrap border-s border-slate-200 first:border-s-0"
+                  className="px-3 py-3 text-xs font-bold text-slate-600 tracking-wide whitespace-nowrap border-s border-slate-200/80 first:border-s-0"
                 >
                   {COLUMN_LABELS[col]}
                 </th>
               ))}
             </tr>
-            <tr className="bg-slate-50 border-b border-slate-200">
+            <tr className="bg-[#fafbfc] border-b border-slate-200">
               {DISTRIBUTION_V2_COLUMNS.map((col) => (
-                <th key={col} className="p-1.5 border-s border-slate-100 first:border-s-0 align-top">
+                <th key={col} className="p-2 border-s border-slate-100 first:border-s-0 align-middle">
                   <ColumnFilterCell
                     col={col}
                     label={COLUMN_LABELS[col]}
@@ -150,32 +204,70 @@ export function DistributionV2Table({
             </tr>
           </thead>
           <tbody>
-            {rows.map((row, i) => (
-              <tr
-                key={row.id}
-                className={[
-                  "border-b border-slate-100 transition-colors hover:bg-primary-50/40",
-                  i % 2 === 1 ? "bg-slate-50/50" : "bg-white",
-                ].join(" ")}
-              >
-                <Td>{row.month ?? "—"}</Td>
-                <Td className="tabular-nums whitespace-nowrap">{row.periodDate ?? "—"}</Td>
-                <Td className="tabular-nums">{row.customerId ?? "—"}</Td>
-                <Td className="max-w-[14rem]">{row.customer ?? "—"}</Td>
-                <Td>{row.network ?? "—"}</Td>
-                <Td>{row.city ?? "—"}</Td>
-                <Td className="tabular-nums">{row.productId ?? "—"}</Td>
-                <Td className="max-w-[14rem]">{row.product ?? "—"}</Td>
-                <Td>{row.productCategory ?? "—"}</Td>
-                <Td className="font-medium tabular-nums">{row.quantity.toLocaleString("he-IL")}</Td>
-                <Td className="tabular-nums">{row.returns.toLocaleString("he-IL")}</Td>
-                <Td className="tabular-nums font-medium text-slate-900">
-                  {row.sales != null ? `₪${row.sales.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                </Td>
-                <Td>{row.driver ?? "—"}</Td>
-                <Td>{row.agent ?? "—"}</Td>
-              </tr>
-            ))}
+            {groupBlocks.map((block) => {
+              const expanded = expandedIds.has(block.id);
+              return (
+                <Fragment key={block.id}>
+                  <tr className="bg-gradient-to-l from-slate-100/95 to-slate-50/90 border-b border-slate-200 hover:from-slate-100 hover:to-slate-50 transition-colors">
+                    <td colSpan={DISTRIBUTION_V2_COLUMNS.length} className="px-4 py-3 align-middle border-s-4 border-s-primary-500/35">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleGroup(block.id)}
+                          className="flex items-center gap-2.5 text-right rounded-xl px-1 py-0.5 hover:bg-white/70 min-w-0 transition-colors"
+                          aria-expanded={expanded}
+                          aria-label={expanded ? "צמצם קבוצה" : "הרחב קבוצה"}
+                        >
+                          <ChevronDown
+                            className={`w-5 h-5 shrink-0 text-slate-500 transition-transform duration-200 ${expanded ? "rotate-180" : "-rotate-90"}`}
+                          />
+                          <span className="font-bold text-[0.95rem] text-slate-900 tracking-tight truncate max-w-[min(100%,26rem)]">
+                            {block.label}
+                          </span>
+                        </button>
+                        {block.subLabel && (
+                          <span className="text-[11px] font-medium text-slate-500 bg-white/60 px-2 py-0.5 rounded-md border border-slate-200/60">
+                            {block.subLabel}
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-slate-500 tabular-nums">
+                          {block.rowCount.toLocaleString("he-IL")} שורות
+                        </span>
+                        <span className="text-xs text-slate-500">{block.uniqueStoreCount} חנויות</span>
+                        <span className="text-xs text-slate-500">{block.periodCount} חודשים</span>
+                        <span className="mr-auto flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-slate-800 tabular-nums">
+                          <span className="text-slate-600 font-semibold">כמות</span>
+                          {block.totalQuantity.toLocaleString("he-IL")}
+                          <span className="text-slate-300">|</span>
+                          <span className="text-slate-600 font-semibold">חזרות</span>
+                          {block.totalReturns.toLocaleString("he-IL")}
+                          <span className="text-slate-300">|</span>
+                          <span className="text-emerald-700">
+                            ₪
+                            {block.totalSales.toLocaleString("he-IL", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })}
+                          </span>
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                  {expanded &&
+                    block.rows.map((row, i) => (
+                      <tr
+                        key={`${block.id}-${row.id}`}
+                        className={[
+                          "border-b border-slate-100/90 transition-colors hover:bg-slate-50/80",
+                          i % 2 === 1 ? "bg-[#fafbfc]" : "bg-white",
+                        ].join(" ")}
+                      >
+                        <DetailCells row={row} />
+                      </tr>
+                    ))}
+                </Fragment>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -186,12 +278,40 @@ export function DistributionV2Table({
 function Td({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
     <td
-      className={["px-3 py-2 text-slate-800 align-middle border-s border-slate-100 first:border-s-0", className]
+      className={[
+        "px-3 py-2.5 text-slate-700 align-middle border-s border-slate-100 first:border-s-0 text-[13px] leading-snug",
+        className,
+      ]
         .filter(Boolean)
         .join(" ")}
     >
       {children}
     </td>
+  );
+}
+
+function DetailCells({ row }: { row: DistributionV2Row }) {
+  return (
+    <>
+      <Td className="border-s-[3px] border-s-primary-400/25 font-medium text-slate-800">{row.month ?? "—"}</Td>
+      <Td className="tabular-nums whitespace-nowrap">{row.periodDate ?? "—"}</Td>
+      <Td className="tabular-nums">{row.customerId ?? "—"}</Td>
+      <Td className="max-w-[14rem]">{row.customer ?? "—"}</Td>
+      <Td>{row.network ?? "—"}</Td>
+      <Td>{row.city ?? "—"}</Td>
+      <Td className="tabular-nums">{row.productId ?? "—"}</Td>
+      <Td className="max-w-[14rem]">{row.product ?? "—"}</Td>
+      <Td>{row.productCategory ?? "—"}</Td>
+      <Td className="font-medium tabular-nums">{row.quantity.toLocaleString("he-IL")}</Td>
+      <Td className="tabular-nums">{row.returns.toLocaleString("he-IL")}</Td>
+      <Td className="tabular-nums font-semibold text-slate-900">
+        {row.sales != null
+          ? `₪${row.sales.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "—"}
+      </Td>
+      <Td>{row.driver ?? "—"}</Td>
+      <Td>{row.agent ?? "—"}</Td>
+    </>
   );
 }
 
@@ -229,7 +349,7 @@ function ColumnFilterCell({
   const [draftPick, setDraftPick] = useState<Set<string>>(new Set());
   const [draftText, setDraftText] = useState("");
   const [listSearch, setListSearch] = useState("");
-  const [position, setPosition] = useState({ top: 0, left: 0, width: 280 });
+  const [position, setPosition] = useState({ top: 0, left: 0, width: 280, maxHeight: 360 });
 
   const active = hasPicklist || hasText;
 
@@ -249,14 +369,43 @@ function ColumnFilterCell({
     const btn = (e.currentTarget as HTMLButtonElement).closest("button");
     if (btn) {
       const r = btn.getBoundingClientRect();
-      const w = Math.min(320, Math.max(260, window.innerWidth - 24));
+      const margin = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const w = Math.min(320, Math.max(260, vw - 2 * margin));
       let left = r.right - w;
-      if (left < 8) left = 8;
-      if (left + w > window.innerWidth - 8) left = window.innerWidth - w - 8;
-      let top = r.bottom + 6;
-      const maxH = 360;
-      if (top + maxH > window.innerHeight - 8) top = Math.max(8, r.top - maxH - 6);
-      setPosition({ top, left, width: w });
+      if (left < margin) left = margin;
+      if (left + w > vw - margin) left = vw - w - margin;
+
+      const capH = Math.min(380, Math.floor(vh * 0.72));
+      const spaceBelow = vh - r.bottom - margin;
+      const spaceAbove = r.top - margin;
+      const minUseful = 140;
+
+      let top: number;
+      let maxHeight: number;
+
+      if (spaceBelow >= minUseful) {
+        top = r.bottom + margin;
+        maxHeight = Math.min(capH, spaceBelow);
+      } else if (spaceAbove >= minUseful) {
+        maxHeight = Math.min(capH, spaceAbove);
+        top = r.top - maxHeight - margin;
+      } else {
+        maxHeight = Math.max(minUseful, vh - 2 * margin);
+        top = margin;
+      }
+
+      if (top < margin) top = margin;
+      if (top + maxHeight > vh - margin) {
+        maxHeight = Math.max(minUseful, vh - margin - top);
+      }
+      if (maxHeight < minUseful && vh > minUseful + 2 * margin) {
+        maxHeight = vh - 2 * margin;
+        top = margin;
+      }
+
+      setPosition({ top, left, width: w, maxHeight });
     }
     onOpen();
   };
@@ -306,10 +455,10 @@ function ColumnFilterCell({
         data-dv2-filter-trigger
         onClick={openPopover}
         className={[
-          "w-full min-w-[4.5rem] flex items-center justify-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium border transition-colors",
+          "w-full min-w-[4.25rem] flex items-center justify-center gap-1 px-2 py-2 rounded-lg text-[11px] font-bold border transition-all shadow-sm",
           active
-            ? "bg-primary-100 border-primary-300 text-primary-900"
-            : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300",
+            ? "bg-primary-50 border-primary-300 text-primary-800 ring-1 ring-primary-200/50"
+            : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-700",
         ].join(" ")}
         title={`סינון חכם — ${label}`}
       >
@@ -317,19 +466,23 @@ function ColumnFilterCell({
         <span className="truncate max-w-[5rem]">סנן</span>
       </button>
 
-      {isOpen && popoverRef && (
-        <div
-          ref={popoverRef}
-          data-column-filter-popover
-          className="fixed z-[100] rounded-xl border border-slate-200 bg-white shadow-xl flex flex-col max-h-[min(380px,70vh)]"
-          style={{
-            top: position.top,
-            left: position.left,
-            width: position.width,
-          }}
-          dir="rtl"
-        >
-          <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
+      {isOpen &&
+        popoverRef &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={popoverRef}
+            data-column-filter-popover
+            className="fixed z-[200] rounded-xl border border-slate-200 bg-white shadow-xl flex flex-col min-h-0 overflow-hidden"
+            style={{
+              top: position.top,
+              left: position.left,
+              width: position.width,
+              maxHeight: position.maxHeight,
+            }}
+            dir="rtl"
+          >
+          <div className="shrink-0 px-3 py-2 border-b border-slate-100 flex items-center justify-between gap-2">
             <span className="text-sm font-semibold text-slate-800">סינון: {label}</span>
             <button
               type="button"
@@ -341,7 +494,7 @@ function ColumnFilterCell({
             </button>
           </div>
 
-          <div className="px-3 py-2 border-b border-slate-100 space-y-2">
+          <div className="shrink-0 px-3 py-2 border-b border-slate-100 space-y-2">
             <label className="block text-xs text-slate-500">חיפוש בתוך רשימת הערכים</label>
             <input
               type="text"
@@ -397,7 +550,7 @@ function ColumnFilterCell({
             </ul>
           </div>
 
-          <div className="px-3 py-2 border-t border-slate-100 flex gap-2 justify-end flex-wrap">
+          <div className="shrink-0 px-3 py-2 border-t border-slate-100 flex gap-2 justify-end flex-wrap">
             <button
               type="button"
               onClick={clearColumn}
@@ -413,8 +566,9 @@ function ColumnFilterCell({
               החל
             </button>
           </div>
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </>
   );
 }

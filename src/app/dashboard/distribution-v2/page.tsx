@@ -86,7 +86,7 @@ export default function DistributionV2Page() {
   }
 
   return (
-    <div className="space-y-4" dir="rtl">
+    <div className="space-y-5 max-w-[1920px] mx-auto pb-2 font-assistant antialiased" dir="rtl">
       <DistributionV2Header
         hook={hook}
         onToggleFilters={() => setFiltersOpen((v) => !v)}
@@ -115,10 +115,12 @@ export default function DistributionV2Page() {
         onClearAll={handleClearFilters}
       />
 
-      <DistributionV2KpiBar kpi={hook.kpi} />
+      <DistributionV2KpiBar summaryStats={hook.summaryStats} />
 
       <DistributionV2Table
-        rows={hook.displayRows}
+        groupBlocks={hook.displayGroupBlocks}
+        groupBy={hook.groupBy}
+        filteredRowCount={hook.totalRows}
         rowsBeforeColumnFilter={hook.rowsBeforeColumnFilter}
         columnFilters={hook.columnFilters}
         columnPicklists={hook.columnPicklists}
@@ -136,7 +138,8 @@ export default function DistributionV2Page() {
           currentPage={hook.currentPage}
           totalPages={hook.totalPages}
           pageSize={hook.pageSize}
-          totalItems={hook.totalRows}
+          totalItems={hook.groupCount}
+          pageUnitLabel="קבוצות"
           onPageChange={hook.setCurrentPage}
           onPageSizeChange={hook.setPageSize}
         />

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import type {
   DistributionV2Filters,
   DistributionV2Kpi,
+  DistributionV2SummaryStats,
   DistributionV2Row,
   DistributionV2FilterOptions,
   UseDistributionV2Return,
@@ -13,6 +14,7 @@ import type {
   DistributionV2ColumnKey,
   ColumnFiltersState,
   ColumnPicklistsState,
+  DistributionV2GroupBlock,
 } from "../types";
 import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
@@ -211,6 +213,76 @@ function applyFiltersFixed(
   });
 }
 
+function buildGroupBlocks(rows: DistributionV2Row[], mode: GroupByMode): DistributionV2GroupBlock[] {
+  const map = new Map<string, DistributionV2Row[]>();
+  for (const r of rows) {
+    let id: string;
+    if (mode === "products") {
+      id = r.productId != null ? `pid:${r.productId}` : `pn:${(r.product ?? "_").slice(0, 80)}`;
+    } else if (mode === "customers") {
+      id = r.customerId != null ? `cid:${r.customerId}` : `cn:${(r.customer ?? "_").slice(0, 80)}`;
+    } else {
+      id = `drv:${r.driver ?? "__none__"}`;
+    }
+    if (!map.has(id)) map.set(id, []);
+    map.get(id)!.push(r);
+  }
+  const blocks: DistributionV2GroupBlock[] = [];
+  for (const [id, groupRows] of Array.from(map.entries())) {
+    const first = groupRows[0];
+    if (!first) continue;
+    let label: string;
+    let subLabel: string | undefined;
+    if (mode === "products") {
+      label = first.product?.trim() || `מוצר #${first.productId ?? "?"}`;
+      if (first.productId != null) subLabel = `מזהה מוצר ${first.productId}`;
+    } else if (mode === "customers") {
+      label = first.customer?.trim() || `חנות #${first.customerId ?? "?"}`;
+      if (first.customerId != null) subLabel = `מזהה לקוח ${first.customerId}`;
+    } else {
+      label = first.driver?.trim() || "ללא נהג";
+    }
+    const stores = new Set<number>();
+    const periods = new Set<string>();
+    let totalQuantity = 0;
+    let totalReturns = 0;
+    let totalSales = 0;
+    for (const x of groupRows) {
+      if (x.customerId != null) stores.add(x.customerId);
+      if (x.month) periods.add(x.month);
+      totalQuantity += x.quantity;
+      totalReturns += x.returns;
+      totalSales += x.sales ?? 0;
+    }
+    const sortedChildren = [...groupRows];
+    if (mode === "products") {
+      sortedChildren.sort((a, b) => (a.customer ?? "").localeCompare(b.customer ?? "", "he"));
+    } else if (mode === "customers") {
+      sortedChildren.sort((a, b) => (a.product ?? "").localeCompare(b.product ?? "", "he"));
+    } else {
+      sortedChildren.sort((a, b) => {
+        const c = (a.customer ?? "").localeCompare(b.customer ?? "", "he");
+        if (c !== 0) return c;
+        return (a.product ?? "").localeCompare(b.product ?? "", "he");
+      });
+    }
+    blocks.push({
+      id,
+      label,
+      subLabel,
+      rows: sortedChildren,
+      rowCount: groupRows.length,
+      uniqueStoreCount: stores.size,
+      periodCount: periods.size,
+      totalQuantity,
+      totalReturns,
+      totalSales,
+    });
+  }
+  blocks.sort((a, b) => a.label.localeCompare(b.label, "he"));
+  return blocks;
+}
+
 export function useDistributionV2Data(): UseDistributionV2Return {
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
@@ -231,6 +303,10 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const [groupBy, setGroupBy] = useState<GroupByMode>("products");
   const [pageSize, setPageSize] = useState(50);
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [groupBy]);
 
   const setColumnFilter = useCallback((column: DistributionV2ColumnKey, value: string) => {
     setColumnFiltersState((prev) => (value.trim() ? { ...prev, [column]: value.trim() } : { ...prev, [column]: undefined }));
@@ -366,30 +442,76 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     return sorted;
   }, [rows, groupBy]);
 
-  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const groupBlocks = useMemo(
+    () => buildGroupBlocks(sortedRows, groupBy),
+    [sortedRows, groupBy],
+  );
+  const groupCount = groupBlocks.length;
+
+  const totalPages = Math.max(1, Math.ceil(groupCount / pageSize));
   const effectivePage = totalPages < 1 ? 1 : Math.min(currentPage, totalPages);
 
-  const displayRows = useMemo(
-    () => sortedRows.slice((effectivePage - 1) * pageSize, effectivePage * pageSize),
-    [sortedRows, effectivePage, pageSize],
+  const displayGroupBlocks = useMemo(
+    () => groupBlocks.slice((effectivePage - 1) * pageSize, effectivePage * pageSize),
+    [groupBlocks, effectivePage, pageSize],
   );
 
-  const kpi: DistributionV2Kpi | null = useMemo(() => {
+  const summaryStats: DistributionV2SummaryStats | null = useMemo(() => {
     if (rows.length === 0) return null;
-    const totalQuantity = rows.reduce((s, r) => s + r.quantity, 0);
-    const totalReturns = rows.reduce((s, r) => s + r.returns, 0);
-    const totalSales = rows.reduce((s, r) => s + (r.sales ?? 0), 0);
-    const storesCount = new Set(rows.map((r) => r.customerId)).size;
-    const productsCount = new Set(rows.map((r) => r.productId)).size;
+    const stores = new Set<number>();
+    const cities = new Set<string>();
+    const networks = new Set<string>();
+    const drivers = new Set<string>();
+    const agents = new Set<string>();
+    const products = new Set<number>();
+    const categories = new Set<string>();
+    const periods = new Set<string>();
+    let totalQuantity = 0;
+    let totalReturns = 0;
+    let totalSales = 0;
+    for (const r of rows) {
+      if (r.customerId != null) stores.add(r.customerId);
+      if (r.city) cities.add(r.city);
+      if (r.network) networks.add(r.network);
+      if (r.driver) drivers.add(r.driver);
+      if (r.agent) agents.add(r.agent);
+      if (r.productId != null) products.add(r.productId);
+      if (r.productCategory) categories.add(r.productCategory);
+      if (r.month) periods.add(r.month);
+      totalQuantity += r.quantity;
+      totalReturns += r.returns;
+      totalSales += r.sales ?? 0;
+    }
+    const gross = totalQuantity + totalReturns;
+    const returnsPctWeighted = gross > 0 ? Math.round((totalReturns / gross) * 1000) / 10 : 0;
     return {
-      totalRows,
+      rowCount: rows.length,
+      storeCount: stores.size,
+      cityCount: cities.size,
+      networkCount: networks.size,
+      driverCount: drivers.size,
+      agentCount: agents.size,
+      productCount: products.size,
+      categoryCount: categories.size,
+      periodCount: periods.size,
       totalQuantity,
       totalReturns,
       totalSales,
-      storesCount,
-      productsCount,
+      returnsPctWeighted,
     };
-  }, [rows, totalRows]);
+  }, [rows]);
+
+  const kpi: DistributionV2Kpi | null = useMemo(() => {
+    if (!summaryStats) return null;
+    return {
+      totalRows: summaryStats.rowCount,
+      totalQuantity: summaryStats.totalQuantity,
+      totalReturns: summaryStats.totalReturns,
+      totalSales: summaryStats.totalSales,
+      storesCount: summaryStats.storeCount,
+      productsCount: summaryStats.productCount,
+    };
+  }, [summaryStats]);
 
   return {
     isLoading,
@@ -407,7 +529,9 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     groupBy,
     setGroupBy,
     rows,
-    displayRows,
+    displayGroupBlocks,
+    groupCount,
+    summaryStats,
     kpi,
     totalRows,
     pageSize,

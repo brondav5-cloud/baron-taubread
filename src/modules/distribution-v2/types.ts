@@ -5,6 +5,20 @@
 
 export type GroupByMode = "products" | "customers" | "drivers";
 
+/** One collapsible group in the table (by product / customer / driver) */
+export interface DistributionV2GroupBlock {
+  id: string;
+  label: string;
+  subLabel?: string;
+  rows: DistributionV2Row[];
+  rowCount: number;
+  uniqueStoreCount: number;
+  periodCount: number;
+  totalQuantity: number;
+  totalReturns: number;
+  totalSales: number;
+}
+
 export interface DistributionV2Filters {
   dateFrom: string;
   dateTo: string;
@@ -15,6 +29,26 @@ export interface DistributionV2Filters {
   search: string;
 }
 
+/** Aggregates over the currently filtered rows (panel + column filters) */
+export interface DistributionV2SummaryStats {
+  rowCount: number;
+  storeCount: number;
+  cityCount: number;
+  networkCount: number;
+  driverCount: number;
+  agentCount: number;
+  productCount: number;
+  categoryCount: number;
+  /** Distinct month labels in selection */
+  periodCount: number;
+  totalQuantity: number;
+  totalReturns: number;
+  totalSales: number;
+  /** Weighted returns % = totalReturns / (totalQuantity + totalReturns) * 100 */
+  returnsPctWeighted: number;
+}
+
+/** @deprecated use DistributionV2SummaryStats */
 export interface DistributionV2Kpi {
   totalRows: number;
   totalQuantity: number;
@@ -23,6 +57,38 @@ export interface DistributionV2Kpi {
   storesCount: number;
   productsCount: number;
 }
+
+export type DistributionV2SummaryMetricKey = keyof DistributionV2SummaryStats;
+
+export const DISTRIBUTION_V2_SUMMARY_METRIC_ORDER: {
+  key: DistributionV2SummaryMetricKey;
+  label: string;
+  format: "int" | "money" | "percent";
+}[] = [
+  { key: "rowCount", label: "שורות בטבלה", format: "int" },
+  { key: "storeCount", label: "מספר חנויות (ייחודי)", format: "int" },
+  { key: "cityCount", label: "מספר ערים", format: "int" },
+  { key: "networkCount", label: "מספר רשתות", format: "int" },
+  { key: "driverCount", label: "מספר נהגים", format: "int" },
+  { key: "agentCount", label: "מספר סוכנים", format: "int" },
+  { key: "productCount", label: "מספר מוצרים", format: "int" },
+  { key: "categoryCount", label: "מספר קטגוריות", format: "int" },
+  { key: "periodCount", label: "מספר חודשים (תקופות)", format: "int" },
+  { key: "totalQuantity", label: "סה״כ כמות", format: "int" },
+  { key: "totalReturns", label: "סה״כ חזרות", format: "int" },
+  { key: "totalSales", label: "סה״כ מכירות", format: "money" },
+  { key: "returnsPctWeighted", label: "אחוז חזרות (משוקלל)", format: "percent" },
+];
+
+export const DISTRIBUTION_V2_SUMMARY_DEFAULT_KEYS: DistributionV2SummaryMetricKey[] = [
+  "storeCount",
+  "cityCount",
+  "productCount",
+  "totalQuantity",
+  "totalReturns",
+  "totalSales",
+  "rowCount",
+];
 
 export interface DistributionV2Row {
   id: string;
@@ -93,8 +159,12 @@ export interface UseDistributionV2Return {
   groupBy: GroupByMode;
   setGroupBy: (mode: GroupByMode) => void;
   rows: DistributionV2Row[];
-  /** Rows sorted by groupBy, for display (possibly paginated) */
-  displayRows: DistributionV2Row[];
+  /** Paginated group blocks for the table (one row per group until expanded) */
+  displayGroupBlocks: DistributionV2GroupBlock[];
+  /** Total groups after filters (for pagination) */
+  groupCount: number;
+  /** Full summary for current filter selection */
+  summaryStats: DistributionV2SummaryStats | null;
   kpi: DistributionV2Kpi | null;
   totalRows: number;
   /** Pagination */
