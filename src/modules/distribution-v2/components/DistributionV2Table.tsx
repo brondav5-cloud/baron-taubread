@@ -21,7 +21,7 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, SortableContext, useSortable, horizontalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { ChevronDown, Filter, GripVertical, Table2, X } from "lucide-react";
+import { ChevronDown, ChevronUp, ChevronsUpDown, Filter, GripVertical, Table2, X } from "lucide-react";
 import type {
   DistributionV2Row,
   DistributionV2ColumnKey,
@@ -89,6 +89,7 @@ const COLUMN_LABELS: Record<DistributionV2ColumnKey, string> = {
   productCategory: "קטגוריה",
   quantity: "כמות",
   returns: "חזרות",
+  returnsPct: "% חזרות",
   sales: "מכירות",
   driver: "נהג",
   agent: "סוכן",
@@ -124,6 +125,7 @@ function getTdClassForColumn(col: DistributionV2ColumnKey, noAccent?: boolean): 
   if (TRUNCATE_TEXT_COLS.includes(col)) return `${base} ${truncateWide}`;
   if (col === "quantity") return `${base} font-medium tabular-nums whitespace-nowrap`;
   if (col === "returns") return `${base} tabular-nums whitespace-nowrap`;
+  if (col === "returnsPct") return `${base} tabular-nums whitespace-nowrap text-slate-500`;
   if (col === "sales") return `${base} tabular-nums font-semibold text-slate-900 whitespace-nowrap`;
   return base;
 }
@@ -195,10 +197,16 @@ const ColumnsVisibilityPanel = forwardRef<
 function SortableTh({
   col,
   label,
+  isSorted,
+  sortDir,
+  onSort,
   children,
 }: {
   col: DistributionV2ColumnKey;
   label: string;
+  isSorted?: boolean;
+  sortDir?: "asc" | "desc";
+  onSort?: () => void;
   children?: React.ReactNode;
 }) {
   const {
@@ -226,7 +234,26 @@ function SortableTh({
     >
       <div className="flex items-center justify-end gap-1.5">
         {children}
-        <span className="flex-1 min-w-0 truncate">{label}</span>
+        <button
+          type="button"
+          onClick={onSort}
+          className={[
+            "flex-1 min-w-0 flex items-center justify-end gap-1 rounded focus:outline-none focus:ring-1 focus:ring-primary-400/40",
+            isSorted ? "text-primary-700" : "hover:text-slate-900",
+          ].join(" ")}
+          title={`מיין לפי ${label}`}
+        >
+          <span className="truncate">{label}</span>
+          {isSorted ? (
+            sortDir === "asc" ? (
+              <ChevronUp className="w-3 h-3 shrink-0 text-primary-600" />
+            ) : (
+              <ChevronDown className="w-3 h-3 shrink-0 text-primary-600" />
+            )
+          ) : (
+            <ChevronsUpDown className="w-3 h-3 shrink-0 text-slate-300 group-hover:text-slate-400" />
+          )}
+        </button>
         <span
           {...attributes}
           {...listeners}
@@ -259,6 +286,9 @@ interface DistributionV2TableProps {
   onColumnPicklist: (column: DistributionV2ColumnKey, values: string[]) => void;
   onClearColumnFilters: () => void;
   hasActiveColumnFilters: boolean;
+  sortColumn: DistributionV2ColumnKey | null;
+  sortDirection: "asc" | "desc";
+  onSort: (column: DistributionV2ColumnKey) => void;
 }
 
 export function DistributionV2Table({
@@ -275,6 +305,9 @@ export function DistributionV2Table({
   onColumnPicklist,
   onClearColumnFilters,
   hasActiveColumnFilters,
+  sortColumn,
+  sortDirection,
+  onSort,
 }: DistributionV2TableProps) {
   const [columnOrder, setColumnOrder] = useState<DistributionV2ColumnKey[]>(loadColumnOrder);
   const [hiddenColumns, setHiddenColumns] = useState<DistributionV2ColumnKey[]>(loadHiddenColumns);
@@ -610,7 +643,14 @@ export function DistributionV2Table({
               <thead>
                 <tr className="border-b border-slate-200">
                   {visibleColumnOrder.map((col) => (
-                    <SortableTh key={col} col={col} label={COLUMN_LABELS[col]} />
+                    <SortableTh
+                      key={col}
+                      col={col}
+                      label={COLUMN_LABELS[col]}
+                      isSorted={sortColumn === col}
+                      sortDir={sortColumn === col ? sortDirection : undefined}
+                      onSort={() => onSort(col)}
+                    />
                   ))}
                 </tr>
                 <tr className="border-b border-slate-200">
@@ -666,6 +706,13 @@ export function DistributionV2Table({
                         return (
                           <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-white whitespace-nowrap">
                             {summaryStats.totalReturns.toLocaleString("he-IL")}
+                          </td>
+                        );
+                      }
+                      if (col === "returnsPct") {
+                        return (
+                          <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-slate-300 whitespace-nowrap">
+                            {summaryStats.returnsPctWeighted.toLocaleString("he-IL")}%
                           </td>
                         );
                       }
@@ -794,6 +841,9 @@ function formatCellValue(row: DistributionV2Row, col: DistributionV2ColumnKey): 
   }
   if ((col === "quantity" || col === "returns") && typeof v === "number") {
     return v.toLocaleString("he-IL");
+  }
+  if (col === "returnsPct" && typeof v === "number") {
+    return `${v.toLocaleString("he-IL")}%`;
   }
   return String(v);
 }
@@ -1044,20 +1094,29 @@ function ColumnFilterCell({
                 {displayValues.length} ערכים
                 {truncated ? ` (מתוך ${filteredValues.length})` : ""}
               </span>
-              <button
-                type="button"
-                onClick={selectAllVisible}
-                className="text-xs text-primary-600 hover:underline"
-              >
-                סמן את המוצגים
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={selectAllVisible}
+                  className="text-xs text-primary-600 hover:underline"
+                >
+                  סמן את המוצגים
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDraftPick(new Set())}
+                  className="text-xs text-slate-500 hover:text-slate-800 hover:underline"
+                >
+                  בטל הכל
+                </button>
+              </div>
             </div>
             <ul className="space-y-0.5">
               {displayValues.length === 0 ? (
                 <li className="text-sm text-slate-400 px-2 py-4 text-center">אין ערכים תואמים</li>
               ) : (
                 displayValues.map((v) => (
-                  <li key={v.slice(0, 80)}>
+                  <li key={v}>
                     <label className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-50 cursor-pointer text-sm">
                       <input
                         type="checkbox"

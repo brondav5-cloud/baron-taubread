@@ -133,6 +133,7 @@ export const DISTRIBUTION_V2_COLUMNS = [
   "productCategory",
   "quantity",
   "returns",
+  "returnsPct",
   "sales",
   "driver",
   "agent",
@@ -183,4 +184,7 @@ export interface UseDistributionV2Return {
   totalItems: number;
   /** Latest period end date in current data (DD/MM/YYYY), for "data inclusive until" banner */
   dataLastDate: string | null;
+  sortColumn: DistributionV2ColumnKey | null;
+  sortDirection: "asc" | "desc";
+  setSort: (column: DistributionV2ColumnKey) => void;
 }

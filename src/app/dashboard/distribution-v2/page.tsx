@@ -150,6 +150,9 @@ export default function DistributionV2Page() {
           Object.values(hook.columnFilters).some((v) => v != null && String(v).trim() !== "") ||
           Object.values(hook.columnPicklists).some((arr) => (arr?.length ?? 0) > 0)
         }
+        sortColumn={hook.sortColumn}
+        sortDirection={hook.sortDirection}
+        onSort={hook.setSort}
       />
 
       {hook.totalRows > 0 && (

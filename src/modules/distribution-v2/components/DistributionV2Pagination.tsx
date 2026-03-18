@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 interface DistributionV2PaginationProps {
   currentPage: number;
   totalPages: number;
@@ -22,6 +24,21 @@ export function DistributionV2Pagination({
 }: DistributionV2PaginationProps) {
   const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
   const endItem = Math.min(currentPage * pageSize, totalItems);
+
+  const [inputVal, setInputVal] = useState(String(currentPage));
+
+  useEffect(() => {
+    setInputVal(String(currentPage));
+  }, [currentPage]);
+
+  const goToPage = () => {
+    const p = parseInt(inputVal, 10);
+    if (!Number.isNaN(p) && p >= 1 && p <= totalPages) {
+      onPageChange(p);
+    } else {
+      setInputVal(String(currentPage));
+    }
+  };
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-4 bg-white rounded-2xl px-5 py-4 shadow-soft border border-slate-200/90">
@@ -62,8 +79,19 @@ export function DistributionV2Pagination({
           >
             הקודם
           </button>
-          <span className="px-3 py-1.5 text-xs font-bold text-slate-800 tabular-nums min-w-[5.5rem] text-center" aria-live="polite">
-            {currentPage} / {totalPages}
+          <span className="px-2 py-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-800 tabular-nums min-w-[7rem] justify-center" aria-live="polite">
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={inputVal}
+              onChange={(e) => setInputVal(e.target.value)}
+              onBlur={goToPage}
+              onKeyDown={(e) => { if (e.key === "Enter") goToPage(); }}
+              aria-label="מספר עמוד"
+              className="w-11 text-center border border-slate-200 rounded-lg px-1 py-0.5 text-xs font-bold focus:ring-2 focus:ring-primary-500/20 focus:border-primary-400 bg-white"
+            />
+            <span className="text-slate-400 font-normal">/ {totalPages}</span>
           </span>
           <button
             type="button"

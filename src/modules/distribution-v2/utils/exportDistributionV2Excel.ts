@@ -27,7 +27,7 @@ export async function exportDistributionV2ToExcel(
     כמות: row.quantity,
     חזרות: row.returns,
     "חזרות(%)": row.returnsPct ?? "",
-    סהכ: row.sales != null ? row.sales : "",
+    מכירות: row.sales != null ? row.sales : "",
     נהג: row.driver ?? "",
     סוכן: row.agent ?? "",
   }));

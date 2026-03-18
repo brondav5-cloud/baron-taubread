@@ -262,10 +262,10 @@ function applyFiltersFixed(
       const rowKey = toCompareKey(row.month);
       if (rowKey && toKey && rowKey > toKey) return false;
     }
-    if (filters.cities.length && row.city && !filters.cities.includes(row.city)) return false;
-    if (filters.networks.length && row.network && !filters.networks.includes(row.network)) return false;
-    if (filters.drivers.length && row.driver && !filters.drivers.includes(row.driver)) return false;
-    if (filters.agents.length && row.agent && !filters.agents.includes(row.agent)) return false;
+    if (filters.cities.length && !filters.cities.includes(row.city ?? "")) return false;
+    if (filters.networks.length && !filters.networks.includes(row.network ?? "")) return false;
+    if (filters.drivers.length && !filters.drivers.includes(row.driver ?? "")) return false;
+    if (filters.agents.length && !filters.agents.includes(row.agent ?? "")) return false;
     if (filters.search.trim()) {
       const q = filters.search.toLowerCase();
       const match =
@@ -371,6 +371,10 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const [viewMode, setViewModeState] = useState<DistributionViewMode>("flat");
   const [pageSize, setPageSize] = useState(50);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sort, setSort_] = useState<{ column: DistributionV2ColumnKey | null; direction: "asc" | "desc" }>({
+    column: null,
+    direction: "asc",
+  });
 
   const setViewMode = useCallback((mode: DistributionViewMode) => {
     setViewModeState(mode);
@@ -387,6 +391,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
 
   const setColumnFilter = useCallback((column: DistributionV2ColumnKey, value: string) => {
     setColumnFiltersState((prev) => (value.trim() ? { ...prev, [column]: value.trim() } : { ...prev, [column]: undefined }));
+    setCurrentPage(1);
   }, []);
 
   const setColumnPicklist = useCallback((column: DistributionV2ColumnKey, values: string[]) => {
@@ -402,6 +407,14 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const clearColumnFilters = useCallback(() => {
     setColumnFiltersState({});
     setColumnPicklistsState({});
+  }, []);
+
+  const setSort = useCallback((column: DistributionV2ColumnKey) => {
+    setSort_((prev) => ({
+      column,
+      direction: prev.column === column && prev.direction === "asc" ? "desc" : "asc",
+    }));
+    setCurrentPage(1);
   }, []);
 
   const setPageSizeWithReset = useCallback((size: number) => {
@@ -497,6 +510,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const setFilters = useCallback(
     (updater: (prev: DistributionV2Filters) => DistributionV2Filters) => {
       setFiltersState(updater);
+      setCurrentPage(1);
     },
     [],
   );
@@ -524,6 +538,21 @@ export function useDistributionV2Data(): UseDistributionV2Return {
 
   const sortedRows = useMemo(() => {
     const sorted = [...rows];
+
+    if (sort.column) {
+      const col = sort.column;
+      const dir = sort.direction === "asc" ? 1 : -1;
+      sorted.sort((a, b) => {
+        const va = getCellValue(a, col);
+        const vb = getCellValue(b, col);
+        const na = Number(va);
+        const nb = Number(vb);
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return (na - nb) * dir;
+        return va.localeCompare(vb, "he") * dir;
+      });
+      return sorted;
+    }
+
     if (groupBy === "products") {
       sorted.sort((a, b) => {
         const p = (a.product ?? "").localeCompare(b.product ?? "", "he");
@@ -544,7 +573,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       });
     }
     return sorted;
-  }, [rows, groupBy]);
+  }, [rows, groupBy, sort]);
 
   const groupBlocks = useMemo(
     () => buildGroupBlocks(sortedRows, groupBy),
@@ -681,5 +710,8 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     totalPages,
     totalItems,
     dataLastDate,
+    sortColumn: sort.column,
+    sortDirection: sort.direction,
+    setSort,
   };
 }
