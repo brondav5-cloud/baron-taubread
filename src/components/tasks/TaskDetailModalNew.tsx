@@ -43,11 +43,14 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
     setExpectedCompletionAtInput,
     progressUpdateText,
     setProgressUpdateText,
+    confirmComplete,
+    setConfirmComplete,
     currentTask,
     isAssignee,
     isCreator,
     myStatus,
     canEditChecklist,
+    canManageTreatment,
     canEditAssignees,
     canDelete,
     handleStartTask,
@@ -199,10 +202,13 @@ export function TaskDetailModal({ task, onClose }: TaskDetailModalProps) {
           rejectReason={rejectReason}
           expectedCompletionAtInput={expectedCompletionAtInput}
           progressUpdateText={progressUpdateText}
+          confirmComplete={confirmComplete}
+          canManageTreatment={canManageTreatment}
           onCompleteResponseChange={setCompleteResponse}
           onRejectReasonChange={setRejectReason}
           onExpectedCompletionAtInputChange={setExpectedCompletionAtInput}
           onProgressUpdateTextChange={setProgressUpdateText}
+          onConfirmCompleteChange={setConfirmComplete}
           onShowRejectForm={setShowRejectForm}
           onStartTask={handleStartTask}
           onCompleteTask={handleCompleteTask}

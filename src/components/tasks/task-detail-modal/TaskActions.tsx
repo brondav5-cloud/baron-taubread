@@ -7,8 +7,10 @@ interface TaskActionsProps {
   task: Task;
   isAssignee: boolean;
   isCreator: boolean;
+  canManageTreatment: boolean;
   myStatus: TaskStatus | undefined;
   showRejectForm: boolean;
+  confirmComplete: boolean;
   completeResponse: string;
   rejectReason: string;
   expectedCompletionAtInput: string;
@@ -17,6 +19,7 @@ interface TaskActionsProps {
   onRejectReasonChange: (value: string) => void;
   onExpectedCompletionAtInputChange: (value: string) => void;
   onProgressUpdateTextChange: (value: string) => void;
+  onConfirmCompleteChange: (value: boolean) => void;
   onShowRejectForm: (show: boolean) => void;
   onStartTask: () => void;
   onCompleteTask: () => void;
@@ -30,8 +33,10 @@ export function TaskActions({
   task,
   isAssignee,
   isCreator,
+  canManageTreatment,
   myStatus,
   showRejectForm,
+  confirmComplete,
   completeResponse,
   rejectReason,
   expectedCompletionAtInput,
@@ -40,6 +45,7 @@ export function TaskActions({
   onRejectReasonChange,
   onExpectedCompletionAtInputChange,
   onProgressUpdateTextChange,
+  onConfirmCompleteChange,
   onShowRejectForm,
   onStartTask,
   onCompleteTask,
@@ -48,14 +54,11 @@ export function TaskActions({
   onUpdateExpectedCompletion,
   onAddProgressUpdate,
 }: TaskActionsProps) {
-  // האם המשתמש בטיפול פעיל
-  const isInProgress = isAssignee && myStatus === "in_progress";
-
   return (
     <div className="border-t border-gray-100 p-4 bg-gray-50">
       {/* In Progress - Response Field + Complete Button */}
-      {isInProgress && (
-        <div className="space-y-3">
+      {canManageTreatment && (
+        <div className="space-y-3 max-h-[40vh] overflow-y-auto">
           <div className="text-xs font-semibold text-gray-500">ניהול בזמן טיפול</div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -96,7 +99,7 @@ export function TaskActions({
                 disabled={!progressUpdateText.trim()}
                 className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm disabled:opacity-50"
               >
-                שמור
+                דווח בטיפול
               </button>
             </div>
           </div>
@@ -112,14 +115,36 @@ export function TaskActions({
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400"
             />
           </div>
-          <button
-            onClick={onCompleteTask}
-            disabled={!completeResponse.trim()}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <CheckCircle className="w-4 h-4" />
-            סיים משימה
-          </button>
+          {!confirmComplete ? (
+            <button
+              onClick={() => onConfirmCompleteChange(true)}
+              disabled={!completeResponse.trim()}
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <CheckCircle className="w-4 h-4" />
+              סיים משימה
+            </button>
+          ) : (
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-2">
+              <p className="text-sm font-medium text-emerald-800">
+                האם באמת סיימת את המשימה?
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={onCompleteTask}
+                  className="flex-1 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700"
+                >
+                  כן, סיימתי
+                </button>
+                <button
+                  onClick={() => onConfirmCompleteChange(false)}
+                  className="flex-1 py-2 border border-emerald-300 text-emerald-700 rounded-lg text-sm font-medium hover:bg-emerald-100"
+                >
+                  עדיין בטיפול
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -153,7 +178,7 @@ export function TaskActions({
       )}
 
       {/* Action Buttons */}
-      {!isInProgress && (
+      {!canManageTreatment && (
         <div className="flex gap-2">
           {/* Start Task Button */}
           {isAssignee && (myStatus === "new" || myStatus === "seen") && (

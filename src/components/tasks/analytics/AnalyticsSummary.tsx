@@ -9,6 +9,8 @@ interface AnalyticsSummaryProps {
   overdueTasks: number;
   avgHandlingDays: number;
   comparisonPercent?: number; // השוואה לחודש קודם
+  selectedCard?: "total" | "completed" | "overdue" | "avg";
+  onCardSelect?: (card: "total" | "completed" | "overdue" | "avg") => void;
 }
 
 export function AnalyticsSummary({
@@ -17,12 +19,15 @@ export function AnalyticsSummary({
   overdueTasks,
   avgHandlingDays,
   comparisonPercent,
+  selectedCard = "total",
+  onCardSelect,
 }: AnalyticsSummaryProps) {
   const completionRate =
     totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const cards = [
     {
+      id: "total" as const,
       title: 'סה"כ משימות',
       value: totalTasks,
       icon: TrendingUp,
@@ -31,6 +36,7 @@ export function AnalyticsSummary({
       iconColor: "text-blue-600",
     },
     {
+      id: "completed" as const,
       title: "הושלמו",
       value: completedTasks,
       subtitle: `${completionRate}%`,
@@ -40,6 +46,7 @@ export function AnalyticsSummary({
       iconColor: "text-green-600",
     },
     {
+      id: "overdue" as const,
       title: "באיחור",
       value: overdueTasks,
       icon: AlertTriangle,
@@ -49,6 +56,7 @@ export function AnalyticsSummary({
       alert: overdueTasks > 0,
     },
     {
+      id: "avg" as const,
       title: "זמן טיפול ממוצע",
       value: avgHandlingDays.toFixed(1),
       subtitle: "ימים",
@@ -64,11 +72,14 @@ export function AnalyticsSummary({
       {cards.map((card) => {
         const Icon = card.icon;
         return (
-          <div
+          <button
             key={card.title}
+            type="button"
+            onClick={() => onCardSelect?.(card.id)}
             className={clsx(
-              "bg-white rounded-2xl shadow-card p-4",
+              "bg-white rounded-2xl shadow-card p-4 text-right w-full transition-all",
               card.alert && "ring-2 ring-red-200",
+              selectedCard === card.id && "ring-2 ring-primary-300",
             )}
           >
             <div className="flex items-start justify-between mb-2">
@@ -97,7 +108,7 @@ export function AnalyticsSummary({
                 <span className="text-sm text-gray-400">({card.subtitle})</span>
               )}
             </div>
-          </div>
+          </button>
         );
       })}
     </div>

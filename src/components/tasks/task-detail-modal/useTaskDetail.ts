@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useUsers } from "@/context/UsersContext";
 import { useTasks } from "@/context/TasksContext";
 import type { Task } from "@/types/task";
+import toast from "react-hot-toast";
 
 export type TabType = "details" | "checklist" | "comments" | "history";
 
@@ -18,6 +19,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
   const [showRejectForm, setShowRejectForm] = useState(false);
   const [expectedCompletionAtInput, setExpectedCompletionAtInput] = useState("");
   const [progressUpdateText, setProgressUpdateText] = useState("");
+  const [confirmComplete, setConfirmComplete] = useState(false);
 
   const { currentUser } = useUsers();
   const {
@@ -81,6 +83,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
   const handleStartTask = useCallback(() => {
     if (!currentTask) return;
     startTask(currentTask.id, currentUser.id, currentUser.name);
+    toast.success("המשימה עברה לסטטוס בטיפול");
   }, [currentTask, startTask, currentUser.id, currentUser.name]);
 
   const handleCompleteTask = useCallback(() => {
@@ -92,6 +95,8 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
       completeResponse.trim(),
     );
     setCompleteResponse("");
+    setConfirmComplete(false);
+    toast.success("המשימה סומנה כהושלמה");
     onClose();
   }, [
     currentTask,
@@ -99,6 +104,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     currentUser.id,
     currentUser.name,
     completeResponse,
+    setConfirmComplete,
     onClose,
   ]);
 
@@ -181,6 +187,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
       currentUser.name,
       new Date(expectedCompletionAtInput).toISOString(),
     );
+    toast.success("יעד הסיום עודכן");
   }, [
     currentTask,
     currentUser.id,
@@ -201,6 +208,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
         : undefined,
     );
     setProgressUpdateText("");
+    toast.success("הדיווח נשמר במשימה");
   }, [
     addProgressUpdate,
     currentTask,
@@ -219,6 +227,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     showRejectForm,
     expectedCompletionAtInput,
     progressUpdateText,
+    confirmComplete,
 
     // Setters
     setActiveTab,
@@ -228,6 +237,7 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     setShowRejectForm,
     setExpectedCompletionAtInput,
     setProgressUpdateText,
+    setConfirmComplete,
 
     // Computed
     currentTask,
@@ -235,6 +245,12 @@ export function useTaskDetail({ task, onClose }: UseTaskDetailProps) {
     isCreator,
     myStatus,
     canEditChecklist: isAssignee && currentTask?.status !== "approved",
+    canManageTreatment:
+      isAssignee &&
+      !!currentTask &&
+      currentTask.status !== "approved" &&
+      myStatus !== "new" &&
+      myStatus !== "seen",
     canEditAssignees,
     canDelete,
 

@@ -17,6 +17,8 @@ export function CommentsTab({
   onNewCommentChange,
   onAddComment,
 }: CommentsTabProps) {
+  const progressUpdates = task.progressUpdates ?? [];
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       onAddComment();
@@ -26,10 +28,10 @@ export function CommentsTab({
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 space-y-3 mb-4">
-        {task.progressUpdates.length > 0 && (
+        {progressUpdates.length > 0 && (
           <div className="space-y-2">
             <p className="text-xs font-semibold text-indigo-700">עדכוני התקדמות</p>
-            {task.progressUpdates.map((update) => (
+            {progressUpdates.map((update) => (
               <div key={update.id} className="p-3 bg-indigo-50 rounded-lg border border-indigo-100">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-medium text-sm text-indigo-900">{update.userName}</span>
@@ -48,7 +50,7 @@ export function CommentsTab({
           </div>
         )}
 
-        {task.comments.length === 0 && task.progressUpdates.length === 0 ? (
+        {task.comments.length === 0 && progressUpdates.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <ClipboardList className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>אין הערות עדיין</p>

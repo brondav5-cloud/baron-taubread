@@ -13,6 +13,7 @@ import {
   Plus,
   Check,
 } from "lucide-react";
+import { StoreVisitsModal } from "@/components/visits/StoreVisitsModal";
 import { clsx } from "clsx";
 import type { DbStore } from "@/types/supabase";
 import {
@@ -179,8 +180,10 @@ export function StoreDetailHeader({
   onExportExcel,
 }: StoreDetailHeaderProps) {
   const metrics = store.metrics;
+  const [showVisitsModal, setShowVisitsModal] = useState(false);
 
   return (
+    <>
     <div className="bg-white rounded-2xl shadow-sm p-6">
       <div className="flex flex-col sm:flex-row items-stretch sm:items-start justify-between gap-4">
         {/* Right side - Store info */}
@@ -224,12 +227,13 @@ export function StoreDetailHeader({
           <StatusBadge status={metrics?.status_long} label="מגמה ארוכה" />
           <StatusBadge status={metrics?.status_short} label="מגמה קצרה" />
           <TreatmentButton storeId={store.external_id} />
-          <Link
-            href={`/dashboard/visits?store=${store.external_id}`}
+          <button
+            onClick={() => setShowVisitsModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-amber-100 text-amber-700 rounded-xl text-sm font-medium hover:bg-amber-200 transition-colors"
           >
-            <ClipboardList className="w-4 h-4" />3 תעודות ביקור אחרונות
-          </Link>
+            <ClipboardList className="w-4 h-4" />
+            תעודות ביקור
+          </button>
           {onExportExcel && (
             <button
               onClick={onExportExcel}
@@ -242,5 +246,14 @@ export function StoreDetailHeader({
         </div>
       </div>
     </div>
+
+    {showVisitsModal && (
+      <StoreVisitsModal
+        storeExternalId={store.external_id}
+        storeName={store.name}
+        onClose={() => setShowVisitsModal(false)}
+      />
+    )}
+    </>
   );
 }

@@ -182,12 +182,26 @@ export function useTaskMutations(
       setTasks((prev) =>
         prev.map((task) => {
           if (task.id !== taskId) return task;
-          const assignee = task.assignees.find((a) => a.userId === userId);
-          if (!assignee) return task;
+          const assigneeIndex = task.assignees.findIndex((a) => a.userId === userId);
+          if (assigneeIndex === -1) return task;
+          const currentAssignee = task.assignees[assigneeIndex];
+          if (!currentAssignee) return task;
+
+          const newAssignees = [...task.assignees];
+          const shouldReopenOwnStatus = currentAssignee.status === "done";
+          newAssignees[assigneeIndex] = {
+            ...currentAssignee,
+            status: shouldReopenOwnStatus ? ("in_progress" as TaskStatus) : currentAssignee.status,
+          };
 
           const originalTask = task;
           const updated = {
             ...task,
+            assignees: newAssignees,
+            status:
+              task.status === "done" && shouldReopenOwnStatus
+                ? ("in_progress" as TaskStatus)
+                : task.status,
             expectedCompletionAt: expectedCompletionAt || task.expectedCompletionAt,
             progressUpdates: [
               ...task.progressUpdates,
@@ -216,6 +230,8 @@ export function useTaskMutations(
           if (companyId) {
             const u = taskToDbTask(updated, companyId);
             updateTask(taskId, {
+              assignees: u.assignees,
+              status: u.status,
               expected_completion_at: u.expected_completion_at,
               progress_updates: u.progress_updates,
               updated_at: now,

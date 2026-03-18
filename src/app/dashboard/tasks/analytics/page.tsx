@@ -102,6 +102,9 @@ export default function TasksAnalyticsPage() {
     createDateRange("this_month"),
   );
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedCard, setSelectedCard] = useState<
+    "total" | "completed" | "overdue" | "avg"
+  >("total");
 
   // Main stats for selected range
   const rangeTasks = useMemo(() => {
@@ -113,6 +116,22 @@ export default function TasksAnalyticsPage() {
   }, [tasks, dateRange, selectedCategory]);
 
   const stats = useMemo(() => calculateStats(rangeTasks), [rangeTasks]);
+
+  const focusedTasks = useMemo(() => {
+    switch (selectedCard) {
+      case "completed":
+        return rangeTasks.filter((t) => t.status === "approved");
+      case "overdue":
+        return rangeTasks.filter(
+          (t) => t.status !== "approved" && new Date(t.dueDate) < new Date(),
+        );
+      case "avg":
+        return rangeTasks.filter((t) => t.status === "approved");
+      case "total":
+      default:
+        return rangeTasks;
+    }
+  }, [rangeTasks, selectedCard]);
 
   // Previous period comparison
   const comparisonPercent = useMemo(() => {
@@ -130,7 +149,7 @@ export default function TasksAnalyticsPage() {
 
     return categories
       .map((cat) => {
-        const catTasks = rangeTasks.filter((t) => t.categoryId === cat.id);
+        const catTasks = focusedTasks.filter((t) => t.categoryId === cat.id);
         const catStats = calculateStats(catTasks);
         const prevCatTasks = getTasksInRange(
           tasks,
@@ -150,7 +169,7 @@ export default function TasksAnalyticsPage() {
         };
       })
       .filter((c) => c.totalTasks > 0 || c.previousMonthTasks! > 0);
-  }, [categories, rangeTasks, dateRange, tasks]);
+  }, [categories, focusedTasks, dateRange, tasks]);
 
   // Monthly trend data (last 6 months)
   const now = useMemo(() => new Date(), []);
@@ -211,6 +230,8 @@ export default function TasksAnalyticsPage() {
         overdueTasks={stats.overdue}
         avgHandlingDays={stats.avgDays}
         comparisonPercent={comparisonPercent}
+        selectedCard={selectedCard}
+        onCardSelect={setSelectedCard}
       />
 
       {/* Charts & Tables */}
@@ -219,8 +240,56 @@ export default function TasksAnalyticsPage() {
         <CategoryBreakdown data={categoryStats} />
       </div>
 
+      <div className="bg-white rounded-2xl shadow-card p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900">
+            {selectedCard === "total" && "פירוט כל המשימות בטווח"}
+            {selectedCard === "completed" && "פירוט משימות שהושלמו"}
+            {selectedCard === "overdue" && "פירוט משימות באיחור"}
+            {selectedCard === "avg" && "פירוט משימות שהושלמו (לחישוב זמן טיפול)"}
+          </h3>
+          <Link
+            href="/dashboard/tasks"
+            className="text-sm text-primary-600 hover:text-primary-700"
+          >
+            מעבר לניהול משימות
+          </Link>
+        </div>
+
+        {focusedTasks.length === 0 ? (
+          <p className="text-sm text-gray-500">אין משימות להצגה בחתך שנבחר.</p>
+        ) : (
+          <div className="space-y-2 max-h-80 overflow-y-auto">
+            {focusedTasks.slice(0, 30).map((task) => (
+              <div
+                key={task.id}
+                className="p-3 border border-gray-100 rounded-xl flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-gray-900 truncate">{task.title}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {task.categoryIcon} {task.categoryName} | נוצר ע״י {task.createdByName}
+                  </p>
+                </div>
+                <span className="text-xs px-2 py-1 rounded-full bg-gray-100 text-gray-600">
+                  {task.status === "approved"
+                    ? "הושלמה"
+                    : task.status === "done"
+                      ? "ממתינה לאישור"
+                      : task.status === "in_progress"
+                        ? "בטיפול"
+                        : task.status === "rejected"
+                          ? "נדחתה"
+                          : "פתוחה"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       {/* Per-user performance */}
-      <UserPerformanceTable tasks={rangeTasks} users={allUsers} />
+      <UserPerformanceTable tasks={focusedTasks} users={allUsers} />
     </div>
   );
 }
