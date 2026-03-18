@@ -36,10 +36,15 @@ export function usePushNotifications() {
     }
 
     navigator.serviceWorker
-      .getRegistration("/sw.js")
+      .getRegistration("/")
       .then(async (reg) => {
         if (!reg) {
-          reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+          reg = await navigator.serviceWorker.register("/sw.js", {
+            scope: "/",
+            updateViaCache: "none",
+          });
+        } else {
+          await reg.update();
         }
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
@@ -69,10 +74,15 @@ export function usePushNotifications() {
         return false;
       }
 
-      let reg = await navigator.serviceWorker.getRegistration("/sw.js");
+      let reg = await navigator.serviceWorker.getRegistration("/");
       if (!reg) {
-        reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+        reg = await navigator.serviceWorker.register("/sw.js", {
+          scope: "/",
+          updateViaCache: "none",
+        });
         await navigator.serviceWorker.ready;
+      } else {
+        await reg.update();
       }
 
       const sub = await reg.pushManager.subscribe({

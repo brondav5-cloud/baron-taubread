@@ -12,12 +12,33 @@ interface VersionPayload {
 const POLL_MS = 60_000;
 const UPDATE_KEY = "app_update_available_version";
 const DISMISSED_KEY = "app_update_dismissed_version";
+const RELOADED_KEY = "app_update_reloaded_version";
 
 export function AppUpdateBanner() {
   const initialVersionRef = useRef<string | null>(null);
   const [hasUpdate, setHasUpdate] = useState(false);
   const [forceRefresh, setForceRefresh] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+
+  const refreshNow = useCallback(async () => {
+    try {
+      if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(
+          regs.map(async (reg) => {
+            await reg.update();
+            if (reg.waiting) {
+              reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+          }),
+        );
+      }
+    } catch {
+      // Best effort only.
+    } finally {
+      window.location.reload();
+    }
+  }, []);
 
   const checkVersion = useCallback(async () => {
     try {
@@ -57,11 +78,20 @@ export function AppUpdateBanner() {
         sessionStorage.removeItem(DISMISSED_KEY);
         setDismissed(false);
         setHasUpdate(true);
+        if (data.force_refresh) {
+          const alreadyReloaded = sessionStorage.getItem(RELOADED_KEY) === version;
+          if (!alreadyReloaded) {
+            sessionStorage.setItem(RELOADED_KEY, version);
+            setTimeout(() => {
+              void refreshNow();
+            }, 300);
+          }
+        }
       }
     } catch {
       // Silent by design: version checks should never block the app UX.
     }
-  }, []);
+  }, [refreshNow]);
 
   useEffect(() => {
     void checkVersion();
@@ -103,7 +133,7 @@ export function AppUpdateBanner() {
       <div className="mt-3">
         <button
           type="button"
-          onClick={() => window.location.reload()}
+          onClick={() => void refreshNow()}
           className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
           <RefreshCw className="w-4 h-4" />
