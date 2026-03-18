@@ -10,7 +10,10 @@ import type {
   DistributionV2FilterOptions,
   UseDistributionV2Return,
   GroupByMode,
+  DistributionV2ColumnKey,
+  ColumnFiltersState,
 } from "../types";
+import { DISTRIBUTION_V2_COLUMNS } from "../types";
 
 const DEFAULT_FILTERS: DistributionV2Filters = {
   dateFrom: "",
@@ -130,6 +133,27 @@ function buildRows(
   return rows;
 }
 
+function getCellValue(row: DistributionV2Row, column: DistributionV2ColumnKey): string {
+  const v = row[column];
+  if (v === undefined || v === null) return "";
+  return String(v);
+}
+
+function applyColumnFilters(
+  rows: DistributionV2Row[],
+  columnFilters: ColumnFiltersState,
+): DistributionV2Row[] {
+  const keys = DISTRIBUTION_V2_COLUMNS.filter((k) => columnFilters[k]);
+  if (keys.length === 0) return rows;
+  return rows.filter((row) =>
+    keys.every((col) => {
+      const cell = getCellValue(row, col).toLowerCase();
+      const q = (columnFilters[col] ?? "").toLowerCase();
+      return cell.includes(q);
+    }),
+  );
+}
+
 function applyFiltersFixed(
   rows: DistributionV2Row[],
   filters: DistributionV2Filters,
@@ -177,7 +201,21 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFiltersState] = useState<DistributionV2Filters>(DEFAULT_FILTERS);
+  const [columnFilters, setColumnFiltersState] = useState<ColumnFiltersState>({});
   const [groupBy, setGroupBy] = useState<GroupByMode>("products");
+  const [pageSize, setPageSize] = useState(50);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const setColumnFilter = useCallback((column: DistributionV2ColumnKey, value: string) => {
+    setColumnFiltersState((prev) => (value.trim() ? { ...prev, [column]: value.trim() } : { ...prev, [column]: undefined }));
+  }, []);
+
+  const clearColumnFilters = useCallback(() => setColumnFiltersState({}), []);
+
+  const setPageSizeWithReset = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  }, []);
 
   const fetchData = useCallback(async () => {
     if (!companyId) {
@@ -254,11 +292,43 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   );
 
   const rows = useMemo(
-    () => applyFiltersFixed(allRows, filters),
-    [allRows, filters],
+    () => applyColumnFilters(applyFiltersFixed(allRows, filters), columnFilters),
+    [allRows, filters, columnFilters],
   );
 
   const totalRows = rows.length;
+
+  const sortedRows = useMemo(() => {
+    const sorted = [...rows];
+    if (groupBy === "products") {
+      sorted.sort((a, b) => {
+        const p = (a.product ?? "").localeCompare(b.product ?? "", "he");
+        if (p !== 0) return p;
+        return (a.customer ?? "").localeCompare(b.customer ?? "", "he");
+      });
+    } else if (groupBy === "customers") {
+      sorted.sort((a, b) => {
+        const c = (a.customer ?? "").localeCompare(b.customer ?? "", "he");
+        if (c !== 0) return c;
+        return (a.product ?? "").localeCompare(b.product ?? "", "he");
+      });
+    } else {
+      sorted.sort((a, b) => {
+        const d = (a.driver ?? "").localeCompare(b.driver ?? "", "he");
+        if (d !== 0) return d;
+        return (a.customer ?? "").localeCompare(b.customer ?? "", "he");
+      });
+    }
+    return sorted;
+  }, [rows, groupBy]);
+
+  const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+  const effectivePage = totalPages < 1 ? 1 : Math.min(currentPage, totalPages);
+
+  const displayRows = useMemo(
+    () => sortedRows.slice((effectivePage - 1) * pageSize, effectivePage * pageSize),
+    [sortedRows, effectivePage, pageSize],
+  );
 
   const kpi: DistributionV2Kpi | null = useMemo(() => {
     if (rows.length === 0) return null;
@@ -284,10 +354,19 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     filters,
     setFilters,
     filterOptions,
+    columnFilters,
+    setColumnFilter,
+    clearColumnFilters,
     groupBy,
     setGroupBy,
     rows,
+    displayRows,
     kpi,
     totalRows,
+    pageSize,
+    setPageSize: setPageSizeWithReset,
+    currentPage: effectivePage,
+    setCurrentPage,
+    totalPages,
   };
 }

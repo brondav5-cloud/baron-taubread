@@ -5,8 +5,10 @@ import {
   useDistributionV2Data,
   DistributionV2Header,
   DistributionV2FiltersBar,
+  DistributionV2ActiveFiltersChips,
   DistributionV2KpiBar,
   DistributionV2Table,
+  DistributionV2Pagination,
 } from "@/modules/distribution-v2";
 import { LoadingState } from "@/components/common";
 import type { DistributionV2Filters } from "@/modules/distribution-v2/types";
@@ -46,6 +48,19 @@ export default function DistributionV2Page() {
       agents: [],
       search: "",
     }));
+  }, [setFilters]);
+
+  const removeCity = useCallback((city: string) => {
+    setFilters((prev) => ({ ...prev, cities: prev.cities.filter((c) => c !== city) }));
+  }, [setFilters]);
+  const removeNetwork = useCallback((network: string) => {
+    setFilters((prev) => ({ ...prev, networks: prev.networks.filter((n) => n !== network) }));
+  }, [setFilters]);
+  const removeDriver = useCallback((driver: string) => {
+    setFilters((prev) => ({ ...prev, drivers: prev.drivers.filter((d) => d !== driver) }));
+  }, [setFilters]);
+  const removeAgent = useCallback((agent: string) => {
+    setFilters((prev) => ({ ...prev, agents: prev.agents.filter((a) => a !== agent) }));
   }, [setFilters]);
 
   if (hook.isLoading && hook.rows.length === 0) {
@@ -88,9 +103,40 @@ export default function DistributionV2Page() {
         activeCount={activeFiltersCount}
       />
 
+      <DistributionV2ActiveFiltersChips
+        filters={hook.filters}
+        onRemoveDateFrom={() => handleFilterUpdate("dateFrom", "")}
+        onRemoveDateTo={() => handleFilterUpdate("dateTo", "")}
+        onRemoveCity={removeCity}
+        onRemoveNetwork={removeNetwork}
+        onRemoveDriver={removeDriver}
+        onRemoveAgent={removeAgent}
+        onRemoveSearch={() => handleFilterUpdate("search", "")}
+        onClearAll={handleClearFilters}
+      />
+
       <DistributionV2KpiBar kpi={hook.kpi} />
 
-      <DistributionV2Table rows={hook.rows} />
+      <DistributionV2Table
+        rows={hook.displayRows}
+        columnFilters={hook.columnFilters}
+        onColumnFilter={hook.setColumnFilter}
+        onClearColumnFilters={hook.clearColumnFilters}
+        hasActiveColumnFilters={Object.values(hook.columnFilters).some(
+          (v) => v != null && String(v).trim() !== "",
+        )}
+      />
+
+      {hook.totalRows > 0 && (
+        <DistributionV2Pagination
+          currentPage={hook.currentPage}
+          totalPages={hook.totalPages}
+          pageSize={hook.pageSize}
+          totalItems={hook.totalRows}
+          onPageChange={hook.setCurrentPage}
+          onPageSizeChange={hook.setPageSize}
+        />
+      )}
     </div>
   );
 }

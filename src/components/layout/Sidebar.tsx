@@ -23,6 +23,7 @@ import {
   Users,
   Upload,
   BarChart3,
+  Table2,
   Wallet,
   FileText,
 } from "lucide-react";
@@ -41,6 +42,7 @@ interface NavItem {
     | "dashboard"
     | "stores"
     | "products"
+    | "distribution"
     | "tasks"
     | "faults"
     | "treatment"
@@ -83,6 +85,12 @@ const navigation: NavSection[] = [
         href: "/dashboard/products",
         icon: Package,
         module: "products",
+      },
+      {
+        label: "נתוני חלוקה",
+        href: "/dashboard/distribution-v2",
+        icon: Table2,
+        module: "distribution",
       },
     ],
   },

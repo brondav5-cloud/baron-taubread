@@ -1,7 +1,31 @@
 "use client";
 
-import { X } from "lucide-react";
+import { X, Calendar } from "lucide-react";
 import type { DistributionV2Filters, DistributionV2FilterOptions } from "../types";
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function getPresetRange(preset: "month" | "quarter" | "year"): { from: string; to: string } {
+  const now = new Date();
+  const today = toDateStr(now);
+  if (preset === "month") {
+    const from = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: toDateStr(from), to: today };
+  }
+  if (preset === "quarter") {
+    const q = Math.floor(now.getMonth() / 3) + 1;
+    const from = new Date(now.getFullYear(), (q - 1) * 3, 1);
+    const to = new Date(now.getFullYear(), q * 3, 0);
+    return { from: toDateStr(from), to: toDateStr(to) };
+  }
+  const from = new Date(now.getFullYear(), 0, 1);
+  return { from: toDateStr(from), to: today };
+}
 
 interface DistributionV2FiltersBarProps {
   open: boolean;
@@ -35,6 +59,31 @@ export function DistributionV2FiltersBar({
             נקה הכל ({activeCount})
           </button>
         )}
+      </div>
+      <div className="space-y-2">
+        <span className="text-sm font-medium text-gray-600 flex items-center gap-1">
+          <Calendar className="w-4 h-4" />
+          תאריך מהיר
+        </span>
+        <div className="flex flex-wrap gap-2">
+          {(["month", "quarter", "year"] as const).map((preset) => {
+            const labels = { month: "החודש", quarter: "הרבעון", year: "השנה" };
+            const { from, to } = getPresetRange(preset);
+            return (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  onUpdate("dateFrom", from);
+                  onUpdate("dateTo", to);
+                }}
+                className="px-3 py-1.5 rounded-lg text-sm bg-gray-100 text-gray-700 hover:bg-gray-200"
+              >
+                {labels[preset]}
+              </button>
+            );
+          })}
+        </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="space-y-2">

@@ -16,6 +16,7 @@ export type UserPermissionModule =
   | "dashboard"
   | "stores"
   | "products"
+  | "distribution"
   | "tasks"
   | "faults"
   | "treatment"

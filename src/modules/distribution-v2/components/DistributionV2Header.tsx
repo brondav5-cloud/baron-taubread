@@ -1,8 +1,10 @@
 "use client";
 
-import { Filter, RefreshCw, FileSpreadsheet } from "lucide-react";
+import { useState } from "react";
+import { Filter, RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
 import { clsx } from "clsx";
 import type { UseDistributionV2Return, GroupByMode } from "../types";
+import { exportDistributionV2ToExcel } from "../utils/exportDistributionV2Excel";
 
 interface DistributionV2HeaderProps {
   hook: UseDistributionV2Return;
@@ -23,7 +25,18 @@ export function DistributionV2Header({
   filtersOpen,
   activeFiltersCount,
 }: DistributionV2HeaderProps) {
-  const { totalRows, groupBy, setGroupBy, isLoading, refetch } = hook;
+  const { totalRows, groupBy, setGroupBy, isLoading, refetch, rows } = hook;
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    if (rows.length === 0) return;
+    setExporting(true);
+    try {
+      await exportDistributionV2ToExcel(rows);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-3">
@@ -65,9 +78,15 @@ export function DistributionV2Header({
           </button>
           <button
             type="button"
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-600"
+            onClick={handleExportExcel}
+            disabled={rows.length === 0 || exporting}
+            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <FileSpreadsheet className="w-4 h-4" />
+            {exporting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <FileSpreadsheet className="w-4 h-4" />
+            )}
             Excel
           </button>
         </div>

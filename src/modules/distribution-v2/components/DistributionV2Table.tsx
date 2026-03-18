@@ -1,12 +1,39 @@
 "use client";
 
-import type { DistributionV2Row } from "../types";
+import type { DistributionV2Row, DistributionV2ColumnKey, ColumnFiltersState } from "../types";
+import { DISTRIBUTION_V2_COLUMNS } from "../types";
+
+const COLUMN_LABELS: Record<DistributionV2ColumnKey, string> = {
+  month: "חודש",
+  customerId: "מזהה לקוח",
+  customer: "לקוח",
+  network: "רשת",
+  city: "עיר",
+  productId: "מזהה מוצר",
+  product: "מוצר",
+  productCategory: "קטגוריה",
+  quantity: "כמות",
+  returns: "חזרות",
+  sales: "מכירות",
+  driver: "נהג",
+  agent: "סוכן",
+};
 
 interface DistributionV2TableProps {
   rows: DistributionV2Row[];
+  columnFilters: ColumnFiltersState;
+  onColumnFilter: (column: DistributionV2ColumnKey, value: string) => void;
+  onClearColumnFilters: () => void;
+  hasActiveColumnFilters: boolean;
 }
 
-export function DistributionV2Table({ rows }: DistributionV2TableProps) {
+export function DistributionV2Table({
+  rows,
+  columnFilters,
+  onColumnFilter,
+  onClearColumnFilters,
+  hasActiveColumnFilters,
+}: DistributionV2TableProps) {
   if (rows.length === 0) {
     return (
       <div className="bg-white rounded-xl border shadow-sm p-12 text-center text-gray-500">
@@ -17,23 +44,40 @@ export function DistributionV2Table({ rows }: DistributionV2TableProps) {
 
   return (
     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+      {hasActiveColumnFilters && (
+        <div className="px-3 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+          <span className="text-xs text-amber-800">פילטר עמודות פעיל</span>
+          <button
+            type="button"
+            onClick={onClearColumnFilters}
+            className="text-xs text-amber-700 hover:text-amber-900 underline"
+          >
+            איפוס פילטר עמודות
+          </button>
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-right">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
-              <Th>חודש</Th>
-              <Th>מזהה לקוח</Th>
-              <Th>לקוח</Th>
-              <Th>רשת</Th>
-              <Th>עיר</Th>
-              <Th>מזהה מוצר</Th>
-              <Th>מוצר</Th>
-              <Th>קטגוריה</Th>
-              <Th>כמות</Th>
-              <Th>חזרות</Th>
-              <Th>מכירות</Th>
-              <Th>נהג</Th>
-              <Th>סוכן</Th>
+              {DISTRIBUTION_V2_COLUMNS.map((col) => (
+                <th key={col} className="px-3 py-3 font-medium text-gray-700 whitespace-nowrap">
+                  {COLUMN_LABELS[col]}
+                </th>
+              ))}
+            </tr>
+            <tr className="bg-gray-100/80 border-b border-gray-200">
+              {DISTRIBUTION_V2_COLUMNS.map((col) => (
+                <th key={col} className="p-1">
+                  <input
+                    type="text"
+                    value={columnFilters[col] ?? ""}
+                    onChange={(e) => onColumnFilter(col, e.target.value)}
+                    placeholder={`סנן ${COLUMN_LABELS[col]}...`}
+                    className="w-full min-w-[4rem] max-w-[10rem] px-2 py-1.5 border border-gray-200 rounded text-sm placeholder:text-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -58,14 +102,6 @@ export function DistributionV2Table({ rows }: DistributionV2TableProps) {
         </table>
       </div>
     </div>
-  );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="px-3 py-3 font-medium text-gray-700 whitespace-nowrap">
-      {children}
-    </th>
   );
 }
 

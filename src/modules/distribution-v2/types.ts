@@ -49,6 +49,27 @@ export interface DistributionV2FilterOptions {
   agents: string[];
 }
 
+/** Column keys for table and per-column filter */
+export const DISTRIBUTION_V2_COLUMNS = [
+  "month",
+  "customerId",
+  "customer",
+  "network",
+  "city",
+  "productId",
+  "product",
+  "productCategory",
+  "quantity",
+  "returns",
+  "sales",
+  "driver",
+  "agent",
+] as const;
+
+export type DistributionV2ColumnKey = (typeof DISTRIBUTION_V2_COLUMNS)[number];
+
+export type ColumnFiltersState = Partial<Record<DistributionV2ColumnKey, string>>;
+
 export interface UseDistributionV2Return {
   isLoading: boolean;
   error: string | null;
@@ -56,9 +77,20 @@ export interface UseDistributionV2Return {
   filters: DistributionV2Filters;
   setFilters: (updater: (prev: DistributionV2Filters) => DistributionV2Filters) => void;
   filterOptions: DistributionV2FilterOptions;
+  columnFilters: ColumnFiltersState;
+  setColumnFilter: (column: DistributionV2ColumnKey, value: string) => void;
+  clearColumnFilters: () => void;
   groupBy: GroupByMode;
   setGroupBy: (mode: GroupByMode) => void;
   rows: DistributionV2Row[];
+  /** Rows sorted by groupBy, for display (possibly paginated) */
+  displayRows: DistributionV2Row[];
   kpi: DistributionV2Kpi | null;
   totalRows: number;
+  /** Pagination */
+  pageSize: number;
+  setPageSize: (size: number) => void;
+  currentPage: number;
+  setCurrentPage: (page: number) => void;
+  totalPages: number;
 }
