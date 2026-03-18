@@ -13,3 +13,14 @@ export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 /** Supabase auth cookie name — must match in client.ts, server.ts, serverClient.ts, middleware.ts, and auth routes */
 export const AUTH_COOKIE_NAME = "hlaiyxpiebmvkb-auth-token";
+export const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+export function getAuthCookieOptions() {
+  return {
+    name: AUTH_COOKIE_NAME,
+    path: "/",
+    sameSite: "lax" as const,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: AUTH_COOKIE_MAX_AGE_SECONDS,
+  };
+}

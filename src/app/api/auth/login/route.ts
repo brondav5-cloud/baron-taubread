@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { SUPABASE_URL, SUPABASE_ANON_KEY, AUTH_COOKIE_NAME } from "@/lib/supabase/env";
+import { SUPABASE_URL, SUPABASE_ANON_KEY, getAuthCookieOptions } from "@/lib/supabase/env";
 import { checkRateLimit, getClientIp } from "@/lib/rateLimiter";
 
 export async function POST(request: Request) {
@@ -29,10 +29,7 @@ export async function POST(request: Request) {
 
   const cookieStore = cookies();
   const supabase = createServerClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    cookieOptions: {
-      name: AUTH_COOKIE_NAME,
-      path: "/",
-    },
+    cookieOptions: getAuthCookieOptions(),
     cookies: {
       getAll() {
         return cookieStore.getAll();
