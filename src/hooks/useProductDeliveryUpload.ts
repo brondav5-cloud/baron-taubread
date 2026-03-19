@@ -52,9 +52,9 @@ function utf8ByteSize(s: string): number {
   return s.length * 3; // safe fallback: worst-case UTF-8
 }
 
-function buildChunks(records: AggregatedWeeklyRecord[]): AggregatedWeeklyRecord[][] {
-  const chunks: AggregatedWeeklyRecord[][] = [];
-  let current: AggregatedWeeklyRecord[] = [];
+function buildChunks<T>(records: T[]): T[][] {
+  const chunks: T[][] = [];
+  let current: T[] = [];
   let currentBytes = 2; // opening/closing brackets of JSON array
 
   for (const record of records) {
@@ -76,6 +76,22 @@ function buildChunks(records: AggregatedWeeklyRecord[]): AggregatedWeeklyRecord[
 // STANDALONE UPLOAD FUNCTION (for queue use)
 // ============================================================
 
+async function postChunk(
+  payload: ProductDeliveryUploadPayload,
+): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+  const response = await fetch("/api/upload-product-deliveries", {
+    method:  "POST",
+    headers: { "Content-Type": "application/json" },
+    body:    JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    let errMsg = `שגיאת שרת (${response.status})`;
+    try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
+    return { ok: false, error: errMsg };
+  }
+  return { ok: true, data: await response.json() };
+}
+
 export async function uploadProductDeliveryFile(
   file: File,
   onProgress: (pct: number) => void,
@@ -91,65 +107,59 @@ export async function uploadProductDeliveryFile(
     }
 
     onProgress(5);
-    // Yield to the browser before SheetJS blocks the main thread
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     onProgress(20);
     const result = await processProductDeliveryExcel(file);
     if (!result.success) return { success: false, error: result.error ?? "שגיאה בעיבוד הקובץ" };
 
     onProgress(50);
+
     const recordChunks = buildChunks(result.records);
-    // storeDeliveries is always sent as its own final request to avoid
-    // pushing the last records chunk over the server's body size limit.
-    const totalChunks = recordChunks.length + 1;
-    let uploadResponse = null;
+    const distChunks   = buildChunks(result.distRecords);
+    // Final chunk carries storeDeliveries only (always exactly 1)
+    const totalChunks  = recordChunks.length + distChunks.length + 1;
+    let chunksSent = 0;
 
-    // Send all record chunks (none of them are the "last" chunk)
-    for (let i = 0; i < recordChunks.length; i++) {
-      const payload: ProductDeliveryUploadPayload = {
-        filename:   file.name,
-        records:    recordChunks[i]!,
-        stats:      result.stats,
-        chunkIndex: i,
-        totalChunks,
-      };
-      const response = await fetch("/api/upload-product-deliveries", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(payload),
-      });
-      if (!response.ok) {
-        let errMsg = "שגיאה בשמירת הנתונים";
-        try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
-        return { success: false, error: errMsg };
-      }
-      onProgress(50 + Math.round(((i + 1) / totalChunks) * 50));
-    }
-
-    // Final chunk: empty records + distRecords + storeDeliveries
-    const finalPayload: ProductDeliveryUploadPayload = {
-      filename:        file.name,
-      records:         [],
-      distRecords:     result.distRecords as MonthlyDistRecord[],
-      storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
-      stats:           result.stats,
-      chunkIndex:      totalChunks - 1,
-      totalChunks,
+    const progress = () => {
+      chunksSent++;
+      onProgress(50 + Math.round((chunksSent / totalChunks) * 50));
     };
-    const finalResponse = await fetch("/api/upload-product-deliveries", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify(finalPayload),
-    });
-    if (!finalResponse.ok) {
-      let errMsg = "שגיאה בשמירת נתוני אספקות";
-      try { const d = await finalResponse.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
-      return { success: false, error: errMsg };
+
+    // 1. Weekly records → store_product_weekly
+    for (let i = 0; i < recordChunks.length; i++) {
+      const res = await postChunk({
+        filename: file.name, records: recordChunks[i]!,
+        stats: result.stats, chunkIndex: i, totalChunks,
+      });
+      if (!res.ok) return { success: false, error: res.error };
+      progress();
     }
-    uploadResponse = await finalResponse.json();
+
+    // 2. Monthly dist records → store_product_monthly_dist (chunked)
+    for (let i = 0; i < distChunks.length; i++) {
+      const res = await postChunk({
+        filename: file.name, records: [],
+        distRecords: distChunks[i] as MonthlyDistRecord[],
+        stats: result.stats,
+        chunkIndex: recordChunks.length + i,
+        totalChunks,
+      });
+      if (!res.ok) return { success: false, error: res.error };
+      progress();
+    }
+
+    // 3. Final chunk: storeDeliveries only → store_deliveries
+    const finalRes = await postChunk({
+      filename: file.name, records: [],
+      storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
+      stats: result.stats,
+      chunkIndex: totalChunks - 1,
+      totalChunks,
+    });
+    if (!finalRes.ok) return { success: false, error: finalRes.error };
     onProgress(100);
 
-    return { success: true, stats: uploadResponse?.stats ?? null };
+    return { success: true, stats: (finalRes.data as { stats?: UploadState["uploadResponse"] })?.stats ?? null };
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : "שגיאה לא ידועה" };
   }
@@ -209,73 +219,59 @@ export function useProductDeliveryUpload() {
       setState((prev) => ({ ...prev, status: "uploading", progress: 70 }));
 
       const recordChunks = buildChunks(result.records);
-      // storeDeliveries always goes as its own final request
-      const totalChunks = recordChunks.length + 1;
+      const distChunks   = buildChunks(result.distRecords);
+      const totalChunks  = recordChunks.length + distChunks.length + 1;
+      let chunksSent = 0;
       let uploadResponse = null;
 
-      for (let i = 0; i < recordChunks.length; i++) {
-        const payload: ProductDeliveryUploadPayload = {
-          filename:   file.name,
-          records:    recordChunks[i]!,
-          stats:      result.stats,
-          chunkIndex: i,
-          totalChunks,
-        };
-
-        const response = await fetch("/api/upload-product-deliveries", {
-          method:  "POST",
-          headers: { "Content-Type": "application/json" },
-          body:    JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          let errMsg = "שגיאה בשמירת הנתונים";
-          try {
-            const errorData = await response.json();
-            if (errorData?.error) errMsg = errorData.error;
-          } catch {
-            errMsg = `שגיאת שרת (${response.status})`;
-          }
-          throw new Error(errMsg);
-        }
-
-        const chunkProgress = 70 + Math.round(((i + 1) / totalChunks) * 30);
-        setState((prev) => ({ ...prev, progress: chunkProgress }));
-      }
-
-      // Final chunk: empty records + distRecords + storeDeliveries
-      const finalPayload: ProductDeliveryUploadPayload = {
-        filename:        file.name,
-        records:         [],
-        distRecords:     result.distRecords as MonthlyDistRecord[],
-        storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
-        stats:           result.stats,
-        chunkIndex:      totalChunks - 1,
-        totalChunks,
+      const trackProgress = () => {
+        chunksSent++;
+        setState((prev) => ({
+          ...prev,
+          progress: 70 + Math.round((chunksSent / totalChunks) * 30),
+        }));
       };
-      const finalResponse = await fetch("/api/upload-product-deliveries", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(finalPayload),
-      });
-      if (!finalResponse.ok) {
-        let errMsg = "שגיאה בשמירת נתוני אספקות";
-        try {
-          const errorData = await finalResponse.json();
-          if (errorData?.error) errMsg = errorData.error;
-        } catch {
-          errMsg = `שגיאת שרת (${finalResponse.status})`;
-        }
-        throw new Error(errMsg);
+
+      // 1. Weekly records → store_product_weekly
+      for (let i = 0; i < recordChunks.length; i++) {
+        const res = await postChunk({
+          filename: file.name, records: recordChunks[i]!,
+          stats: result.stats, chunkIndex: i, totalChunks,
+        });
+        if (!res.ok) throw new Error(res.error);
+        trackProgress();
       }
-      uploadResponse = await finalResponse.json();
+
+      // 2. Monthly dist records → store_product_monthly_dist (chunked)
+      for (let i = 0; i < distChunks.length; i++) {
+        const res = await postChunk({
+          filename: file.name, records: [],
+          distRecords: distChunks[i] as MonthlyDistRecord[],
+          stats: result.stats,
+          chunkIndex: recordChunks.length + i,
+          totalChunks,
+        });
+        if (!res.ok) throw new Error(res.error);
+        trackProgress();
+      }
+
+      // 3. Final chunk: storeDeliveries only → store_deliveries
+      const finalRes = await postChunk({
+        filename: file.name, records: [],
+        storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
+        stats: result.stats,
+        chunkIndex: totalChunks - 1,
+        totalChunks,
+      });
+      if (!finalRes.ok) throw new Error(finalRes.error);
+      uploadResponse = finalRes.data;
       setState((prev) => ({ ...prev, progress: 100 }));
 
       setState((prev) => ({
         ...prev,
         status:         "success",
         progress:       100,
-        uploadResponse: uploadResponse?.stats ?? null,
+        uploadResponse: (uploadResponse as { stats?: UploadState["uploadResponse"] })?.stats ?? null,
       }));
 
       return true;

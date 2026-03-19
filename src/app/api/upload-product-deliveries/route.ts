@@ -183,8 +183,8 @@ export async function POST(request: NextRequest) {
 
     const processingTime = Math.round(performance.now() - startTime);
 
-    // On the last chunk: upsert monthly distribution records → store_product_monthly_dist
-    if (isLastChunk && payload.distRecords?.length) {
+    // Upsert monthly dist records on any chunk that carries them
+    if (payload.distRecords?.length) {
       const distResult = await upsertMonthlyDistRecords(
         supabaseAdmin,
         companyId,
