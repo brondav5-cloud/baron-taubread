@@ -6,7 +6,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { processProductDeliveryExcel } from "@/lib/productDeliveryExcelProcessor";
+import { processProductDeliveryExcel, type ProcessorExclusions } from "@/lib/productDeliveryExcelProcessor";
+import { createClient } from "@/lib/supabase/client";
 import type {
   ProductDeliveryProcessingResult,
   ProductDeliveryUploadPayload,
@@ -75,6 +76,27 @@ function buildChunks<T>(records: T[]): T[][] {
 // STANDALONE UPLOAD FUNCTION (for queue use)
 // ============================================================
 
+async function fetchExclusions(companyId: string): Promise<ProcessorExclusions> {
+  const supabase = createClient();
+  const { data } = await supabase
+    .from("excluded_entities")
+    .select("entity_type, entity_value")
+    .eq("company_id", companyId)
+    .eq("active", true);
+
+  const excl: ProcessorExclusions = {
+    networks: new Set<string>(),
+    drivers:  new Set<string>(),
+    stores:   new Set<string>(),
+    agents:   new Set<string>(),
+  };
+  for (const row of data ?? []) {
+    const t = row.entity_type as keyof ProcessorExclusions;
+    if (excl[t]) excl[t].add(row.entity_value as string);
+  }
+  return excl;
+}
+
 async function postChunk(
   payload: ProductDeliveryUploadPayload,
 ): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
@@ -94,6 +116,7 @@ async function postChunk(
 export async function uploadProductDeliveryFile(
   file: File,
   onProgress: (pct: number) => void,
+  companyId?: string,
 ): Promise<{
   success: boolean;
   stats?: UploadState["uploadResponse"];
@@ -107,8 +130,12 @@ export async function uploadProductDeliveryFile(
 
     onProgress(5);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    // Fetch exclusions before processing so excluded rows are never uploaded
+    const exclusions = companyId ? await fetchExclusions(companyId) : undefined;
+
     onProgress(20);
-    const result = await processProductDeliveryExcel(file);
+    const result = await processProductDeliveryExcel(file, exclusions);
     if (!result.success) return { success: false, error: result.error ?? "שגיאה בעיבוד הקובץ" };
 
     onProgress(50);
@@ -206,7 +233,15 @@ export function useProductDeliveryUpload() {
 
       // Step 2: Processing (client-side SheetJS parsing)
       setState((prev) => ({ ...prev, status: "processing", progress: 30 }));
-      const result = await processProductDeliveryExcel(file);
+      // Fetch exclusions from DB before parsing so excluded rows are never uploaded
+      const { data: authData } = await createClient().auth.getUser();
+      const { data: userRow } = authData?.user
+        ? await createClient().from("users").select("company_id").eq("id", authData.user.id).single()
+        : { data: null };
+      const exclusions = userRow?.company_id
+        ? await fetchExclusions(userRow.company_id as string)
+        : undefined;
+      const result = await processProductDeliveryExcel(file, exclusions);
 
       if (!result.success) {
         throw new Error(result.error ?? "שגיאה בעיבוד הקובץ");

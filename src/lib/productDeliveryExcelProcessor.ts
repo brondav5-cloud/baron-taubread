@@ -66,8 +66,18 @@ const COL_ALIASES: Record<string, string[]> = {
   totalValue: ["סהכ", "סה\"כ", "סה'כ"],
 };
 
-// Networks to exclude from processing (wholesale/non-distribution channels)
-const EXCLUDED_NETWORKS = new Set(["בלנדר איגור"]);
+// Configurable exclusions — passed in at call time from excluded_entities DB table.
+// Replaces the old hardcoded EXCLUDED_NETWORKS constant.
+export interface ProcessorExclusions {
+  networks: Set<string>;
+  drivers:  Set<string>;
+  stores:   Set<string>;
+  agents:   Set<string>;
+}
+
+export function emptyExclusions(): ProcessorExclusions {
+  return { networks: new Set(), drivers: new Set(), stores: new Set(), agents: new Set() };
+}
 
 // ============================================================
 // NORMALISE HELPERS
@@ -309,6 +319,7 @@ function aggregateRecords(
   headerRowIndex: number,
   colMap: ColMap,
   XLSX?: { SSF?: { parse_date_code?: (n: number) => unknown } },
+  exclusions: ProcessorExclusions = emptyExclusions(),
 ): {
   records: AggregatedWeeklyRecord[];
   distRecords: MonthlyDistRecord[];
@@ -335,10 +346,14 @@ function aggregateRecords(
     const storeId = Number(rawCustomerId);
     if (!storeId || isNaN(storeId) || storeId <= 0) { rowsSkipped++; continue; }
 
-    // Skip excluded networks (e.g. wholesale channels that distort distribution data)
+    // Skip excluded entities (networks, drivers, stores, agents)
     if (colMap.network >= 0) {
       const network = String(row[colMap.network] ?? "").trim();
-      if (EXCLUDED_NETWORKS.has(network)) { rowsSkipped++; continue; }
+      if (exclusions.networks.has(network)) { rowsSkipped++; continue; }
+    }
+    if (colMap.customerId >= 0 && exclusions.stores.size > 0) {
+      const storeName = String(row[colMap.customerName] ?? "").trim();
+      if (exclusions.stores.has(storeName)) { rowsSkipped++; continue; }
     }
 
     const storeName = String(row[colMap.customerName] ?? "").trim();
@@ -576,6 +591,7 @@ function aggregateRecords(
 
 export async function processProductDeliveryExcel(
   file: File,
+  exclusions: ProcessorExclusions = emptyExclusions(),
 ): Promise<ProductDeliveryProcessingResult> {
   const startTime = performance.now();
 
@@ -611,7 +627,7 @@ export async function processProductDeliveryExcel(
     }
 
     const { headerRowIndex, colMap } = headerResult;
-    const { records, distRecords, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX);
+    const { records, distRecords, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX, exclusions);
 
     if (records.length === 0) {
       return failure("לא נמצאו שורות תקינות בקובץ");

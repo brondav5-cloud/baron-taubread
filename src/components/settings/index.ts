@@ -1,4 +1,5 @@
 export { SettingsTabs } from "./SettingsTabs";
+export { ExcludedEntitiesTab } from "./ExcludedEntitiesTab";
 export { PricingUploadZone } from "./PricingUploadZone";
 export { PricingPreview } from "./PricingPreview";
 export { PricingStoresList } from "./PricingStoresList";

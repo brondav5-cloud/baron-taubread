@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Users,
+  XCircle,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -42,12 +43,18 @@ const TABS = [
     label: "סטטוסי תקלות",
     icon: CheckCircle,
   },
+  {
+    href: "/dashboard/settings/exclusions",
+    label: "חריגי העלאה",
+    icon: XCircle,
+  },
 ];
 
 const ADMIN_ONLY_TABS = new Set([
   "/dashboard/settings/users",
   "/dashboard/settings/pricing",
   "/dashboard/settings/costs",
+  "/dashboard/settings/exclusions",
 ]);
 
 export function SettingsTabs() {
