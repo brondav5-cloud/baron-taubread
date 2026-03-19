@@ -118,6 +118,9 @@ export function useNewVisit() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const preSelectedStoreId = searchParams.get("store");
+  // Support pre-fill from work plan: ?visitType=general&activity=ישיבת+צוות
+  const preVisitType = searchParams.get("visitType") as "store" | "general" | null;
+  const preActivity = searchParams.get("activity");
   const { addVisit, stores } = useVisits();
   const auth = useAuth();
   const agentName =
@@ -146,11 +149,15 @@ export function useNewVisit() {
   );
 
   // Form state - תאריך ושעה נקבעים אוטומטית
-  const [visitType, setVisitType] = useState<"store" | "general">("store");
+  const [visitType, setVisitType] = useState<"store" | "general">(
+    preVisitType === "general" ? "general" : "store",
+  );
   const [selectedStore, setSelectedStore] = useState<string>(
     preSelectedStoreId || "",
   );
-  const [generalActivityLabel, setGeneralActivityLabel] = useState<string>("");
+  const [generalActivityLabel, setGeneralActivityLabel] = useState<string>(
+    preActivity ? decodeURIComponent(preActivity) : "",
+  );
   const [date, setDate] = useState<string>(getCurrentDate());
   const [time, setTime] = useState<string>(getCurrentTime());
   const [notes, setNotes] = useState<string>("");

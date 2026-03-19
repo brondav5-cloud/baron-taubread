@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   Calendar,
   ChevronLeft,
@@ -28,6 +28,7 @@ import type { PlanItem, PlannedVisit, PlannedTask } from "@/hooks/useWorkPlan";
 
 export default function WorkPlanPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const initialWeek = searchParams.get("week") ? parseInt(searchParams.get("week")!, 10) : 0;
 
   const {
@@ -343,18 +344,29 @@ export default function WorkPlanPage() {
                 /* ── General visit tab ── */
                 <div className="space-y-3 pt-1">
                   <p className="text-sm text-gray-600">בחר את סוג הפעילות הכללית:</p>
+                  <p className="text-xs text-gray-400">
+                    תועבר לטופס ביקור כדי להוסיף הערות ותמונות
+                  </p>
                   {GENERAL_ACTIVITY_OPTIONS.map((o) => (
                     <button
                       key={o.value}
                       type="button"
                       onClick={() => {
                         if (selectedDay !== null) {
-                          addGeneralVisit(o.label, selectedDay);
+                          // Add to work plan
+                          void addGeneralVisit(o.label, selectedDay);
                         }
+                        // Navigate to new visit form pre-filled
+                        router.push(
+                          `/dashboard/visits/new?visitType=general&activity=${encodeURIComponent(o.label)}`,
+                        );
                       }}
-                      className="w-full p-3 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl text-right text-sm font-medium text-primary-800 transition-colors"
+                      className="w-full p-3 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl text-right text-sm font-medium text-primary-800 transition-colors flex items-center justify-between"
                     >
-                      {o.label}
+                      <span>{o.label}</span>
+                      <span className="text-xs text-primary-500 font-normal">
+                        הוסף + צור תעודה ←
+                      </span>
                     </button>
                   ))}
                 </div>
