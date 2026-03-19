@@ -11,6 +11,7 @@ import type {
   ProductDeliveryProcessingResult,
   ProductDeliveryUploadPayload,
   AggregatedWeeklyRecord,
+  MonthlyDistRecord,
   StoreDeliveryAggregate,
 } from "@/types/productDeliveries";
 
@@ -125,10 +126,11 @@ export async function uploadProductDeliveryFile(
       onProgress(50 + Math.round(((i + 1) / totalChunks) * 50));
     }
 
-    // Final chunk: empty records + storeDeliveries only
+    // Final chunk: empty records + distRecords + storeDeliveries
     const finalPayload: ProductDeliveryUploadPayload = {
       filename:        file.name,
       records:         [],
+      distRecords:     result.distRecords as MonthlyDistRecord[],
       storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
       stats:           result.stats,
       chunkIndex:      totalChunks - 1,
@@ -241,10 +243,11 @@ export function useProductDeliveryUpload() {
         setState((prev) => ({ ...prev, progress: chunkProgress }));
       }
 
-      // Final chunk: storeDeliveries only (empty records)
+      // Final chunk: empty records + distRecords + storeDeliveries
       const finalPayload: ProductDeliveryUploadPayload = {
         filename:        file.name,
         records:         [],
+        distRecords:     result.distRecords as MonthlyDistRecord[],
         storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],
         stats:           result.stats,
         chunkIndex:      totalChunks - 1,

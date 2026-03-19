@@ -28,6 +28,7 @@
 import { loadXlsx } from "./loadXlsx";
 import type {
   AggregatedWeeklyRecord,
+  MonthlyDistRecord,
   StoreDeliveryAggregate,
   ProductDeliveryProcessingResult,
 } from "@/types/productDeliveries";
@@ -293,6 +294,16 @@ interface StoreWeekData {
   totalNetQty: number;
 }
 
+interface DistAggData {
+  storeName:   string;
+  productName: string;
+  grossQty:    number;
+  returnsQty:  number;
+  netQty:      number;
+  totalValue:  number;
+  uniqueDates: Set<string>;
+}
+
 function aggregateRecords(
   rawRows: unknown[][],
   headerRowIndex: number,
@@ -300,11 +311,14 @@ function aggregateRecords(
   XLSX?: { SSF?: { parse_date_code?: (n: number) => unknown } },
 ): {
   records: AggregatedWeeklyRecord[];
+  distRecords: MonthlyDistRecord[];
   storeDeliveries: StoreDeliveryAggregate[];
   stats: Omit<ProductDeliveryProcessingResult["stats"], "processingTimeMs">;
 } {
   const map = new Map<string, { key: AggKey; data: AggData }>();
   const storeWeekMap = new Map<string, StoreWeekData>();
+  // Monthly aggregation for store_product_monthly_dist (keyed by dist year/month)
+  const distMap = new Map<string, DistAggData>();
 
   let rowsProcessed = 0;
   let rowsSkipped   = 0;
@@ -336,11 +350,12 @@ function aggregateRecords(
     const weekInfo = parseWeekDate(row[colMap.weekStart], XLSX);
     if (!weekInfo) { rowsSkipped++; continue; }
 
-    // Use month from "חודש" column (C) and year from "תאריך מסמך" column (B)
-    // because week 2023-12-31 can belong to January 2024 per the document date.
-    const rawMonth = colMap.monthCol >= 0 ? Number(row[colMap.monthCol]) : NaN;
-    const month = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : weekInfo.month;
-    const year  = parseDocumentYear(row[colMap.documentDate]) ?? weekInfo.year;
+    // Dist year/month: from document date (col B) and month column (col C).
+    // Used for store_product_monthly_dist so edge weeks like 2023-12-31
+    // correctly appear in January 2024 instead of December 2023.
+    const rawDistMonth = colMap.monthCol >= 0 ? Number(row[colMap.monthCol]) : NaN;
+    const distMonth = rawDistMonth >= 1 && rawDistMonth <= 12 ? rawDistMonth : weekInfo.month;
+    const distYear  = parseDocumentYear(row[colMap.documentDate]) ?? weekInfo.year;
 
     const grossQty   = Number(row[colMap.grossQty])   || 0;
     const returnsQty = Number(row[colMap.returnsQty]) || 0;
@@ -373,8 +388,8 @@ function aggregateRecords(
           productName:           rawProductName,
           productNameNormalized: normalized,
           weekStartDate:         weekInfo.weekStartDate,
-          year,
-          month,
+          year:                  weekInfo.year,   // from col D — correct for weekly view
+          month:                 weekInfo.month,  // from col D — correct for weekly view
         },
         data: { grossQty, returnsQty, netQty, totalValue: totalVal, uniqueDates: dates },
       });
@@ -382,6 +397,29 @@ function aggregateRecords(
 
     if (weekInfo.weekStartDate < minDate) minDate = weekInfo.weekStartDate;
     if (weekInfo.weekStartDate > maxDate) maxDate = weekInfo.weekStartDate;
+
+    // Monthly distribution aggregation (uses distYear/distMonth from cols B/C)
+    const distKey = `${storeId}|${normalized}|${distYear}|${distMonth}`;
+    const existingDist = distMap.get(distKey);
+    if (existingDist) {
+      existingDist.grossQty   += grossQty;
+      existingDist.returnsQty += returnsQty;
+      existingDist.netQty     += netQty;
+      existingDist.totalValue += totalVal;
+      if (deliveryDateRaw && grossQty > 0) existingDist.uniqueDates.add(deliveryDateRaw);
+    } else {
+      const dates = new Set<string>();
+      if (deliveryDateRaw && grossQty > 0) dates.add(deliveryDateRaw);
+      distMap.set(distKey, {
+        storeName:   storeName,
+        productName: rawProductName,
+        grossQty,
+        returnsQty,
+        netQty,
+        totalValue:  totalVal,
+        uniqueDates: dates,
+      });
+    }
 
     // Store-level aggregation for store_deliveries
     const storeWeekKey = `${storeId}|${weekInfo.weekStartDate}`;
@@ -395,8 +433,8 @@ function aggregateRecords(
       storeWeekMap.set(storeWeekKey, {
         storeExternalId: storeId,
         storeName,
-        year,
-        month,
+        year:  weekInfo.year,   // from col D — correct for weekly view
+        month: weekInfo.month,  // from col D — correct for weekly view
         weekStartDate: weekInfo.weekStartDate,
         uniqueDates: dates,
         totalNetQty: netQty,
@@ -421,6 +459,41 @@ function aggregateRecords(
       totalValue:            data.totalValue,
     }),
   );
+
+  // Build monthly dist records from distMap
+  const distRecords: MonthlyDistRecord[] = Array.from(distMap.entries()).map(([key, d]) => {
+    const parts = key.split("|");
+    const storeId   = parseInt(parts[0]!, 10);
+    const distYear  = parseInt(parts[2]!, 10);
+    const distMonth = parseInt(parts[3]!, 10);
+    const normalized = parts[1]!;
+    return {
+      storeExternalId:       storeId,
+      storeName:             d.storeName,
+      productName:           d.productName,
+      productNameNormalized: normalized,
+      year:                  distYear,
+      month:                 distMonth,
+      grossQty:              d.grossQty,
+      returnsQty:            d.returnsQty,
+      netQty:                d.netQty,
+      totalValue:            d.totalValue,
+      deliveryCount:         d.uniqueDates.size,
+    };
+  });
+
+  // Compute year-month range for dist records (used to delete stale rows in DB)
+  let distYearMonthFrom = 999999;
+  let distYearMonthTo   = 0;
+  for (const r of distRecords) {
+    const ym = r.year * 100 + r.month;
+    if (ym < distYearMonthFrom) distYearMonthFrom = ym;
+    if (ym > distYearMonthTo)   distYearMonthTo   = ym;
+  }
+  if (distRecords.length === 0) {
+    distYearMonthFrom = 0;
+    distYearMonthTo   = 0;
+  }
 
   const uniqueStores   = new Set(records.map((r) => r.storeExternalId));
   const uniqueProducts = new Set(records.map((r) => r.productNameNormalized));
@@ -479,6 +552,7 @@ function aggregateRecords(
 
   return {
     records,
+    distRecords,
     storeDeliveries,
     stats: {
       rowsProcessed,
@@ -488,8 +562,10 @@ function aggregateRecords(
       weeksCount:    uniqueWeeks.size,
       totalGrossQty:   records.reduce((s, r) => s + r.grossQty,   0),
       totalReturnsQty: records.reduce((s, r) => s + r.returnsQty, 0),
-      periodStart: minDate === "9999-99-99" ? "" : minDate,
-      periodEnd:   maxDate === "0000-00-00" ? "" : maxDate,
+      periodStart:       minDate === "9999-99-99" ? "" : minDate,
+      periodEnd:         maxDate === "0000-00-00" ? "" : maxDate,
+      distYearMonthFrom,
+      distYearMonthTo,
     },
   };
 }
@@ -535,7 +611,7 @@ export async function processProductDeliveryExcel(
     }
 
     const { headerRowIndex, colMap } = headerResult;
-    const { records, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX);
+    const { records, distRecords, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX);
 
     if (records.length === 0) {
       return failure("לא נמצאו שורות תקינות בקובץ");
@@ -544,6 +620,7 @@ export async function processProductDeliveryExcel(
     return {
       success: true,
       records,
+      distRecords,
       storeDeliveries,
       stats: { ...stats, processingTimeMs: Math.round(performance.now() - startTime) },
     };
@@ -558,7 +635,8 @@ export async function processProductDeliveryExcel(
 function failure(error: string): ProductDeliveryProcessingResult {
   return {
     success: false,
-    records: [],
+    records:      [],
+    distRecords:  [],
     storeDeliveries: [],
     stats: {
       rowsProcessed: 0,
@@ -566,11 +644,13 @@ function failure(error: string): ProductDeliveryProcessingResult {
       storesCount:   0,
       productsCount: 0,
       weeksCount:    0,
-      totalGrossQty:   0,
-      totalReturnsQty: 0,
-      periodStart: "",
-      periodEnd:   "",
-      processingTimeMs: 0,
+      totalGrossQty:     0,
+      totalReturnsQty:   0,
+      periodStart:       "",
+      periodEnd:         "",
+      distYearMonthFrom: 0,
+      distYearMonthTo:   0,
+      processingTimeMs:  0,
     },
     error,
   };

@@ -4,7 +4,7 @@
 // ============================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AggregatedWeeklyRecord } from "@/types/productDeliveries";
+import type { AggregatedWeeklyRecord, MonthlyDistRecord } from "@/types/productDeliveries";
 
 const UPSERT_CHUNK_SIZE = 500;
 
@@ -76,6 +76,82 @@ export async function upsertWeeklyRecords(
       return { success: false, upserted, error: error.message };
     }
 
+    upserted += batch.length;
+  }
+
+  return { success: true, upserted };
+}
+
+// ============================================================
+// DELETE + UPSERT — store_product_monthly_dist
+// ============================================================
+
+export async function deleteMonthlyDistForPeriod(
+  supabase: SupabaseClient,
+  companyId: string,
+  yearMonthFrom: number, // e.g., 202401
+  yearMonthTo:   number, // e.g., 202403
+): Promise<{ success: boolean; error?: string }> {
+  // Expand the range into individual (year, month) pairs and delete each.
+  const pairs: { year: number; month: number }[] = [];
+  let y = Math.floor(yearMonthFrom / 100);
+  let m = yearMonthFrom % 100;
+  const yTo = Math.floor(yearMonthTo / 100);
+  const mTo = yearMonthTo % 100;
+  while (y < yTo || (y === yTo && m <= mTo)) {
+    pairs.push({ year: y, month: m });
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+
+  for (const { year, month } of pairs) {
+    const { error } = await supabase
+      .from("store_product_monthly_dist")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("year",  year)
+      .eq("month", month);
+    if (error) return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
+export async function upsertMonthlyDistRecords(
+  supabase: SupabaseClient,
+  companyId: string,
+  records: MonthlyDistRecord[],
+): Promise<{ success: boolean; upserted: number; error?: string }> {
+  if (records.length === 0) return { success: true, upserted: 0 };
+
+  let upserted = 0;
+  const CHUNK = 500;
+
+  for (let i = 0; i < records.length; i += CHUNK) {
+    const batch = records.slice(i, i + CHUNK);
+    const rows = batch.map((r) => ({
+      company_id:             companyId,
+      store_external_id:      r.storeExternalId,
+      store_name:             r.storeName,
+      product_name:           r.productName,
+      product_name_normalized: r.productNameNormalized,
+      year:                   r.year,
+      month:                  r.month,
+      gross_qty:              r.grossQty,
+      returns_qty:            r.returnsQty,
+      net_qty:                r.netQty,
+      total_value:            r.totalValue,
+      delivery_count:         r.deliveryCount,
+      updated_at:             new Date().toISOString(),
+    }));
+
+    const { error } = await supabase
+      .from("store_product_monthly_dist")
+      .upsert(rows, {
+        onConflict:       "company_id,store_external_id,product_name_normalized,year,month",
+        ignoreDuplicates: false,
+      });
+
+    if (error) return { success: false, upserted, error: error.message };
     upserted += batch.length;
   }
 

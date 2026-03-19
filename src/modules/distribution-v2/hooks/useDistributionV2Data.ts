@@ -432,7 +432,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
           .order("name"),
         supabase.from("filters").select("cities, networks, drivers, agents").eq("company_id", companyId).single(),
         supabase
-          .from("store_product_weekly")
+          .from("store_product_monthly_dist")
           .select("year, month")
           .eq("company_id", companyId)
           .order("year", { ascending: false })

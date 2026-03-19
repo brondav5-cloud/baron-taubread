@@ -15,6 +15,22 @@ export interface StoreDeliveryAggregate {
   totalQuantity: number;
 }
 
+// One aggregated record per store × product × month (for store_product_monthly_dist).
+// year + month come from Excel col B (document date) and col C (חודש) — not from col D.
+export interface MonthlyDistRecord {
+  storeExternalId:       number;
+  storeName:             string;
+  productName:           string;
+  productNameNormalized: string;
+  year:                  number;
+  month:                 number;
+  grossQty:              number;
+  returnsQty:            number;
+  netQty:                number;
+  totalValue:            number;
+  deliveryCount:         number;
+}
+
 // One aggregated record per store × product × week
 export interface AggregatedWeeklyRecord {
   storeExternalId: number;
@@ -33,8 +49,9 @@ export interface AggregatedWeeklyRecord {
 
 export interface ProductDeliveryProcessingResult {
   success: boolean;
-  records: AggregatedWeeklyRecord[];
-  storeDeliveries: StoreDeliveryAggregate[];
+  records: AggregatedWeeklyRecord[];         // → store_product_weekly
+  distRecords: MonthlyDistRecord[];           // → store_product_monthly_dist
+  storeDeliveries: StoreDeliveryAggregate[];  // → store_deliveries
   stats: {
     rowsProcessed: number;
     rowsSkipped: number;
@@ -43,8 +60,12 @@ export interface ProductDeliveryProcessingResult {
     weeksCount: number;
     totalGrossQty: number;
     totalReturnsQty: number;
-    periodStart: string; // "YYYY-MM-DD"
-    periodEnd: string;   // "YYYY-MM-DD"
+    periodStart: string; // "YYYY-MM-DD" — based on week_start_date (col D)
+    periodEnd: string;   // "YYYY-MM-DD" — based on week_start_date (col D)
+    // Year-month range for store_product_monthly_dist (from col B/C).
+    // Encoded as YYYYMM integer, e.g., 202401. Used to delete stale dist records.
+    distYearMonthFrom: number;
+    distYearMonthTo:   number;
     processingTimeMs: number;
   };
   error?: string;
@@ -53,6 +74,7 @@ export interface ProductDeliveryProcessingResult {
 export interface ProductDeliveryUploadPayload {
   filename: string;
   records: AggregatedWeeklyRecord[];
+  distRecords?: MonthlyDistRecord[];          // sent only on last chunk
   storeDeliveries?: StoreDeliveryAggregate[]; // sent only on last chunk
   stats: ProductDeliveryProcessingResult["stats"];
   chunkIndex: number;

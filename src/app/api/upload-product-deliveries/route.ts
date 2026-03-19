@@ -9,6 +9,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   deleteWeeklyRecordsForPeriod,
   upsertWeeklyRecords,
+  deleteMonthlyDistForPeriod,
+  upsertMonthlyDistRecords,
   createProductDeliveryUpload,
   verifyProductDeliveryTotals,
 } from "@/lib/db/productDeliveries.repo";
@@ -133,18 +135,35 @@ export async function POST(request: NextRequest) {
 
     // On the first chunk: delete existing data for this period so the new
     // file fully replaces old data (no stale "ghost" records left behind).
-    if (chunkIndex === 0 && payload.stats?.periodStart && payload.stats?.periodEnd) {
-      const delResult = await deleteWeeklyRecordsForPeriod(
-        supabaseAdmin,
-        companyId,
-        payload.stats.periodStart,
-        payload.stats.periodEnd,
-      );
-      if (!delResult.success) {
-        return NextResponse.json(
-          { error: delResult.error ?? "שגיאה במחיקת נתונים ישנים" },
-          { status: 500 },
+    if (chunkIndex === 0) {
+      if (payload.stats?.periodStart && payload.stats?.periodEnd) {
+        const delResult = await deleteWeeklyRecordsForPeriod(
+          supabaseAdmin,
+          companyId,
+          payload.stats.periodStart,
+          payload.stats.periodEnd,
         );
+        if (!delResult.success) {
+          return NextResponse.json(
+            { error: delResult.error ?? "שגיאה במחיקת נתונים שבועיים ישנים" },
+            { status: 500 },
+          );
+        }
+      }
+
+      if (payload.stats?.distYearMonthFrom && payload.stats?.distYearMonthTo) {
+        const delDist = await deleteMonthlyDistForPeriod(
+          supabaseAdmin,
+          companyId,
+          payload.stats.distYearMonthFrom,
+          payload.stats.distYearMonthTo,
+        );
+        if (!delDist.success) {
+          return NextResponse.json(
+            { error: delDist.error ?? "שגיאה במחיקת נתוני חלוקה ישנים" },
+            { status: 500 },
+          );
+        }
       }
     }
 
@@ -163,6 +182,21 @@ export async function POST(request: NextRequest) {
     }
 
     const processingTime = Math.round(performance.now() - startTime);
+
+    // On the last chunk: upsert monthly distribution records → store_product_monthly_dist
+    if (isLastChunk && payload.distRecords?.length) {
+      const distResult = await upsertMonthlyDistRecords(
+        supabaseAdmin,
+        companyId,
+        payload.distRecords,
+      );
+      if (!distResult.success) {
+        return NextResponse.json(
+          { error: distResult.error ?? "שגיאה בשמירת נתוני חלוקה חודשית" },
+          { status: 500 },
+        );
+      }
+    }
 
     // On the last chunk: replace store-level delivery aggregates → store_deliveries
     if (isLastChunk && payload.storeDeliveries?.length) {
