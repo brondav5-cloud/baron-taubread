@@ -62,6 +62,7 @@ const COL_ALIASES: Record<string, string[]> = {
   grossQty:   ["כמות"],
   returnsQty: ["החזרות"],
   weekStart:  ["שבוע"],
+  totalValue: ["סהכ", "סה\"כ", "סה'כ"],
 };
 
 // Networks to exclude from processing (wholesale/non-distribution channels)
@@ -174,6 +175,7 @@ interface ColMap {
   netQty:       number;
   weekStart:    number;
   network:      number; // -1 if column not present in file
+  totalValue:   number; // -1 if column not present (סהכ)
 }
 
 function findHeaderRow(rawRows: unknown[][]): {
@@ -199,6 +201,12 @@ function findHeaderRow(rawRows: unknown[][]): {
     const findOptional = (name: string): number =>
       headers.find((h) => h.norm === normalizeHeader(name))?.i ?? -1;
 
+    const findTotalValue = (): number => {
+      const aliases = COL_ALIASES.totalValue ?? ["סהכ"];
+      const all = [...aliases].map(normalizeHeader);
+      return headers.find((h) => all.includes(h.norm))?.i ?? -1;
+    };
+
     const colMap: ColMap = {
       documentDate: find("documentDate"),
       customerId:   find("customerId"),
@@ -209,11 +217,12 @@ function findHeaderRow(rawRows: unknown[][]): {
       netQty:       find("netQty"),
       weekStart:    find("weekStart"),
       network:      findOptional("רשת"),
+      totalValue:   findTotalValue(),
     };
 
     const missing: string[] = [];
     for (const [k, idx] of Object.entries(colMap)) {
-      if (k === "network") continue; // optional column
+      if (k === "network" || k === "totalValue") continue; // optional columns
       if (idx === -1) missing.push(REQUIRED_COLS[k as keyof typeof REQUIRED_COLS]);
     }
 
@@ -247,6 +256,7 @@ interface AggData {
   grossQty:      number;
   returnsQty:    number;
   netQty:        number;
+  totalValue:    number;
   uniqueDates:   Set<string>; // for delivery_count
 }
 
@@ -306,6 +316,7 @@ function aggregateRecords(
     const grossQty   = Number(row[colMap.grossQty])   || 0;
     const returnsQty = Number(row[colMap.returnsQty]) || 0;
     const netQty     = Number(row[colMap.netQty])     || 0;
+    const totalVal   = colMap.totalValue >= 0 ? (Number(row[colMap.totalValue]) || 0) : 0;
 
     // Delivery date string for counting unique visits
     const deliveryDateRaw = String(row[colMap.documentDate] ?? "").trim();
@@ -320,6 +331,7 @@ function aggregateRecords(
       existing.data.grossQty   += grossQty;
       existing.data.returnsQty += returnsQty;
       existing.data.netQty     += netQty;
+      existing.data.totalValue += totalVal;
       // Only count as a delivery visit if actual goods were supplied (not return-only)
       if (deliveryDateRaw && grossQty > 0) existing.data.uniqueDates.add(deliveryDateRaw);
     } else {
@@ -335,7 +347,7 @@ function aggregateRecords(
           year:                  weekInfo.year,
           month:                 weekInfo.month,
         },
-        data: { grossQty, returnsQty, netQty, uniqueDates: dates },
+        data: { grossQty, returnsQty, netQty, totalValue: totalVal, uniqueDates: dates },
       });
     }
 
@@ -377,6 +389,7 @@ function aggregateRecords(
       returnsQty:            data.returnsQty,
       netQty:                data.netQty,
       deliveryCount:         data.uniqueDates.size,
+      totalValue:            data.totalValue,
     }),
   );
 

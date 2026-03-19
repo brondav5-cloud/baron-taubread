@@ -37,6 +37,7 @@ export async function upsertWeeklyRecords(
       returns_qty:            r.returnsQty,
       net_qty:                r.netQty,
       delivery_count:         r.deliveryCount,
+      total_value:            r.totalValue ?? 0,
       updated_at:             new Date().toISOString(),
     }));
 

@@ -18,6 +18,7 @@ export interface DistributionV2GroupBlock {
   uniqueStoreCount: number;
   periodCount: number;
   totalQuantity: number;
+  totalGrossQuantity: number;
   totalReturns: number;
   totalSales: number;
 }
@@ -45,6 +46,7 @@ export interface DistributionV2SummaryStats {
   /** Distinct month labels in selection */
   periodCount: number;
   totalQuantity: number;
+  totalGrossQuantity: number;
   totalReturns: number;
   totalSales: number;
   /** Weighted returns % = totalReturns / (totalQuantity + totalReturns) * 100 */
@@ -77,7 +79,8 @@ export const DISTRIBUTION_V2_SUMMARY_METRIC_ORDER: {
   { key: "productCount", label: "מספר מוצרים", format: "int" },
   { key: "categoryCount", label: "מספר קטגוריות", format: "int" },
   { key: "periodCount", label: "מספר חודשים (תקופות)", format: "int" },
-  { key: "totalQuantity", label: "סה״כ כמות", format: "int" },
+  { key: "totalQuantity", label: "סה״כ כמות (נטו)", format: "int" },
+  { key: "totalGrossQuantity", label: "סה״כ כמות (ברוטו)", format: "int" },
   { key: "totalReturns", label: "סה״כ חזרות", format: "int" },
   { key: "totalSales", label: "סה״כ מכירות", format: "money" },
   { key: "returnsPctWeighted", label: "אחוז חזרות (משוקלל)", format: "percent" },
@@ -105,7 +108,10 @@ export interface DistributionV2Row {
   productId?: number;
   product?: string;
   productCategory?: string;
+  /** Net quantity (after returns) */
   quantity: number;
+  /** Gross quantity (before returns) */
+  grossQuantity?: number;
   returns: number;
   returnsPct?: number;
   sales?: number;
@@ -131,6 +137,7 @@ export const DISTRIBUTION_V2_COLUMNS = [
   "productId",
   "product",
   "productCategory",
+  "grossQuantity",
   "quantity",
   "returns",
   "returnsPct",

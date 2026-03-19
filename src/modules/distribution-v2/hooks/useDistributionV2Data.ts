@@ -45,31 +45,19 @@ function toDdMmYyyyFromParts(p: { y: number; m: number; d: number }): string {
 }
 
 
-function rawMonthKeyToYyyyMm(k: string): string {
-  const s = k.trim();
-  if (/^\d{6}$/.test(s)) return s;
-  const p = s.match(/^(\d{4})-(\d{1,2})$/);
-  if (p && p[1] && p[2]) return `${p[1]}${String(p[2]).padStart(2, "0")}`;
-  return "";
-}
-
-/** Max YYYYMM from monthly_qty keys where qty > 0 */
-function maxMonthKeyFromStoreProducts(sp: StoreProductRow[]): string | null {
+/** Max YYYYMM from weekly rows (year + month) */
+function maxMonthKeyFromWeekly(rows: StoreProductWeeklyRow[]): string | null {
   let max = "";
-  for (const row of sp) {
-    const mq = row.monthly_qty ?? {};
-    for (const key of Object.keys(mq)) {
-      if ((mq[key] ?? 0) <= 0) continue;
-      const yyyymm = rawMonthKeyToYyyyMm(key);
-      if (yyyymm && yyyymm > max) max = yyyymm;
-    }
+  for (const r of rows) {
+    const yyyymm = `${r.year}${String(r.month).padStart(2, "0")}`;
+    if (yyyymm > max) max = yyyymm;
   }
   return max || null;
 }
 
-/** Fallback when updated_at missing: full latest month that has qty */
-function latestMonthRangeFromQty(sp: StoreProductRow[]): { dateFrom: string; dateTo: string } | null {
-  const max = maxMonthKeyFromStoreProducts(sp);
+/** Latest month range for date filter seed (from weekly data) */
+function latestMonthRangeFromWeekly(rows: StoreProductWeeklyRow[]): { dateFrom: string; dateTo: string } | null {
+  const max = maxMonthKeyFromWeekly(rows);
   if (!max || max.length < 6) return null;
   const y = parseInt(max.slice(0, 4), 10);
   const m = parseInt(max.slice(4, 6), 10);
@@ -163,64 +151,117 @@ interface StoreLite {
   agent: string | null;
 }
 
-interface StoreProductRow {
+/** One row from store_product_weekly (source: פירוט מוצרים) */
+interface StoreProductWeeklyRow {
   store_external_id: number;
-  product_external_id: number;
+  store_name: string;
   product_name: string;
-  product_category: string | null;
-  monthly_qty: Record<string, number>;
-  monthly_sales: Record<string, number>;
-  monthly_returns: Record<string, number>;
+  product_name_normalized: string;
+  week_start_date: string;
+  year: number;
+  month: number;
+  gross_qty: number;
+  returns_qty: number;
+  net_qty: number;
+  delivery_count: number;
+  total_value: number;
   updated_at?: string | null;
 }
 
-function buildRows(
+/** Product lookup for join (name -> id, category) */
+interface ProductLookup {
+  external_id: number;
+  category: string | null;
+}
+
+function normalizeProductNameForMatch(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+function buildRowsFromWeekly(
+  weeklyRows: StoreProductWeeklyRow[],
   stores: StoreLite[],
-  storeProducts: StoreProductRow[],
+  productsByNormalizedName: Map<string, ProductLookup>,
 ): DistributionV2Row[] {
   const storeMap = new Map<number, StoreLite>();
   stores.forEach((s) => storeMap.set(s.external_id, s));
 
+  // Group by store_external_id + product_name_normalized + year + month
+  const groupKey = (r: StoreProductWeeklyRow) =>
+    `${r.store_external_id}|${r.product_name_normalized}|${r.year}|${r.month}`;
+  const aggregates = new Map<
+    string,
+    {
+      storeExternalId: number;
+      storeName: string;
+      productName: string;
+      productNameNormalized: string;
+      year: number;
+      month: number;
+      grossQty: number;
+      returnsQty: number;
+      netQty: number;
+      totalValue: number;
+    }
+  >();
+
+  for (const r of weeklyRows) {
+    const key = groupKey(r);
+    const existing = aggregates.get(key);
+    if (existing) {
+      existing.grossQty += r.gross_qty ?? 0;
+      existing.returnsQty += r.returns_qty ?? 0;
+      existing.netQty += r.net_qty ?? 0;
+      existing.totalValue += r.total_value ?? 0;
+    } else {
+      aggregates.set(key, {
+        storeExternalId: r.store_external_id,
+        storeName: r.store_name,
+        productName: r.product_name,
+        productNameNormalized: r.product_name_normalized,
+        year: r.year,
+        month: r.month,
+        grossQty: r.gross_qty ?? 0,
+        returnsQty: r.returns_qty ?? 0,
+        netQty: r.net_qty ?? 0,
+        totalValue: r.total_value ?? 0,
+      });
+    }
+  }
+
   const rows: DistributionV2Row[] = [];
   let id = 0;
+  const monthKey = (y: number, m: number) => `${y}${String(m).padStart(2, "0")}`;
 
-  storeProducts.forEach((sp) => {
-    const store = storeMap.get(sp.store_external_id);
-    if (!store) return;
+  for (const agg of Array.from(aggregates.values())) {
+    const store = storeMap.get(agg.storeExternalId);
+    const productLookup = productsByNormalizedName.get(agg.productNameNormalized);
+    const gross = agg.grossQty;
+    const returnsQty = agg.returnsQty;
+    const netQty = agg.netQty;
+    const returnsPct = gross > 0 ? (returnsQty / gross) * 100 : 0;
+    const keyForPeriod = monthKey(agg.year, agg.month);
 
-    const monthlyQty = sp.monthly_qty ?? {};
-    const monthlySales = sp.monthly_sales ?? {};
-    const monthlyReturns = sp.monthly_returns ?? {};
-
-    Object.keys(monthlyQty).forEach((monthKey) => {
-      const qty = monthlyQty[monthKey] ?? 0;
-      if (qty === 0) return;
-
-      const returnsQty = monthlyReturns[monthKey] ?? 0;
-      const sales = monthlySales[monthKey] ?? 0;
-      const gross = qty + returnsQty;
-      const returnsPct = gross > 0 ? (returnsQty / gross) * 100 : 0;
-
-      rows.push({
-        id: String(++id),
-        month: monthKeyToLabel(monthKey),
-        periodDate: monthKeyToPeriodEndDisplay(monthKey),
-        customerId: store.external_id,
-        customer: store.name,
-        network: store.network ?? undefined,
-        city: store.city ?? undefined,
-        productId: sp.product_external_id,
-        product: sp.product_name,
-        productCategory: sp.product_category ?? undefined,
-        quantity: qty,
-        returns: returnsQty,
-        returnsPct: Math.round(returnsPct * 10) / 10,
-        sales,
-        driver: store.driver ?? undefined,
-        agent: store.agent ?? undefined,
-      });
+    rows.push({
+      id: String(++id),
+      month: monthKeyToLabel(keyForPeriod),
+      periodDate: monthKeyToPeriodEndDisplay(keyForPeriod),
+      customerId: store?.external_id ?? agg.storeExternalId,
+      customer: store?.name ?? agg.storeName,
+      network: store?.network ?? undefined,
+      city: store?.city ?? undefined,
+      productId: productLookup?.external_id,
+      product: agg.productName,
+      productCategory: productLookup?.category ?? undefined,
+      grossQuantity: gross,
+      quantity: netQty,
+      returns: returnsQty,
+      returnsPct: Math.round(returnsPct * 10) / 10,
+      sales: agg.totalValue,
+      driver: store?.driver ?? undefined,
+      agent: store?.agent ?? undefined,
     });
-  });
+  }
 
   return rows;
 }
@@ -312,12 +353,14 @@ function buildGroupBlocks(rows: DistributionV2Row[], mode: GroupByMode): Distrib
     const stores = new Set<number>();
     const periods = new Set<string>();
     let totalQuantity = 0;
+    let totalGrossQuantity = 0;
     let totalReturns = 0;
     let totalSales = 0;
     for (const x of groupRows) {
       if (x.customerId != null) stores.add(x.customerId);
       if (x.month) periods.add(x.month);
       totalQuantity += x.quantity;
+      totalGrossQuantity += x.grossQuantity ?? 0;
       totalReturns += x.returns;
       totalSales += x.sales ?? 0;
     }
@@ -342,6 +385,7 @@ function buildGroupBlocks(rows: DistributionV2Row[], mode: GroupByMode): Distrib
       uniqueStoreCount: stores.size,
       periodCount: periods.size,
       totalQuantity,
+      totalGrossQuantity,
       totalReturns,
       totalSales,
     });
@@ -356,7 +400,8 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const seededDateFilterRef = useRef(false);
 
   const [stores, setStores] = useState<StoreLite[]>([]);
-  const [storeProducts, setStoreProducts] = useState<StoreProductRow[]>([]);
+  const [weeklyRows, setWeeklyRows] = useState<StoreProductWeeklyRow[]>([]);
+  const [productsList, setProductsList] = useState<{ name: string; external_id: number; category: string | null }[]>([]);
   const [filterOptions, setFilterOptions] = useState<DistributionV2FilterOptions>({
     cities: [],
     networks: [],
@@ -427,7 +472,8 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     if (!companyId) {
       setLoading(false);
       setStores([]);
-      setStoreProducts([]);
+      setWeeklyRows([]);
+      setProductsList([]);
       setFiltersState(emptyFilters());
       setFilterOptions({ cities: [], networks: [], drivers: [], agents: [] });
       setError(null);
@@ -440,36 +486,40 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     try {
       const supabase = createClient();
 
-      const [storesRes, spRes, filtersRes] = await Promise.all([
+      const [storesRes, weeklyRes, productsRes, filtersRes] = await Promise.all([
         supabase
           .from("stores")
           .select("external_id, name, city, network, driver, agent")
           .eq("company_id", companyId)
           .order("name"),
         supabase
-          .from("store_products")
+          .from("store_product_weekly")
           .select(
-            "store_external_id, product_external_id, product_name, product_category, monthly_qty, monthly_sales, monthly_returns, updated_at",
+            "store_external_id, store_name, product_name, product_name_normalized, week_start_date, year, month, gross_qty, returns_qty, net_qty, delivery_count, total_value, updated_at",
           )
+          .eq("company_id", companyId),
+        supabase
+          .from("products")
+          .select("name, external_id, category")
           .eq("company_id", companyId),
         supabase.from("filters").select("cities, networks, drivers, agents").eq("company_id", companyId).single(),
       ]);
 
       if (storesRes.error) throw new Error(storesRes.error.message);
-      if (spRes.error) throw new Error(spRes.error.message);
+      if (weeklyRes.error) throw new Error(weeklyRes.error.message);
 
-      const products = (spRes.data ?? []) as StoreProductRow[];
+      const weekly = (weeklyRes.data ?? []) as StoreProductWeeklyRow[];
+      const prods = (productsRes.data ?? []) as { name: string; external_id: number; category: string | null }[];
 
-      if (!seededDateFilterRef.current && products.length > 0) {
-        // Seed the date filter to the latest month that actually has qty data,
-        // NOT the upload date — upload can happen in a different month than the data.
-        const fb = latestMonthRangeFromQty(products);
+      if (!seededDateFilterRef.current && weekly.length > 0) {
+        const fb = latestMonthRangeFromWeekly(weekly);
         if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
         seededDateFilterRef.current = true;
       }
 
       setStores((storesRes.data ?? []) as StoreLite[]);
-      setStoreProducts(products);
+      setWeeklyRows(weekly);
+      setProductsList(prods);
 
       const st = (storesRes.data ?? []) as StoreLite[];
       const filtersData = filtersRes.data as { cities?: string[]; networks?: string[]; drivers?: string[]; agents?: string[] } | null;
@@ -504,9 +554,18 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     fetchData();
   }, [fetchData]);
 
+  const productsByNormalizedName = useMemo(() => {
+    const map = new Map<string, ProductLookup>();
+    for (const p of productsList) {
+      const key = normalizeProductNameForMatch(p.name);
+      if (!map.has(key)) map.set(key, { external_id: p.external_id, category: p.category });
+    }
+    return map;
+  }, [productsList]);
+
   const allRows = useMemo(
-    () => buildRows(stores, storeProducts),
-    [stores, storeProducts],
+    () => buildRowsFromWeekly(weeklyRows, stores, productsByNormalizedName),
+    [weeklyRows, stores, productsByNormalizedName],
   );
 
   const rowsBeforeColumnFilter = useMemo(
@@ -597,6 +656,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     const categories = new Set<string>();
     const periods = new Set<string>();
     let totalQuantity = 0;
+    let totalGrossQuantity = 0;
     let totalReturns = 0;
     let totalSales = 0;
     for (const r of rows) {
@@ -609,11 +669,13 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       if (r.productCategory) categories.add(r.productCategory);
       if (r.month) periods.add(r.month);
       totalQuantity += r.quantity;
+      totalGrossQuantity += r.grossQuantity ?? 0;
       totalReturns += r.returns;
       totalSales += r.sales ?? 0;
     }
-    const gross = totalQuantity + totalReturns;
-    const returnsPctWeighted = gross > 0 ? Math.round((totalReturns / gross) * 1000) / 10 : 0;
+    const returnsPctWeighted = totalGrossQuantity > 0
+      ? Math.round((totalReturns / totalGrossQuantity) * 1000) / 10
+      : 0;
     return {
       rowCount: rows.length,
       storeCount: stores.size,
@@ -625,6 +687,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       categoryCount: categories.size,
       periodCount: periods.size,
       totalQuantity,
+      totalGrossQuantity,
       totalReturns,
       totalSales,
       returnsPctWeighted,
@@ -644,25 +707,25 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   }, [summaryStats]);
 
   /**
-   * Last data touch: max(updated_at) across store_products (upload time),
-   * else end of latest month that has qty. Independent of current filters.
+   * Last data touch: max(updated_at) across store_product_weekly (upload time),
+   * else end of latest month. Independent of current filters.
    */
   const dataLastDate = useMemo(() => {
-    if (storeProducts.length === 0) return null;
+    if (weeklyRows.length === 0) return null;
     let maxTs = 0;
-    for (const p of storeProducts) {
-      if (!p.updated_at) continue;
-      const t = new Date(p.updated_at).getTime();
+    for (const r of weeklyRows) {
+      if (!r.updated_at) continue;
+      const t = new Date(r.updated_at).getTime();
       if (!Number.isNaN(t) && t > maxTs) maxTs = t;
     }
     if (maxTs > 0) {
       const jp = jerusalemYmdFromIso(new Date(maxTs).toISOString());
       if (jp) return toDdMmYyyyFromParts(jp);
     }
-    const maxKey = maxMonthKeyFromStoreProducts(storeProducts);
+    const maxKey = maxMonthKeyFromWeekly(weeklyRows);
     if (!maxKey) return null;
     return monthKeyToPeriodEndDisplay(maxKey);
-  }, [storeProducts]);
+  }, [weeklyRows]);
 
   return {
     isLoading,

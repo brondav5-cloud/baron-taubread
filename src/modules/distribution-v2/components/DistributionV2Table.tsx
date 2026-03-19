@@ -111,7 +111,8 @@ const COLUMN_LABELS: Record<DistributionV2ColumnKey, string> = {
   productId: "מזהה מוצר",
   product: "מוצר",
   productCategory: "קטגוריה",
-  quantity: "כמות",
+  grossQuantity: "כמות ברוטו",
+  quantity: "כמות נטו",
   returns: "חזרות",
   returnsPct: "% חזרות",
   sales: "מכירות",
@@ -147,6 +148,7 @@ function getTdClassForColumn(col: DistributionV2ColumnKey, noAccent?: boolean): 
   if (col === "month") return `${base} ${accent}`;
   if (col === "periodDate" || col === "customerId" || col === "productId") return `${base} tabular-nums whitespace-nowrap`;
   if (TRUNCATE_TEXT_COLS.includes(col)) return `${base} ${truncateWide}`;
+  if (col === "grossQuantity") return `${base} tabular-nums whitespace-nowrap text-slate-500`;
   if (col === "quantity") return `${base} font-medium tabular-nums whitespace-nowrap`;
   if (col === "returns") return `${base} tabular-nums whitespace-nowrap`;
   if (col === "returnsPct") return `${base} tabular-nums whitespace-nowrap text-slate-500`;
@@ -780,6 +782,13 @@ export function DistributionV2Table({
                           </td>
                         );
                       }
+                      if (col === "grossQuantity") {
+                        return (
+                          <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-slate-300 whitespace-nowrap">
+                            {summaryStats.totalGrossQuantity.toLocaleString("he-IL")}
+                          </td>
+                        );
+                      }
                       if (col === "quantity") {
                         return (
                           <td key={col} className="px-2.5 py-1.5 text-xs font-bold tabular-nums text-white whitespace-nowrap">
@@ -861,7 +870,10 @@ export function DistributionV2Table({
                         <span className="text-xs text-slate-500">{block.uniqueStoreCount} חנויות</span>
                         <span className="text-xs text-slate-500">{block.periodCount} חודשים</span>
                         <span className="mr-auto flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-slate-800 tabular-nums">
-                          <span className="text-slate-600 font-semibold">כמות</span>
+                          <span className="text-slate-500 font-semibold">ברוטו</span>
+                          <span className="text-slate-500">{block.totalGrossQuantity.toLocaleString("he-IL")}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="text-slate-600 font-semibold">נטו</span>
                           {block.totalQuantity.toLocaleString("he-IL")}
                           <span className="text-slate-300">|</span>
                           <span className="text-slate-600 font-semibold">חזרות</span>
@@ -924,7 +936,7 @@ function formatCellValue(row: DistributionV2Row, col: DistributionV2ColumnKey): 
   if (col === "sales" && typeof v === "number") {
     return `₪${v.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   }
-  if ((col === "quantity" || col === "returns") && typeof v === "number") {
+  if ((col === "grossQuantity" || col === "quantity" || col === "returns") && typeof v === "number") {
     return v.toLocaleString("he-IL");
   }
   if (col === "returnsPct" && typeof v === "number") {

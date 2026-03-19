@@ -94,6 +94,9 @@ export default function DistributionV2Page() {
 
   return (
     <div className="space-y-5 max-w-[1920px] mx-auto pb-2 font-assistant antialiased" dir="rtl">
+      <div className="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-200 bg-slate-50 text-xs font-medium text-slate-600">
+        מקור: פירוט מוצרים
+      </div>
       {hook.dataLastDate && (
         <div className="flex items-center justify-center sm:justify-start gap-2 px-4 py-2.5 rounded-2xl border border-slate-200/90 bg-slate-50/80 text-sm font-medium text-slate-700 shadow-sm">
           <span className="text-slate-500">הנתונים כולל עד תאריך</span>
