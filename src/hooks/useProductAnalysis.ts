@@ -26,6 +26,10 @@ export interface StoreProductStat {
   vsBenchmark:     TrendResult;
   top10Benchmark:  number | null;
   lastWeekQty:     number | null;
+  /** Average of previous 3 weeks (for "ממוצע 3" column) */
+  avg3wQty:        number | null;
+  /** Same week last year qty (for "שנה שעב'" column) */
+  lastYearQty:     number | null;
 }
 
 export interface ProductOption {
@@ -226,6 +230,8 @@ function computeStores(
       vsBenchmark:     computeTrend(grossQty, top10Benchmark),
       top10Benchmark,
       lastWeekQty:     lw1,
+      avg3wQty:        avg3w !== null ? Math.round(avg3w) : null,
+      lastYearQty:     lastYearQty !== null ? Math.round(lastYearQty) : null,
     });
   });
 

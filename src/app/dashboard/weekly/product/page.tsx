@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Package, TrendingDown, TrendingUp, Search } from "lucide-react";
+import { Package, TrendingDown, TrendingUp, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { clsx } from "clsx";
 import {
   useProductAnalysis,
@@ -58,6 +58,42 @@ function ProductAnalysisInner() {
     totalQty: stores.reduce((s, r) => s + r.grossQty, 0),
     totalRet: stores.reduce((s, r) => s + r.returnsQty, 0),
   }), [stores]);
+
+  // Table sort: by quantity (default desc) or by store name
+  type SortKey = "quantity" | "store";
+  const [sortKey, setSortKey] = useState<SortKey>("quantity");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const sortedStores = useMemo(() => {
+    const list = [...stores];
+    if (sortKey === "quantity") {
+      list.sort((a, b) => (sortDir === "desc" ? b.grossQty - a.grossQty : a.grossQty - b.grossQty));
+    } else {
+      list.sort((a, b) => {
+        const cmp = (a.storeName || "").localeCompare(b.storeName || "", "he");
+        return sortDir === "desc" ? -cmp : cmp;
+      });
+    }
+    return list;
+  }, [stores, sortKey, sortDir]);
+
+  const cycleQuantitySort = () => {
+    if (sortKey !== "quantity") {
+      setSortKey("quantity");
+      setSortDir("desc");
+    } else {
+      setSortDir((d) => (d === "desc" ? "asc" : "desc"));
+    }
+  };
+
+  const cycleStoreSort = () => {
+    if (sortKey !== "store") {
+      setSortKey("store");
+      setSortDir("asc");
+    } else {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    }
+  };
 
   return (
     <div className="space-y-4" dir="rtl">
@@ -160,12 +196,38 @@ function ProductAnalysisInner() {
             <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">{error}</div>
           ) : (
             <>
-              {/* Summary */}
+              {/* Summary — cubes clickable to sort table */}
               <div className="grid grid-cols-4 gap-3">
-                <StatCard label="חנויות" value={summary.total} color="gray" />
-                <StatCard label="בעלייה" value={summary.up} color="green" Icon={TrendingUp} />
-                <StatCard label="בירידה" value={summary.down} color="red" Icon={TrendingDown} />
-                <StatCard label="סה״כ יח׳" value={summary.totalQty} color="purple" />
+                <StatCard
+                  label="חנויות"
+                  value={summary.total}
+                  color="gray"
+                  onClick={cycleStoreSort}
+                  title="מיין לפי שם חנות"
+                />
+                <StatCard
+                  label="בעלייה"
+                  value={summary.up}
+                  color="green"
+                  Icon={TrendingUp}
+                  onClick={() => { setSortKey("quantity"); setSortDir("desc"); }}
+                  title="מיין לפי כמות (הרבה→מעט)"
+                />
+                <StatCard
+                  label="בירידה"
+                  value={summary.down}
+                  color="red"
+                  Icon={TrendingDown}
+                  onClick={() => { setSortKey("quantity"); setSortDir("desc"); }}
+                  title="מיין לפי כמות (הרבה→מעט)"
+                />
+                <StatCard
+                  label="סה״כ יח׳"
+                  value={summary.totalQty}
+                  color="purple"
+                  onClick={cycleQuantitySort}
+                  title="מיין לפי כמות — לחיצה מחליפה כיוון"
+                />
               </div>
 
               {/* Table */}
@@ -186,7 +248,17 @@ function ProductAnalysisInner() {
                     <thead className="bg-gray-50 text-xs text-gray-500">
                       <tr>
                         <th className="text-right px-4 py-2 font-medium">חנות</th>
-                        <th className="text-center px-3 py-2 font-medium">כמות</th>
+                        <th className="text-center px-3 py-2 font-medium">
+                          <button
+                            type="button"
+                            onClick={cycleQuantitySort}
+                            className="inline-flex items-center gap-1 hover:text-purple-600 hover:underline focus:outline-none focus:ring-2 focus:ring-purple-400 rounded"
+                            title={sortKey === "quantity" ? (sortDir === "desc" ? "מיין מהרבה למעט (לחץ להפוך)" : "מיין ממעט להרבה (לחץ להפוך)") : "מיין לפי כמות"}
+                          >
+                            כמות
+                            {sortKey === "quantity" ? (sortDir === "desc" ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />) : <ArrowUpDown className="w-3.5 h-3.5 opacity-50" />}
+                          </button>
+                        </th>
                         <th className="text-center px-3 py-2 font-medium">שב׳ קודם</th>
                         <th className="text-center px-3 py-2 font-medium">ממוצע 3</th>
                         <th className="text-center px-3 py-2 font-medium">שנה שעב׳</th>
@@ -195,13 +267,13 @@ function ProductAnalysisInner() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
-                      {stores.length === 0 ? (
+                      {sortedStores.length === 0 ? (
                         <tr>
                           <td colSpan={7} className="px-4 py-8 text-center text-gray-400">
                             אין נתונים לשבוע ולמוצר זה
                           </td>
                         </tr>
-                      ) : stores.map((s) => (
+                      ) : sortedStores.map((s) => (
                         <tr key={s.storeExternalId} className="hover:bg-gray-50">
                           <td className="px-4 py-2 font-medium text-gray-800">
                             <button
@@ -218,10 +290,10 @@ function ProductAnalysisInner() {
                             <TrendCell trend={s.vsLastWeek} reference={s.lastWeekQty} />
                           </td>
                           <td className="px-3 py-2 text-center">
-                            <TrendCell trend={s.vs3WeekAvg} reference={null} />
+                            <TrendCell trend={s.vs3WeekAvg} reference={s.avg3wQty} />
                           </td>
                           <td className="px-3 py-2 text-center">
-                            <TrendCell trend={s.vsLastYear} reference={null} />
+                            <TrendCell trend={s.vsLastYear} reference={s.lastYearQty} />
                           </td>
                           <td className="px-3 py-2 text-center">
                             <TrendCell trend={s.vsBenchmark} reference={s.top10Benchmark} formatRef={(v) => `${Math.round(v)}`} />
@@ -253,22 +325,33 @@ function ProductAnalysisInner() {
 }
 
 function StatCard({
-  label, value, color, Icon,
+  label, value, color, Icon, onClick, title,
 }: {
   label: string; value: number;
   color: "gray" | "green" | "red" | "purple";
   Icon?: React.ElementType;
+  onClick?: () => void;
+  title?: string;
 }) {
   const bg   = { gray: "bg-gray-50", green: "bg-green-50", red: "bg-red-50", purple: "bg-purple-50" }[color];
   const text = { gray: "text-gray-900", green: "text-green-700", red: "text-red-700", purple: "text-purple-700" }[color];
+  const Wrapper = onClick ? "button" : "div";
   return (
-    <div className={`${bg} rounded-xl p-3 text-center border border-gray-100`}>
+    <Wrapper
+      type={onClick ? "button" : undefined}
+      onClick={onClick}
+      title={title}
+      className={clsx(
+        `${bg} rounded-xl p-3 text-center border border-gray-100 w-full`,
+        onClick && "cursor-pointer hover:ring-2 hover:ring-purple-300 transition-shadow focus:outline-none focus:ring-2 focus:ring-purple-400",
+      )}
+    >
       <p className={`text-2xl font-bold ${text}`}>{value.toLocaleString("he-IL")}</p>
       <p className="text-xs text-gray-500 mt-0.5 flex items-center justify-center gap-1">
         {Icon && <Icon className={`w-3 h-3 ${text}`} />}
         {label}
       </p>
-    </div>
+    </Wrapper>
   );
 }
 

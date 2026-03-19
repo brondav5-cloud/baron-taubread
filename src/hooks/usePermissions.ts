@@ -8,6 +8,7 @@ export const MODULE_TO_PATH: Record<string, string[]> = {
   dashboard: ["/dashboard"],
   stores: ["/dashboard/stores"],
   products: ["/dashboard/products"],
+  distribution: ["/dashboard/distribution-v2"],
   tasks: ["/dashboard/tasks"],
   faults: ["/dashboard/faults"],
   treatment: ["/dashboard/treatment", "/dashboard/field-summary"],

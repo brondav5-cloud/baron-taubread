@@ -27,7 +27,8 @@ export interface AggregatedWeeklyRecord {
   grossQty: number;              // כמות (before returns)
   returnsQty: number;            // החזרות
   netQty: number;                // סה"כ כמות
-  deliveryCount: number;         // unique delivery dates this week for this store+product
+  deliveryCount: number;        // unique delivery dates this week for this store+product
+  totalValue: number;            // סהכ (sales value), optional in Excel
 }
 
 export interface ProductDeliveryProcessingResult {
@@ -73,6 +74,7 @@ export interface DbStoreProductWeekly {
   returns_qty: number;
   net_qty: number;
   delivery_count: number;
+  total_value: number;
   created_at: string;
   updated_at: string;
 }
