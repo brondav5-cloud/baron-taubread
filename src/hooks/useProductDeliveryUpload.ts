@@ -10,7 +10,6 @@ import { processProductDeliveryExcel } from "@/lib/productDeliveryExcelProcessor
 import type {
   ProductDeliveryProcessingResult,
   ProductDeliveryUploadPayload,
-  AggregatedWeeklyRecord,
   MonthlyDistRecord,
   StoreDeliveryAggregate,
 } from "@/types/productDeliveries";
