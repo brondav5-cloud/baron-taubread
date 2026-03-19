@@ -80,6 +80,27 @@ function normalizeProductName(name: string): string {
   return name.trim().toLowerCase();
 }
 
+// Parse only the year from the "תאריך מסמך" (document date) column.
+// Used to override the year derived from the week start date.
+function parseDocumentYear(v: unknown): number | null {
+  if (v instanceof Date && !isNaN(v.getTime())) return v.getFullYear();
+  if (typeof v === "string") {
+    const s = v.trim();
+    // DD-MM-YYYY or DD/MM/YYYY
+    let m = s.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})$/);
+    if (m) { const y = parseInt(m[3]!, 10); if (y >= 2000 && y <= 2040) return y; }
+    // YYYY-MM-DD
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) { const y = parseInt(m[1]!, 10); if (y >= 2000 && y <= 2040) return y; }
+  }
+  if (typeof v === "number" && v > 36526 && v < 58849) {
+    const epoch = new Date(1899, 11, 30);
+    const date = new Date(epoch.getTime() + v * 86400000);
+    if (!isNaN(date.getTime())) return date.getFullYear();
+  }
+  return null;
+}
+
 // Parse week start date from the "שבוע" column.
 // The file stores it as "YYYY-MM-DD" string or as an Excel date serial.
 function parseWeekDate(
@@ -176,6 +197,7 @@ interface ColMap {
   weekStart:    number;
   network:      number; // -1 if column not present in file
   totalValue:   number; // -1 if column not present (סהכ)
+  monthCol:     number; // -1 if column not present — "חודש" (col C)
 }
 
 function findHeaderRow(rawRows: unknown[][]): {
@@ -218,6 +240,7 @@ function findHeaderRow(rawRows: unknown[][]): {
       weekStart:    find("weekStart"),
       network:      findOptional("רשת"),
       totalValue:   findTotalValue(),
+      monthCol:     findOptional("חודש"),
     };
 
     const missing: string[] = [];
@@ -313,6 +336,12 @@ function aggregateRecords(
     const weekInfo = parseWeekDate(row[colMap.weekStart], XLSX);
     if (!weekInfo) { rowsSkipped++; continue; }
 
+    // Use month from "חודש" column (C) and year from "תאריך מסמך" column (B)
+    // because week 2023-12-31 can belong to January 2024 per the document date.
+    const rawMonth = colMap.monthCol >= 0 ? Number(row[colMap.monthCol]) : NaN;
+    const month = rawMonth >= 1 && rawMonth <= 12 ? rawMonth : weekInfo.month;
+    const year  = parseDocumentYear(row[colMap.documentDate]) ?? weekInfo.year;
+
     const grossQty   = Number(row[colMap.grossQty])   || 0;
     const returnsQty = Number(row[colMap.returnsQty]) || 0;
     const netQty     = Number(row[colMap.netQty])     || 0;
@@ -344,8 +373,8 @@ function aggregateRecords(
           productName:           rawProductName,
           productNameNormalized: normalized,
           weekStartDate:         weekInfo.weekStartDate,
-          year:                  weekInfo.year,
-          month:                 weekInfo.month,
+          year,
+          month,
         },
         data: { grossQty, returnsQty, netQty, totalValue: totalVal, uniqueDates: dates },
       });
@@ -366,8 +395,8 @@ function aggregateRecords(
       storeWeekMap.set(storeWeekKey, {
         storeExternalId: storeId,
         storeName,
-        year: weekInfo.year,
-        month: weekInfo.month,
+        year,
+        month,
         weekStartDate: weekInfo.weekStartDate,
         uniqueDates: dates,
         totalNetQty: netQty,
