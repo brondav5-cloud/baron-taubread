@@ -53,9 +53,13 @@ export interface VisitPhoto {
 
 export interface Visit {
   id: string;
-  storeId: number;
-  storeName: string;
-  storeCity: string;
+  visitType: "store" | "general";
+  /** Set for store visits only */
+  storeId?: number;
+  storeName?: string;
+  storeCity?: string;
+  /** Set for general visits only (e.g. ישיבת צוות, שליחות) */
+  generalActivityLabel?: string;
   agentName: string;
   date: string;
   time?: string; // שעת הביקור
@@ -115,9 +119,11 @@ interface VisitsProviderProps {
 function dbToVisit(db: DbVisit): Visit {
   return {
     id: db.id,
-    storeId: db.store_external_id,
-    storeName: db.store_name,
-    storeCity: db.store_city,
+    visitType: db.visit_type ?? "store",
+    storeId: db.store_external_id ?? undefined,
+    storeName: db.store_name ?? undefined,
+    storeCity: db.store_city ?? undefined,
+    generalActivityLabel: db.general_activity_label ?? undefined,
     agentName: db.agent_name,
     date: db.date,
     time: db.time ?? undefined,
@@ -145,9 +151,11 @@ function isLikelyNetworkError(message: string): boolean {
 function queuedToVisit(item: OfflineVisitQueueItem): Visit {
   return {
     id: item.tempId,
-    storeId: item.payload.store_external_id,
-    storeName: item.payload.store_name,
-    storeCity: item.payload.store_city,
+    visitType: item.payload.visit_type ?? "store",
+    storeId: item.payload.store_external_id ?? undefined,
+    storeName: item.payload.store_name ?? undefined,
+    storeCity: item.payload.store_city ?? undefined,
+    generalActivityLabel: item.payload.general_activity_label ?? undefined,
     agentName: item.payload.agent_name,
     date: item.payload.date,
     time: item.payload.time ?? undefined,
@@ -335,11 +343,14 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
         return optimistic;
       }
 
+      const isGeneral = visitData.visitType === "general";
       const payload = {
         company_id: companyId,
-        store_external_id: visitData.storeId,
-        store_name: visitData.storeName,
-        store_city: visitData.storeCity,
+        visit_type: visitData.visitType,
+        store_external_id: isGeneral ? null : visitData.storeId ?? null,
+        store_name: isGeneral ? null : visitData.storeName ?? null,
+        store_city: isGeneral ? null : visitData.storeCity ?? null,
+        general_activity_label: isGeneral ? visitData.generalActivityLabel ?? null : null,
         agent_name: visitData.agentName,
         date: visitData.date,
         time: visitData.time ?? null,
@@ -402,10 +413,13 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
         prev.map((v) => (v.id === id ? { ...v, ...updates } : v)),
       );
       const toDb: Partial<DbVisit> = {};
+      if (updates.visitType !== undefined) toDb.visit_type = updates.visitType;
       if (updates.storeId !== undefined)
         toDb.store_external_id = updates.storeId;
       if (updates.storeName !== undefined) toDb.store_name = updates.storeName;
       if (updates.storeCity !== undefined) toDb.store_city = updates.storeCity;
+      if (updates.generalActivityLabel !== undefined)
+        toDb.general_activity_label = updates.generalActivityLabel;
       if (updates.agentName !== undefined) toDb.agent_name = updates.agentName;
       if (updates.date !== undefined) toDb.date = updates.date;
       if (updates.time !== undefined) toDb.time = updates.time ?? null;
@@ -452,7 +466,9 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
 
   const getVisitsByStore = useCallback(
     (storeId: number): Visit[] => {
-      return visits.filter((visit) => visit.storeId === storeId);
+      return visits.filter(
+        (visit) => visit.visitType === "store" && visit.storeId === storeId,
+      );
     },
     [visits],
   );
@@ -461,7 +477,9 @@ export function VisitsProvider({ children }: VisitsProviderProps) {
     const today = new Date();
 
     return stores.map((store) => {
-      const storeVisits = visits.filter((v) => v.storeId === store.external_id);
+      const storeVisits = visits.filter(
+        (v) => v.visitType === "store" && v.storeId === store.external_id,
+      );
       const sortedVisits = [...storeVisits].sort(
         (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
       );

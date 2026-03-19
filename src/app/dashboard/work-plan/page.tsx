@@ -8,6 +8,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Store,
+  LayoutList,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -45,6 +46,7 @@ export default function WorkPlanPage() {
     selectedDay,
     draggedItem,
     addVisit,
+    addGeneralVisit,
     addVisitFromTreatment,
     addTask,
     removeItem,
@@ -70,13 +72,22 @@ export default function WorkPlanPage() {
   // State for modal tab
   const [modalTab, setModalTab] = useState<"all" | "treatment">("all");
 
-  // Filter treatment stores that aren't already planned
+  // General visit activity options (same as new visit form)
+  const GENERAL_ACTIVITY_OPTIONS = [
+    { value: "team_meeting", label: "ישיבת צוות" },
+    { value: "errands", label: "שליחות" },
+    { value: "general_task", label: "משימה כללית" },
+    { value: "other", label: "אחר" },
+  ];
+  const [generalActivityLabel, setGeneralActivityLabel] = useState<string>("");
+
+  // Filter treatment stores that aren't already planned (only store visits have storeId)
   const plannedStoreIds = useMemo(() => {
     const ids = new Set<number>();
     Object.values(itemsByDay).forEach((items) => {
       items.forEach((item) => {
-        if (item.type === "visit") {
-          ids.add(item.storeId);
+        if (item.type === "visit" && (item as PlannedVisit).storeId != null) {
+          ids.add((item as PlannedVisit).storeId!);
         }
       });
     });
@@ -103,7 +114,10 @@ export default function WorkPlanPage() {
   const getDuplicatingItemName = (): string => {
     if (!duplicatingItem) return "";
     if (duplicatingItem.type === "visit") {
-      return (duplicatingItem as PlannedVisit).store.name;
+      const v = duplicatingItem as PlannedVisit;
+      return v.store
+        ? v.store.name
+        : `ביקור כללי: ${v.generalActivityLabel ?? "פעילות כללית"}`;
     }
     return (duplicatingItem as PlannedTask).title;
   };
@@ -282,6 +296,50 @@ export default function WorkPlanPage() {
             )}
 
             <div className="overflow-y-auto max-h-96 p-4 space-y-2">
+              {/* General visit option - show in both tabs */}
+              <div className="p-3 bg-primary-50 rounded-xl border border-primary-100 space-y-2 mb-3">
+                <p className="text-sm font-medium text-primary-900 flex items-center gap-2">
+                  <LayoutList className="w-4 h-4" />
+                  ביקור כללי
+                </p>
+                <div className="flex gap-2">
+                  <select
+                    value={
+                      GENERAL_ACTIVITY_OPTIONS.find(
+                        (o) => o.label === generalActivityLabel,
+                      )?.value ?? ""
+                    }
+                    onChange={(e) => {
+                      const opt = GENERAL_ACTIVITY_OPTIONS.find(
+                        (o) => o.value === e.target.value,
+                      );
+                      setGeneralActivityLabel(opt ? opt.label : "");
+                    }}
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white"
+                  >
+                    <option value="">בחר סוג פעילות...</option>
+                    {GENERAL_ACTIVITY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (generalActivityLabel && selectedDay !== null) {
+                        addGeneralVisit(generalActivityLabel, selectedDay);
+                        setGeneralActivityLabel("");
+                      }
+                    }}
+                    disabled={!generalActivityLabel}
+                    className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-600"
+                  >
+                    הוסף
+                  </button>
+                </div>
+              </div>
+
               {modalTab === "all" ? (
                 availableStores.length === 0 ? (
                   <p className="text-center text-gray-500 py-8">

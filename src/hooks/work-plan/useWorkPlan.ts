@@ -24,19 +24,23 @@ import {
 import type { DbWorkPlanItem } from "@/types/supabase";
 
 function dbToPlanItem(row: DbWorkPlanItem): PlanItem {
-  if (row.item_type === "visit" && row.store_id != null) {
+  if (row.item_type === "visit") {
+    const isGeneral = row.store_id == null;
     const visit: PlannedVisit = {
       id: row.id,
       type: "visit",
-      storeId: row.store_id,
-      store: {
-        id: row.store_id,
-        name: row.store_name || "",
-        city: row.store_city || "",
-        agent: row.store_agent || "",
-        status_long: "יציב",
-        metric_12v12: 0,
-      },
+      storeId: row.store_id ?? null,
+      store: isGeneral
+        ? null
+        : {
+            id: row.store_id!,
+            name: row.store_name || "",
+            city: row.store_city || "",
+            agent: row.store_agent || "",
+            status_long: "יציב",
+            metric_12v12: 0,
+          },
+      generalActivityLabel: isGeneral ? (row.task_title || "ביקור כללי") : undefined,
       day: row.day,
       order: row.sort_order,
       priority: row.priority as Priority,
@@ -184,6 +188,31 @@ export function useWorkPlan(initialWeekOffset?: number) {
         store_name: store.name,
         store_city: store.city,
         store_agent: store.agent,
+      });
+      if (result.data)
+        setAllPlanItems((prev) => [...prev, dbToPlanItem(result.data!)]);
+      setShowAddModal(false);
+      setSelectedDay(null);
+    },
+    [companyId, userId, currentWeekKey, allPlanItems],
+  );
+
+  const addGeneralVisit = useCallback(
+    async (activityLabel: string, day: number) => {
+      if (!companyId || !userId) return;
+      const dayItems = allPlanItems.filter((i) => i.day === day);
+      const maxOrder =
+        dayItems.length > 0 ? Math.max(...dayItems.map((i) => i.order)) + 1 : 0;
+      const result = await insertWorkPlanItem({
+        company_id: companyId,
+        week_key: currentWeekKey,
+        day,
+        item_type: "visit",
+        sort_order: maxOrder,
+        priority: "medium",
+        completed: false,
+        created_by: userId,
+        task_title: activityLabel || "ביקור כללי",
       });
       if (result.data)
         setAllPlanItems((prev) => [...prev, dbToPlanItem(result.data!)]);
@@ -415,10 +444,11 @@ export function useWorkPlan(initialWeekOffset?: number) {
           priority: visit.priority,
           completed: false,
           created_by: userId,
-          store_id: visit.storeId,
-          store_name: visit.store.name,
-          store_city: visit.store.city,
-          store_agent: visit.store.agent,
+          store_id: visit.storeId ?? undefined,
+          store_name: visit.store?.name,
+          store_city: visit.store?.city,
+          store_agent: visit.store?.agent,
+          task_title: visit.generalActivityLabel,
         });
         if (result.data)
           setAllPlanItems((prev) => [...prev, dbToPlanItem(result.data!)]);
@@ -468,6 +498,7 @@ export function useWorkPlan(initialWeekOffset?: number) {
 
     // Actions
     addVisit,
+    addGeneralVisit,
     addVisitFromTreatment,
     addTask,
     removeItem,

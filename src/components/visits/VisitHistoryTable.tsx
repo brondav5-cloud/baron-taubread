@@ -62,25 +62,28 @@ export function VisitHistoryTable() {
       }
     >();
 
-    visits.forEach((v) => {
-      if (!storeMap.has(v.storeId)) {
-        storeMap.set(v.storeId, {
-          storeId: v.storeId,
-          storeName: v.storeName,
-          storeCity: v.storeCity,
-          agentName: v.agentName,
-          visitCount: 0,
-          lastVisit: null,
-          visits: [],
-        });
-      }
-      const data = storeMap.get(v.storeId)!;
-      data.visitCount++;
-      data.visits.push(v);
-      if (!data.lastVisit || new Date(v.date) > new Date(data.lastVisit)) {
-        data.lastVisit = v.date;
-      }
-    });
+    visits
+      .filter((v) => v.visitType === "store" && v.storeId != null)
+      .forEach((v) => {
+        const sid = v.storeId!;
+        if (!storeMap.has(sid)) {
+          storeMap.set(sid, {
+            storeId: sid,
+            storeName: v.storeName ?? "",
+            storeCity: v.storeCity ?? "",
+            agentName: v.agentName,
+            visitCount: 0,
+            lastVisit: null,
+            visits: [],
+          });
+        }
+        const data = storeMap.get(sid)!;
+        data.visitCount++;
+        data.visits.push(v);
+        if (!data.lastVisit || new Date(v.date) > new Date(data.lastVisit)) {
+          data.lastVisit = v.date;
+        }
+      });
 
     return Array.from(storeMap.values());
   }, [visits]);

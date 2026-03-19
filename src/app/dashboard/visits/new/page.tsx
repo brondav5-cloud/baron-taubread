@@ -9,11 +9,16 @@ import {
   ListTodo,
   Search,
   X,
+  Store,
+  LayoutList,
 } from "lucide-react";
 import Link from "next/link";
 import { clsx } from "clsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNewVisit } from "@/hooks/useNewVisit";
+import {
+  useNewVisit,
+  GENERAL_VISIT_ACTIVITY_OPTIONS,
+} from "@/hooks/useNewVisit";
 import { VisitPhotosSection } from "@/components/visits/VisitPhotosSection";
 import { VisitCompetitorsSection } from "@/components/visits/VisitCompetitorsSection";
 
@@ -25,6 +30,10 @@ export default function NewVisitPage() {
     allStores,
     store,
     isLoading,
+    visitType,
+    setVisitType,
+    generalActivityLabel,
+    setGeneralActivityLabel,
     selectedStore,
     setSelectedStore,
     date,
@@ -36,6 +45,7 @@ export default function NewVisitPage() {
     competitors,
     isSubmitting,
     showSuccess,
+    canSubmit,
     cameraInputRef,
     fileInputRef,
     toggleChecklistItem,
@@ -135,103 +145,197 @@ export default function NewVisitPage() {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Store & Date & Time */}
+        {/* Visit type: Store vs General */}
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">
-          <h2 className="font-semibold text-gray-900">פרטי ביקור</h2>
-          <div className="grid md:grid-cols-3 gap-4">
-            <div className="md:col-span-1">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                בחר חנות *
-              </label>
-              <div className="relative mb-2" ref={storeSearchContainerRef}>
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={storeSearch}
-                  onChange={(e) => {
-                    setStoreSearch(e.target.value);
-                    setShowStoreSuggestions(true);
-                  }}
-                  onFocus={() => setShowStoreSuggestions(true)}
-                  placeholder="חיפוש מהיר חנות..."
-                  className="w-full pr-9 pl-9 py-2 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
-                />
-                {storeSearch && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStoreSearch("");
-                      setSelectedStore("");
-                      setShowStoreSuggestions(true);
-                    }}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                    aria-label="נקה חיפוש"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+          <h2 className="font-semibold text-gray-900">סוג ביקור</h2>
+          <div className="flex gap-2 p-1 bg-gray-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setVisitType("store")}
+              className={clsx(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                visitType === "store"
+                  ? "bg-white text-primary-700 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900",
+              )}
+            >
+              <Store className="w-4 h-4" />
+              ביקור בחנות
+            </button>
+            <button
+              type="button"
+              onClick={() => setVisitType("general")}
+              className={clsx(
+                "flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                visitType === "general"
+                  ? "bg-white text-primary-700 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900",
+              )}
+            >
+              <LayoutList className="w-4 h-4" />
+              ביקור כללי
+            </button>
+          </div>
 
-                {showStoreSuggestions && (
-                  <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">
-                    {visibleStores.length > 0 ? (
-                      visibleStores.map((s) => (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() =>
-                            handleStoreSelect(
-                              s.id.toString(),
-                              `${s.name}${s.city ? ` - ${s.city}` : ""}`,
-                            )
-                          }
-                          className="w-full px-3 py-2 text-sm text-right hover:bg-gray-50"
-                        >
-                          <span className="font-medium text-gray-900">{s.name}</span>
-                          {s.city && (
-                            <span className="text-gray-500"> - {s.city}</span>
-                          )}
-                        </button>
-                      ))
-                    ) : (
-                      <p className="px-3 py-2 text-xs text-gray-500">
-                        לא נמצאו חנויות לחיפוש הזה
-                      </p>
+          {visitType === "general" ? (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                סוג הפעילות *
+              </label>
+              <select
+                value={
+                  GENERAL_VISIT_ACTIVITY_OPTIONS.find(
+                    (o) => o.label === generalActivityLabel,
+                  )?.value ?? (generalActivityLabel ? "other" : "")
+                }
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const opt = GENERAL_VISIT_ACTIVITY_OPTIONS.find(
+                    (o) => o.value === val,
+                  );
+                  setGeneralActivityLabel(opt ? opt.label : "");
+                }}
+                className="w-full px-4 py-3 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="">בחר סוג פעילות...</option>
+                {GENERAL_VISIT_ACTIVITY_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="md:col-span-1">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    בחר חנות *
+                  </label>
+                  <div className="relative mb-2" ref={storeSearchContainerRef}>
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={storeSearch}
+                      onChange={(e) => {
+                        setStoreSearch(e.target.value);
+                        setShowStoreSuggestions(true);
+                      }}
+                      onFocus={() => setShowStoreSuggestions(true)}
+                      placeholder="חיפוש מהיר חנות..."
+                      className="w-full pr-9 pl-9 py-2 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-primary-500"
+                    />
+                    {storeSearch && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStoreSearch("");
+                          setSelectedStore("");
+                          setShowStoreSuggestions(true);
+                        }}
+                        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label="נקה חיפוש"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    {showStoreSuggestions && (
+                      <div className="absolute top-full right-0 left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 max-h-52 overflow-y-auto">
+                        {visibleStores.length > 0 ? (
+                          visibleStores.map((s) => (
+                            <button
+                              key={s.id}
+                              type="button"
+                              onClick={() =>
+                                handleStoreSelect(
+                                  s.id.toString(),
+                                  `${s.name}${s.city ? ` - ${s.city}` : ""}`,
+                                )
+                              }
+                              className="w-full px-3 py-2 text-sm text-right hover:bg-gray-50"
+                            >
+                              <span className="font-medium text-gray-900">{s.name}</span>
+                              {s.city && (
+                                <span className="text-gray-500"> - {s.city}</span>
+                              )}
+                            </button>
+                          ))
+                        ) : (
+                          <p className="px-3 py-2 text-xs text-gray-500">
+                            לא נמצאו חנויות לחיפוש הזה
+                          </p>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
+                  <input
+                    type="hidden"
+                    value={selectedStore}
+                    required={visitType === "store"}
+                    readOnly
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    תאריך *
+                  </label>
+                  <input
+                    type="date"
+                    value={date}
+                    readOnly
+                    required
+                    className="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl text-sm cursor-default select-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                    <Clock className="w-4 h-4" /> שעה
+                  </label>
+                  <input
+                    type="time"
+                    value={time}
+                    readOnly
+                    className="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl text-sm cursor-default select-none"
+                  />
+                </div>
               </div>
-              <input type="hidden" value={selectedStore} required readOnly />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                תאריך *
-              </label>
-              <input
-                type="date"
-                value={date}
-                readOnly
-                required
-                className="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl text-sm cursor-default select-none"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
-                <Clock className="w-4 h-4" /> שעה
-              </label>
-              <input
-                type="time"
-                value={time}
-                readOnly
-                className="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl text-sm cursor-default select-none"
-              />
-            </div>
-          </div>
-          {store && (
-            <div className="p-4 bg-primary-50 rounded-xl">
-              <p className="font-medium text-primary-900">{store.name}</p>
-              <p className="text-sm text-primary-700">
-                {store.city} • {store.network || "עצמאי"} • {store.agent}
-              </p>
+              {store && (
+                <div className="p-4 bg-primary-50 rounded-xl">
+                  <p className="font-medium text-primary-900">{store.name}</p>
+                  <p className="text-sm text-primary-700">
+                    {store.city} • {store.network || "עצמאי"} • {store.agent}
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+
+          {visitType === "general" && (
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  תאריך *
+                </label>
+                <input
+                  type="date"
+                  value={date}
+                  readOnly
+                  required
+                  className="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl text-sm cursor-default select-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1">
+                  <Clock className="w-4 h-4" /> שעה
+                </label>
+                <input
+                  type="time"
+                  value={time}
+                  readOnly
+                  className="w-full px-4 py-3 bg-gray-100 border-0 rounded-xl text-sm cursor-default select-none"
+                />
+              </div>
             </div>
           )}
         </div>
@@ -325,10 +429,10 @@ export default function NewVisitPage() {
           <div className="flex flex-1 gap-3">
             <button
               type="submit"
-              disabled={!selectedStore || isSubmitting}
+              disabled={!canSubmit || isSubmitting}
               className={clsx(
                 "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-medium",
-                selectedStore && !isSubmitting
+                canSubmit && !isSubmitting
                   ? "bg-primary-500 text-white hover:bg-primary-600"
                   : "bg-gray-200 text-gray-500 cursor-not-allowed",
               )}
@@ -345,20 +449,22 @@ export default function NewVisitPage() {
                 </>
               )}
             </button>
-            <button
-              type="button"
-              onClick={handleSubmitAndCreateTask}
-              disabled={!selectedStore || isSubmitting}
-              className={clsx(
-                "flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-medium",
-                selectedStore && !isSubmitting
-                  ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
-                  : "bg-gray-200 text-gray-500 cursor-not-allowed",
-              )}
-              title="שמור ביקור ועבור ליצירת משימה לחנות"
-            >
-              <ListTodo className="w-5 h-5" /> שמור ועבור למשימה
-            </button>
+            {visitType === "store" && (
+              <button
+                type="button"
+                onClick={handleSubmitAndCreateTask}
+                disabled={!canSubmit || isSubmitting}
+                className={clsx(
+                  "flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-medium",
+                  canSubmit && !isSubmitting
+                    ? "bg-purple-100 text-purple-700 hover:bg-purple-200"
+                    : "bg-gray-200 text-gray-500 cursor-not-allowed",
+                )}
+                title="שמור ביקור ועבור ליצירת משימה לחנות"
+              >
+                <ListTodo className="w-5 h-5" /> שמור ועבור למשימה
+              </button>
+            )}
           </div>
           <button
             type="button"

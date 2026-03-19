@@ -75,29 +75,45 @@ export function DraggablePlanItem({
         {/* Content */}
         <div className="flex-1 min-w-0">
           {isVisit && visit ? (
-            <>
-              <Link
-                href={`/dashboard/stores/${visit.storeId}`}
-                className={clsx(
-                  "font-medium hover:underline line-clamp-1",
-                  item.completed && "line-through",
-                )}
-              >
-                {visit.store.name}
-              </Link>
-              <p className="text-xs opacity-75 flex items-center gap-1">
-                <MapPin className="w-3 h-3" />
-                {visit.store.city}
-              </p>
-              <Link
-                href={`/dashboard/visits/new?store=${visit.storeId}`}
-                className="mt-1 inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ClipboardList className="w-3 h-3" />
-                צור ביקור
-              </Link>
-            </>
+            visit.store ? (
+              <>
+                <Link
+                  href={`/dashboard/stores/${visit.storeId!}`}
+                  className={clsx(
+                    "font-medium hover:underline line-clamp-1",
+                    item.completed && "line-through",
+                  )}
+                >
+                  {visit.store.name}
+                </Link>
+                <p className="text-xs opacity-75 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {visit.store.city}
+                </p>
+                <Link
+                  href={`/dashboard/visits/new?store=${visit.storeId}`}
+                  className="mt-1 inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ClipboardList className="w-3 h-3" />
+                  צור ביקור
+                </Link>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-primary-700 line-clamp-1">
+                  ביקור כללי: {visit.generalActivityLabel ?? "פעילות כללית"}
+                </p>
+                <Link
+                  href="/dashboard/visits/new"
+                  className="mt-1 inline-flex items-center gap-1 text-xs px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <ClipboardList className="w-3 h-3" />
+                  צור תעודת ביקור
+                </Link>
+              </>
+            )
           ) : task ? (
             <>
               <p

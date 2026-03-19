@@ -112,6 +112,44 @@ export async function getDeliveryUploads(
 // WRITE OPERATIONS
 // ============================================
 
+export async function deleteDeliveriesForPeriod(
+  supabase: SupabaseClient,
+  companyId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<{ success: boolean; error?: string }> {
+  const startYear = parseInt(periodStart.slice(0, 4));
+  const startMonth = parseInt(periodStart.slice(5, 7));
+  const endYear = parseInt(periodEnd.slice(0, 4));
+  const endMonth = parseInt(periodEnd.slice(5, 7));
+
+  const conditions: string[] = [];
+  let y = startYear;
+  let m = startMonth;
+  while (y < endYear || (y === endYear && m <= endMonth)) {
+    conditions.push(`and(year.eq.${y},month.eq.${m})`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+
+  if (conditions.length === 0) return { success: true };
+
+  const { error } = await supabase
+    .from("store_deliveries")
+    .delete()
+    .eq("company_id", companyId)
+    .or(conditions.join(","));
+
+  if (error) {
+    console.error("[deliveries.repo] deleteDeliveriesForPeriod:", error);
+    return { success: false, error: error.message };
+  }
+  return { success: true };
+}
+
 export async function upsertDeliveries(
   supabase: SupabaseClient,
   companyId: string,

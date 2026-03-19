@@ -245,9 +245,11 @@ export interface DbFilters {
 export interface DbVisit {
   id: string;
   company_id: string;
-  store_external_id: number;
-  store_name: string;
-  store_city: string;
+  visit_type: "store" | "general";
+  store_external_id: number | null;
+  store_name: string | null;
+  store_city: string | null;
+  general_activity_label: string | null;
   agent_name: string;
   date: string;
   time: string | null;

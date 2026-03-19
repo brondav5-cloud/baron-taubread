@@ -56,6 +56,10 @@ export function useCompetitors() {
     const stats: Record<string, CompetitorStats> = {};
 
     visits.forEach((visit) => {
+      // Skip general visits (no store) for competitor stats
+      const storeExternalId = visit.store_external_id;
+      if (storeExternalId == null) return;
+
       const comps =
         (visit.competitors as Array<{
           id?: string;
@@ -84,9 +88,9 @@ export function useCompetitors() {
         if (visit.date > comp.lastSeen) comp.lastSeen = visit.date;
         if (c.notes?.trim()) comp.recentNotes.push(c.notes.trim());
 
-        const store = storesByExternalId.get(visit.store_external_id);
+        const store = storesByExternalId.get(storeExternalId);
         const existingStore = comp.stores.find(
-          (s) => s.id === visit.store_external_id,
+          (s) => s.id === storeExternalId,
         );
         if (existingStore) {
           existingStore.count++;
@@ -94,8 +98,8 @@ export function useCompetitors() {
             existingStore.lastSeen = visit.date;
         } else {
           comp.stores.push({
-            id: visit.store_external_id,
-            name: visit.store_name,
+            id: storeExternalId,
+            name: visit.store_name ?? "",
             city: visit.store_city || "",
             count: 1,
             lastSeen: visit.date,

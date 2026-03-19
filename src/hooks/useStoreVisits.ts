@@ -9,9 +9,11 @@ import type { DbVisit } from "@/types/supabase";
 function dbToVisit(db: DbVisit): Visit {
   return {
     id: db.id,
-    storeId: db.store_external_id,
-    storeName: db.store_name,
-    storeCity: db.store_city,
+    visitType: db.visit_type ?? "store",
+    storeId: db.store_external_id ?? undefined,
+    storeName: db.store_name ?? undefined,
+    storeCity: db.store_city ?? undefined,
+    generalActivityLabel: db.general_activity_label ?? undefined,
     agentName: db.agent_name,
     date: db.date,
     time: db.time ?? undefined,

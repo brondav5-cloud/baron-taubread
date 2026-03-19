@@ -17,8 +17,11 @@ export interface StoreForWorkPlan {
 export interface PlannedVisit {
   id: string;
   type: "visit";
-  storeId: number;
-  store: StoreForWorkPlan;
+  /** Set for store visits; null for general visits */
+  storeId: number | null;
+  store: StoreForWorkPlan | null;
+  /** Set for general visits (e.g. ישיבת צוות, שליחות) */
+  generalActivityLabel?: string;
   day: number;
   order: number;
   priority: Priority;

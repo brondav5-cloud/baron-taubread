@@ -7,11 +7,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
+  deleteWeeklyRecordsForPeriod,
   upsertWeeklyRecords,
   createProductDeliveryUpload,
   verifyProductDeliveryTotals,
 } from "@/lib/db/productDeliveries.repo";
-import { upsertDeliveries } from "@/lib/db/deliveries.repo";
+import { upsertDeliveries, deleteDeliveriesForPeriod } from "@/lib/db/deliveries.repo";
 import type { ProductDeliveryUploadPayload } from "@/types/productDeliveries";
 import type { AggregatedDelivery } from "@/types/deliveries";
 import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
@@ -128,6 +129,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // On the first chunk: delete existing data for this period so the new
+    // file fully replaces old data (no stale "ghost" records left behind).
+    if (chunkIndex === 0 && payload.stats?.periodStart && payload.stats?.periodEnd) {
+      const delResult = await deleteWeeklyRecordsForPeriod(
+        supabaseAdmin,
+        companyId,
+        payload.stats.periodStart,
+        payload.stats.periodEnd,
+      );
+      if (!delResult.success) {
+        return NextResponse.json(
+          { error: delResult.error ?? "שגיאה במחיקת נתונים ישנים" },
+          { status: 500 },
+        );
+      }
+    }
+
     // Upsert weekly records (may be empty on the final storeDeliveries-only chunk)
     const result = await upsertWeeklyRecords(
       supabaseAdmin,
@@ -144,8 +162,16 @@ export async function POST(request: NextRequest) {
 
     const processingTime = Math.round(performance.now() - startTime);
 
-    // On the last chunk: also upsert store-level delivery aggregates → store_deliveries
+    // On the last chunk: replace store-level delivery aggregates → store_deliveries
     if (isLastChunk && payload.storeDeliveries?.length) {
+      if (payload.stats?.periodStart && payload.stats?.periodEnd) {
+        await deleteDeliveriesForPeriod(
+          supabaseAdmin,
+          companyId,
+          payload.stats.periodStart,
+          payload.stats.periodEnd,
+        );
+      }
       const deliveries: AggregatedDelivery[] = payload.storeDeliveries.map((sd) => ({
         storeExternalId: sd.storeExternalId,
         storeName: sd.storeName,

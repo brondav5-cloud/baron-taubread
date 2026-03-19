@@ -52,18 +52,22 @@ export default function VisitsPage() {
   // Filter visits
   const filteredVisits = useMemo(() => {
     return visits.filter((visit) => {
-      // Store filter (e.g. from ?store=123)
-      if (storeFilter != null && visit.storeId !== storeFilter) return false;
-      // Search filter
+      // Store filter (e.g. from ?store=123) — only store visits; general visits excluded
+      if (
+        storeFilter != null &&
+        (visit.visitType !== "store" || visit.storeId !== storeFilter)
+      )
+        return false;
+      // Search filter (store name/city or general label or notes)
       if (search) {
         const searchLower = search.toLowerCase();
-        if (
-          !visit.storeName.toLowerCase().includes(searchLower) &&
-          !visit.storeCity.toLowerCase().includes(searchLower) &&
-          !visit.notes.toLowerCase().includes(searchLower)
-        ) {
-          return false;
-        }
+        const storeMatch =
+          visit.storeName?.toLowerCase().includes(searchLower) ||
+          visit.storeCity?.toLowerCase().includes(searchLower);
+        const generalMatch =
+          visit.generalActivityLabel?.toLowerCase().includes(searchLower);
+        const notesMatch = visit.notes.toLowerCase().includes(searchLower);
+        if (!storeMatch && !generalMatch && !notesMatch) return false;
       }
       // Agent filter
       if (agentFilter && visit.agentName !== agentFilter) return false;
@@ -209,8 +213,10 @@ export default function VisitsPage() {
               <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
                 <span className="text-sm text-gray-600">
                   מסנן לפי חנות:{" "}
-                  {visits.find((v) => v.storeId === storeFilter)?.storeName ??
-                    `#${storeFilter}`}
+                  {visits.find(
+                    (v) =>
+                      v.visitType === "store" && v.storeId === storeFilter,
+                  )?.storeName ?? `#${storeFilter}`}
                 </span>
                 <button
                   onClick={() => {

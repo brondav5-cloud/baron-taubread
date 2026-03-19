@@ -15,7 +15,16 @@ import {
   useCompetitorsSettings,
 } from "@/hooks/useVisitSettings";
 import { useVisits } from "@/context/VisitsContext";
+import { useAuth } from "@/hooks/useAuth";
 import { toast } from "@/providers/ToastProvider";
+
+/** Options for general visit (ביקור כללי) activity type */
+export const GENERAL_VISIT_ACTIVITY_OPTIONS = [
+  { value: "team_meeting", label: "ישיבת צוות" },
+  { value: "errands", label: "שליחות" },
+  { value: "general_task", label: "משימה כללית" },
+  { value: "other", label: "אחר" },
+] as const;
 
 // ============================================
 // TYPES
@@ -110,6 +119,9 @@ export function useNewVisit() {
   const searchParams = useSearchParams();
   const preSelectedStoreId = searchParams.get("store");
   const { addVisit, stores } = useVisits();
+  const auth = useAuth();
+  const agentName =
+    auth.status === "authed" ? auth.user.userName || "" : "";
 
   // Refs for file inputs
   const cameraInputRef = useRef<HTMLInputElement>(null);
@@ -134,9 +146,11 @@ export function useNewVisit() {
   );
 
   // Form state - תאריך ושעה נקבעים אוטומטית
+  const [visitType, setVisitType] = useState<"store" | "general">("store");
   const [selectedStore, setSelectedStore] = useState<string>(
     preSelectedStoreId || "",
   );
+  const [generalActivityLabel, setGeneralActivityLabel] = useState<string>("");
   const [date, setDate] = useState<string>(getCurrentDate());
   const [time, setTime] = useState<string>(getCurrentTime());
   const [notes, setNotes] = useState<string>("");
@@ -283,7 +297,9 @@ export function useNewVisit() {
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!store) return;
+      const isGeneral = visitType === "general";
+      if (!isGeneral && !store) return;
+      if (isGeneral && !generalActivityLabel.trim()) return;
 
       setIsSubmitting(true);
 
@@ -294,10 +310,18 @@ export function useNewVisit() {
         .map((c) => ({ id: c.id, name: c.name, notes: c.notes }));
 
       addVisit({
-        storeId: store.id,
-        storeName: store.name,
-        storeCity: store.city,
-        agentName: store.agent,
+        visitType,
+        ...(isGeneral
+          ? {
+              generalActivityLabel: generalActivityLabel.trim(),
+              agentName,
+            }
+          : {
+              storeId: store!.id,
+              storeName: store!.name,
+              storeCity: store!.city,
+              agentName: store!.agent,
+            }),
         date,
         time,
         notes,
@@ -319,7 +343,10 @@ export function useNewVisit() {
       }, 1500);
     },
     [
+      visitType,
       store,
+      generalActivityLabel,
+      agentName,
       date,
       time,
       notes,
@@ -331,11 +358,11 @@ export function useNewVisit() {
     ],
   );
 
-  // Submit and create task
+  // Submit and create task (store visits only)
   const handleSubmitAndCreateTask = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!store) return;
+      if (visitType !== "store" || !store) return;
 
       setIsSubmitting(true);
 
@@ -346,6 +373,7 @@ export function useNewVisit() {
         .map((c) => ({ id: c.id, name: c.name, notes: c.notes }));
 
       addVisit({
+        visitType: "store",
         storeId: store.id,
         storeName: store.name,
         storeCity: store.city,
@@ -365,7 +393,6 @@ export function useNewVisit() {
 
       setIsSubmitting(false);
 
-      // שמירת פרטי החנות ב-sessionStorage ומעבר לדף משימות
       sessionStorage.setItem(
         "createTaskStore",
         JSON.stringify({
@@ -376,6 +403,7 @@ export function useNewVisit() {
       router.push("/dashboard/tasks");
     },
     [
+      visitType,
       store,
       date,
       time,
@@ -392,6 +420,11 @@ export function useNewVisit() {
 
   const isLoading = !checklistLoaded || !competitorsLoaded;
 
+  const canSubmit =
+    visitType === "general"
+      ? generalActivityLabel.trim().length > 0
+      : !!selectedStore && !!store;
+
   return {
     // Data
     allStores,
@@ -399,6 +432,10 @@ export function useNewVisit() {
     isLoading,
 
     // Form state
+    visitType,
+    setVisitType,
+    generalActivityLabel,
+    setGeneralActivityLabel,
     selectedStore,
     setSelectedStore,
     date,
@@ -412,6 +449,7 @@ export function useNewVisit() {
     competitors,
     isSubmitting,
     showSuccess,
+    canSubmit,
 
     // Refs
     cameraInputRef,

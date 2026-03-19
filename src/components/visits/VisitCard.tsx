@@ -24,20 +24,33 @@ export function VisitCard({ visit, onViewDetails }: VisitCardProps) {
     return date.toLocaleDateString("he-IL");
   };
 
+  const isGeneral = visit.visitType === "general";
+  const titleLine = isGeneral ? (
+    <div className="flex items-center gap-2 mb-2">
+      <span className="font-semibold text-primary-600">ביקור כללי</span>
+      <span className="text-gray-400">•</span>
+      <span className="font-medium text-gray-900">
+        {visit.generalActivityLabel ?? "פעילות כללית"}
+      </span>
+    </div>
+  ) : (
+    <div className="flex items-center gap-2 mb-2">
+      <Link
+        href={`/dashboard/stores/${visit.storeId}`}
+        className="font-semibold text-gray-900 hover:text-primary-600 transition-colors"
+      >
+        {visit.storeName}
+      </Link>
+      <span className="text-gray-400">•</span>
+      <span className="text-sm text-gray-500">{visit.storeCity}</span>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-2xl shadow-card p-4 hover:shadow-elevated transition-shadow">
       <div className="flex items-start justify-between gap-4">
         <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <Link
-              href={`/dashboard/stores/${visit.storeId}`}
-              className="font-semibold text-gray-900 hover:text-primary-600 transition-colors"
-            >
-              {visit.storeName}
-            </Link>
-            <span className="text-gray-400">•</span>
-            <span className="text-sm text-gray-500">{visit.storeCity}</span>
-          </div>
+          {titleLine}
 
           {visit.notes && (
             <p className="text-gray-600 text-sm mb-3 line-clamp-2">

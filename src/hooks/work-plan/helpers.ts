@@ -183,8 +183,8 @@ export function getAvailableStores(
 ): StoreForWorkPlan[] {
   const plannedStoreIds = new Set(
     planItems
-      .filter((i): i is PlannedVisit => i.type === "visit")
-      .map((v) => v.storeId),
+      .filter((i): i is PlannedVisit => i.type === "visit" && i.storeId != null)
+      .map((v) => v.storeId as number),
   );
 
   return stores

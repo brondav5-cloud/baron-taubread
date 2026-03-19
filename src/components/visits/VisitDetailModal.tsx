@@ -58,7 +58,11 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
               </div>
               <div>
                 <h3 className="font-bold text-lg text-gray-900">תעודת ביקור</h3>
-                <p className="text-sm text-gray-500">{visit.storeName}</p>
+                <p className="text-sm text-gray-500">
+                  {visit.visitType === "general"
+                    ? `ביקור כללי: ${visit.generalActivityLabel ?? "פעילות כללית"}`
+                    : visit.storeName}
+                </p>
               </div>
             </div>
             <button
@@ -71,16 +75,22 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {/* Store Info */}
+            {/* Visit type & details (store or general) */}
             <div className="p-4 bg-gray-50 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
-                <Link
-                  href={`/dashboard/stores/${visit.storeId}`}
-                  className="font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1"
-                >
-                  {visit.storeName}
-                  <ExternalLink className="w-4 h-4" />
-                </Link>
+                {visit.visitType === "general" ? (
+                  <span className="font-bold text-primary-600">
+                    ביקור כללי: {visit.generalActivityLabel ?? "פעילות כללית"}
+                  </span>
+                ) : (
+                  <Link
+                    href={`/dashboard/stores/${visit.storeId}`}
+                    className="font-bold text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                  >
+                    {visit.storeName}
+                    <ExternalLink className="w-4 h-4" />
+                  </Link>
+                )}
                 <span
                   className={clsx(
                     "px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1",
@@ -101,10 +111,12 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
                 </span>
               </div>
               <div className="flex flex-wrap gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  {visit.storeCity}
-                </div>
+                {visit.visitType === "store" && visit.storeCity && (
+                  <div className="flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    {visit.storeCity}
+                  </div>
+                )}
                 <div className="flex items-center gap-1">
                   <Calendar className="w-4 h-4" />
                   {formatDate(visit.date)}
@@ -229,19 +241,21 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
 
           {/* Footer */}
           <div className="p-4 border-t bg-gray-50">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">
-                נוצר: {new Date(visit.createdAt).toLocaleString("he-IL")}
-              </span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowCreateTaskModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
-                >
-                  <ListTodo className="w-4 h-4" />
-                  צור משימה
-                </button>
-                <button
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-500">
+                  נוצר: {new Date(visit.createdAt).toLocaleString("he-IL")}
+                </span>
+                <div className="flex items-center gap-2">
+                  {visit.visitType === "store" && visit.storeId != null && (
+                    <button
+                      onClick={() => setShowCreateTaskModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors text-sm font-medium"
+                    >
+                      <ListTodo className="w-4 h-4" />
+                      צור משימה
+                    </button>
+                  )}
+                  <button
                   onClick={onClose}
                   className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
                 >
@@ -253,17 +267,19 @@ export function VisitDetailModal({ visit, onClose }: VisitDetailModalProps) {
         </div>
       </div>
 
-      {/* Create Task Modal */}
-      {showCreateTaskModal && (
-        <CreateTaskModal
-          isOpen={true}
-          onClose={() => setShowCreateTaskModal(false)}
-          storeId={visit.storeId}
-          storeName={visit.storeName}
-          visitId={visit.id}
-          stores={stores}
-        />
-      )}
+      {/* Create Task Modal (store visits only) */}
+      {showCreateTaskModal &&
+        visit.visitType === "store" &&
+        visit.storeId != null && (
+          <CreateTaskModal
+            isOpen={true}
+            onClose={() => setShowCreateTaskModal(false)}
+            storeId={visit.storeId}
+            storeName={visit.storeName ?? ""}
+            visitId={visit.id}
+            stores={stores}
+          />
+        )}
     </>
   );
 }
