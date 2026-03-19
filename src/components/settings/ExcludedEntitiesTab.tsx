@@ -5,7 +5,7 @@ import { Plus, Trash2, Eye, EyeOff, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
-type EntityType = "network" | "driver" | "store" | "agent";
+type EntityType = "network" | "driver" | "store" | "agent" | "line";
 
 interface ExcludedEntity {
   id: string;
@@ -21,6 +21,7 @@ const TYPE_LABELS: Record<EntityType, string> = {
   driver:  "נהג",
   store:   "חנות",
   agent:   "סוכן",
+  line:    "קו",
 };
 
 const TYPE_COLORS: Record<EntityType, string> = {
@@ -28,6 +29,7 @@ const TYPE_COLORS: Record<EntityType, string> = {
   driver:  "bg-purple-100 text-purple-800",
   store:   "bg-green-100 text-green-800",
   agent:   "bg-amber-100 text-amber-800",
+  line:    "bg-rose-100 text-rose-800",
 };
 
 export function ExcludedEntitiesTab() {

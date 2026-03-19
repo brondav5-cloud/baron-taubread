@@ -73,10 +73,11 @@ export interface ProcessorExclusions {
   drivers:  Set<string>;
   stores:   Set<string>;
   agents:   Set<string>;
+  lines:    Set<string>;
 }
 
 export function emptyExclusions(): ProcessorExclusions {
-  return { networks: new Set(), drivers: new Set(), stores: new Set(), agents: new Set() };
+  return { networks: new Set(), drivers: new Set(), stores: new Set(), agents: new Set(), lines: new Set() };
 }
 
 // ============================================================
@@ -209,6 +210,7 @@ interface ColMap {
   network:      number; // -1 if column not present in file
   totalValue:   number; // -1 if column not present (סהכ)
   monthCol:     number; // -1 if column not present — "חודש" (col C)
+  lineCol:      number; // -1 if column not present — "קו" (col 18)
 }
 
 function findHeaderRow(rawRows: unknown[][]): {
@@ -252,6 +254,7 @@ function findHeaderRow(rawRows: unknown[][]): {
       network:      findOptional("רשת"),
       totalValue:   findTotalValue(),
       monthCol:     findOptional("חודש"),
+      lineCol:      findOptional("קו"),
     };
 
     const missing: string[] = [];
@@ -346,7 +349,7 @@ function aggregateRecords(
     const storeId = Number(rawCustomerId);
     if (!storeId || isNaN(storeId) || storeId <= 0) { rowsSkipped++; continue; }
 
-    // Skip excluded entities (networks, drivers, stores, agents)
+    // Skip excluded entities (networks, drivers, stores, agents, lines)
     if (colMap.network >= 0) {
       const network = String(row[colMap.network] ?? "").trim();
       if (exclusions.networks.has(network)) { rowsSkipped++; continue; }
@@ -354,6 +357,10 @@ function aggregateRecords(
     if (colMap.customerId >= 0 && exclusions.stores.size > 0) {
       const storeName = String(row[colMap.customerName] ?? "").trim();
       if (exclusions.stores.has(storeName)) { rowsSkipped++; continue; }
+    }
+    if (colMap.lineCol >= 0 && exclusions.lines.size > 0) {
+      const line = String(row[colMap.lineCol] ?? "").trim();
+      if (exclusions.lines.has(line)) { rowsSkipped++; continue; }
     }
 
     const storeName = String(row[colMap.customerName] ?? "").trim();

@@ -89,10 +89,18 @@ async function fetchExclusions(companyId: string): Promise<ProcessorExclusions> 
     drivers:  new Set<string>(),
     stores:   new Set<string>(),
     agents:   new Set<string>(),
+    lines:    new Set<string>(),
+  };
+  const typeMap: Record<string, keyof ProcessorExclusions> = {
+    network: "networks",
+    driver:  "drivers",
+    store:   "stores",
+    agent:   "agents",
+    line:    "lines",
   };
   for (const row of data ?? []) {
-    const t = row.entity_type as keyof ProcessorExclusions;
-    if (excl[t]) excl[t].add(row.entity_value as string);
+    const key = typeMap[row.entity_type as string];
+    if (key) excl[key].add(row.entity_value as string);
   }
   return excl;
 }
