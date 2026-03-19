@@ -24,14 +24,16 @@ import {
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 
-const MAX_BODY_BYTES = 3 * 1024 * 1024; // 3MB per chunk (client targets 2MB, safety margin)
+export const maxDuration = 60;
+
+const MAX_BODY_BYTES = 3 * 1024 * 1024;
 const MAX_PROCESSING_MS = 55_000;
 
 const PAYLOAD_TOO_LARGE_MSG = {
   error: "גודל הבקשה חורג מהמותר. הקובץ יחולק אוטומטית — נסה שוב.",
 };
 
-const RATE_LIMIT = { max: 15, windowMs: 60_000 };
+const RATE_LIMIT = { max: 50, windowMs: 60_000 };
 
 export async function POST(request: NextRequest) {
   const startTime = performance.now();

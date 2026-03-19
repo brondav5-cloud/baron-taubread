@@ -18,18 +18,18 @@ export async function deleteWeeklyRecordsForPeriod(
   companyId: string,
   periodStart: string,
   periodEnd: string,
-): Promise<{ success: boolean; deleted: number; error?: string }> {
-  const { count, error } = await supabase
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase
     .from("store_product_weekly")
-    .delete({ count: "exact" })
+    .delete()
     .eq("company_id", companyId)
     .gte("week_start_date", periodStart)
     .lte("week_start_date", periodEnd);
 
   if (error) {
-    return { success: false, deleted: 0, error: error.message };
+    return { success: false, error: error.message };
   }
-  return { success: true, deleted: count ?? 0 };
+  return { success: true };
 }
 
 // ============================================================
