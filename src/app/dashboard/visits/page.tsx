@@ -49,29 +49,28 @@ export default function VisitsPage() {
     return Array.from(agentSet).sort((a, b) => a.localeCompare(b, "he"));
   }, [visits]);
 
-  // Filter visits
+  // Filter all visits together (store + general)
   const filteredVisits = useMemo(() => {
     return visits.filter((visit) => {
-      // Store filter (e.g. from ?store=123) — only store visits; general visits excluded
+      // Store filter — applies only to store visits
       if (
         storeFilter != null &&
         (visit.visitType !== "store" || visit.storeId !== storeFilter)
       )
         return false;
-      // Search filter (store name/city or general label or notes)
+      // Search: match store name/city, general activity label, or notes
       if (search) {
         const searchLower = search.toLowerCase();
         const storeMatch =
           visit.storeName?.toLowerCase().includes(searchLower) ||
           visit.storeCity?.toLowerCase().includes(searchLower);
-        const generalMatch =
-          visit.generalActivityLabel?.toLowerCase().includes(searchLower);
+        const generalMatch = visit.generalActivityLabel
+          ?.toLowerCase()
+          .includes(searchLower);
         const notesMatch = visit.notes.toLowerCase().includes(searchLower);
         if (!storeMatch && !generalMatch && !notesMatch) return false;
       }
-      // Agent filter
       if (agentFilter && visit.agentName !== agentFilter) return false;
-      // Status filter
       if (statusFilter && visit.status !== statusFilter) return false;
       return true;
     });
