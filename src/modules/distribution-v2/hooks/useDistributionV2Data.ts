@@ -55,20 +55,6 @@ function maxMonthKeyFromWeekly(rows: StoreProductWeeklyRow[]): string | null {
   return max || null;
 }
 
-/** Latest month range for date filter seed (from weekly data) */
-function latestMonthRangeFromWeekly(rows: StoreProductWeeklyRow[]): { dateFrom: string; dateTo: string } | null {
-  const max = maxMonthKeyFromWeekly(rows);
-  if (!max || max.length < 6) return null;
-  const y = parseInt(max.slice(0, 4), 10);
-  const m = parseInt(max.slice(4, 6), 10);
-  if (!y || !m) return null;
-  const lastDay = new Date(y, m, 0).getDate();
-  return {
-    dateFrom: `${y}-${pad2(m)}-01`,
-    dateTo: `${y}-${pad2(m)}-${pad2(lastDay)}`,
-  };
-}
-
 /** Default filters before first load (no date filter until data seeds). */
 function emptyFilters(): DistributionV2Filters {
   return {
@@ -398,6 +384,8 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
   const seededDateFilterRef = useRef(false);
+  // Tracks which date range is currently loaded (to avoid duplicate fetches)
+  const fetchedRangeRef = useRef<{ from: string; to: string } | null>(null);
 
   const [stores, setStores] = useState<StoreLite[]>([]);
   const [weeklyRows, setWeeklyRows] = useState<StoreProductWeeklyRow[]>([]);
@@ -433,6 +421,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
 
   useEffect(() => {
     seededDateFilterRef.current = false;
+    fetchedRangeRef.current = null;
   }, [companyId]);
 
   const setColumnFilter = useCallback((column: DistributionV2ColumnKey, value: string) => {
@@ -468,6 +457,32 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     setCurrentPage(1);
   }, []);
 
+  /** Fetch weekly rows for a specific date range (server-side filtered). */
+  const fetchWeeklyForRange = useCallback(async (dateFrom: string, dateTo: string) => {
+    if (!companyId) return;
+    // Mark range immediately to prevent duplicate concurrent fetches
+    fetchedRangeRef.current = { from: dateFrom, to: dateTo };
+    setLoading(true);
+    setError(null);
+    try {
+      const supabase = createClient();
+      const weeklyRes = await supabase
+        .from("store_product_weekly")
+        .select(
+          "store_external_id, store_name, product_name, product_name_normalized, week_start_date, year, month, gross_qty, returns_qty, net_qty, delivery_count, total_value, updated_at",
+        )
+        .eq("company_id", companyId)
+        .gte("week_start_date", dateFrom)
+        .lte("week_start_date", dateTo);
+      if (weeklyRes.error) throw new Error(weeklyRes.error.message);
+      setWeeklyRows((weeklyRes.data ?? []) as StoreProductWeeklyRow[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "שגיאה בטעינת נתונים");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
   const fetchData = useCallback(async () => {
     if (!companyId) {
       setLoading(false);
@@ -486,61 +501,84 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     try {
       const supabase = createClient();
 
-      const [storesRes, weeklyRes, productsRes, filtersRes] = await Promise.all([
+      // Fetch metadata in parallel: stores, products, filter options, latest available month
+      const [storesRes, productsRes, filtersRes, latestMonthRes] = await Promise.all([
         supabase
           .from("stores")
           .select("external_id, name, city, network, driver, agent")
           .eq("company_id", companyId)
           .order("name"),
         supabase
-          .from("store_product_weekly")
-          .select(
-            "store_external_id, store_name, product_name, product_name_normalized, week_start_date, year, month, gross_qty, returns_qty, net_qty, delivery_count, total_value, updated_at",
-          )
-          .eq("company_id", companyId),
-        supabase
           .from("products")
           .select("name, external_id, category")
           .eq("company_id", companyId),
         supabase.from("filters").select("cities, networks, drivers, agents").eq("company_id", companyId).single(),
+        // Cheap query — one row only — to discover the latest available month
+        supabase
+          .from("store_product_weekly")
+          .select("year, month")
+          .eq("company_id", companyId)
+          .order("year", { ascending: false })
+          .order("month", { ascending: false })
+          .limit(1),
       ]);
 
       if (storesRes.error) throw new Error(storesRes.error.message);
-      if (weeklyRes.error) throw new Error(weeklyRes.error.message);
-
-      const weekly = (weeklyRes.data ?? []) as StoreProductWeeklyRow[];
-      const prods = (productsRes.data ?? []) as { name: string; external_id: number; category: string | null }[];
-
-      if (!seededDateFilterRef.current && weekly.length > 0) {
-        const fb = latestMonthRangeFromWeekly(weekly);
-        if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
-        seededDateFilterRef.current = true;
-      }
-
-      setStores((storesRes.data ?? []) as StoreLite[]);
-      setWeeklyRows(weekly);
-      setProductsList(prods);
 
       const st = (storesRes.data ?? []) as StoreLite[];
+      const prods = (productsRes.data ?? []) as { name: string; external_id: number; category: string | null }[];
       const filtersData = filtersRes.data as { cities?: string[]; networks?: string[]; drivers?: string[]; agents?: string[] } | null;
       const sortHe = (a: string, b: string) => String(a).localeCompare(String(b), "he");
       const uniq = (arr: (string | null)[]) => Array.from(new Set(arr.filter((x): x is string => Boolean(x)))).sort(sortHe);
+
+      setStores(st);
+      setProductsList(prods);
       setFilterOptions({
         cities: filtersData?.cities?.length ? [...filtersData.cities].sort(sortHe) : uniq(st.map((s) => s.city)),
         networks: filtersData?.networks?.length ? [...filtersData.networks].sort(sortHe) : uniq(st.map((s) => s.network)),
         drivers: filtersData?.drivers?.length ? [...filtersData.drivers].sort(sortHe) : uniq(st.map((s) => s.driver)),
         agents: filtersData?.agents?.length ? [...filtersData.agents].sort(sortHe) : uniq(st.map((s) => s.agent)),
       });
+
+      // Determine the default date range (latest month available)
+      let seedFrom = "";
+      let seedTo = "";
+      if (!seededDateFilterRef.current && latestMonthRes.data?.[0]) {
+        const { year, month } = latestMonthRes.data[0] as { year: number; month: number };
+        const lastDay = new Date(year, month, 0).getDate();
+        seedFrom = `${year}-${pad2(month)}-01`;
+        seedTo = `${year}-${pad2(month)}-${pad2(lastDay)}`;
+        seededDateFilterRef.current = true;
+        setFiltersState((prev) => ({ ...prev, dateFrom: seedFrom, dateTo: seedTo }));
+      }
+
+      // Fetch weekly data for the seeded range (server-side filtered)
+      if (seedFrom && seedTo) {
+        await fetchWeeklyForRange(seedFrom, seedTo);
+      } else {
+        setLoading(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בטעינת נתונים");
-    } finally {
       setLoading(false);
     }
-  }, [companyId]);
+  }, [companyId, fetchWeeklyForRange]);
 
+  // Initial load
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Re-fetch when the user changes the date filter (server-side refetch for the new range)
+  useEffect(() => {
+    if (!seededDateFilterRef.current) return;
+    if (!filters.dateFrom || !filters.dateTo) return;
+    if (
+      fetchedRangeRef.current?.from === filters.dateFrom &&
+      fetchedRangeRef.current?.to === filters.dateTo
+    ) return;
+    fetchWeeklyForRange(filters.dateFrom, filters.dateTo);
+  }, [filters.dateFrom, filters.dateTo, fetchWeeklyForRange]);
 
   const setFilters = useCallback(
     (updater: (prev: DistributionV2Filters) => DistributionV2Filters) => {
@@ -551,8 +589,13 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   );
 
   const refetch = useCallback(() => {
-    fetchData();
-  }, [fetchData]);
+    if (filters.dateFrom && filters.dateTo) {
+      fetchedRangeRef.current = null; // force re-fetch even for same range
+      fetchWeeklyForRange(filters.dateFrom, filters.dateTo);
+    } else {
+      fetchData();
+    }
+  }, [fetchData, fetchWeeklyForRange, filters.dateFrom, filters.dateTo]);
 
   const productsByNormalizedName = useMemo(() => {
     const map = new Map<string, ProductLookup>();
