@@ -53,7 +53,7 @@ export function DistributionV2ActiveFiltersChips({
           <button
             type="button"
             onClick={chip.onRemove}
-            className="p-1 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-800"
+            className="p-2 rounded-md hover:bg-slate-100 text-slate-500 hover:text-slate-800"
             title="הסר"
             aria-label="הסר פילטר"
           >
@@ -64,7 +64,7 @@ export function DistributionV2ActiveFiltersChips({
       <button
         type="button"
         onClick={onClearAll}
-        className="text-xs font-semibold text-slate-500 hover:text-red-600 mr-1"
+        className="text-xs font-semibold text-slate-500 hover:text-red-600 mr-1 px-2 py-2 rounded-md hover:bg-slate-100"
       >
         נקה הכל
       </button>

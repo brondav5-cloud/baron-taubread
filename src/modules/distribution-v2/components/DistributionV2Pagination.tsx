@@ -60,13 +60,13 @@ export function DistributionV2Pagination({
             <option value={200}>200</option>
           </select>
         </div>
-        <div className="flex items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50/30 p-0.5">
+        <div className="flex flex-wrap justify-center items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50/30 p-0.5">
           <button
             type="button"
             onClick={() => onPageChange(1)}
             disabled={currentPage <= 1}
             aria-label="עמוד ראשון"
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            className="hidden sm:inline-flex px-2.5 py-2 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             ראשון
           </button>
@@ -75,11 +75,11 @@ export function DistributionV2Pagination({
             onClick={() => onPageChange(currentPage - 1)}
             disabled={currentPage <= 1}
             aria-label="עמוד קודם"
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            className="px-2.5 py-2 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             הקודם
           </button>
-          <span className="px-2 py-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-800 tabular-nums min-w-[7rem] justify-center" aria-live="polite">
+          <span className="px-2 py-2 flex items-center gap-1.5 text-xs font-bold text-slate-800 tabular-nums min-w-[7rem] justify-center" aria-live="polite">
             <input
               type="number"
               min={1}
@@ -98,7 +98,7 @@ export function DistributionV2Pagination({
             onClick={() => onPageChange(currentPage + 1)}
             disabled={currentPage >= totalPages}
             aria-label="עמוד הבא"
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            className="px-2.5 py-2 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             הבא
           </button>
@@ -107,7 +107,7 @@ export function DistributionV2Pagination({
             onClick={() => onPageChange(totalPages)}
             disabled={currentPage >= totalPages}
             aria-label="עמוד אחרון"
-            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
+            className="hidden sm:inline-flex px-2.5 py-2 text-xs font-semibold rounded-lg disabled:opacity-40 disabled:cursor-not-allowed text-slate-600 hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/30"
           >
             אחרון
           </button>

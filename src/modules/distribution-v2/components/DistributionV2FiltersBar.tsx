@@ -120,7 +120,7 @@ export function DistributionV2FiltersBar({
           <button
             type="button"
             onClick={onClear}
-            className="text-sm font-semibold text-slate-500 hover:text-red-600 flex items-center gap-1.5"
+            className="text-sm font-semibold text-slate-500 hover:text-red-600 flex items-center gap-1.5 px-1.5 py-1.5 rounded"
           >
             <X className="w-4 h-4" />
             נקה ({activeCount})
@@ -425,7 +425,7 @@ function FilterSelect({
               className="inline-flex items-center gap-1 px-2 py-1 bg-slate-100 border border-slate-200 text-slate-700 text-xs rounded-lg font-medium"
             >
               {s}
-              <button type="button" onClick={() => toggle(s)} className="hover:text-slate-900 p-0.5 rounded hover:bg-slate-200/80">
+              <button type="button" onClick={() => toggle(s)} className="hover:text-slate-900 p-1.5 rounded hover:bg-slate-200/80">
                 <X className="w-3 h-3" />
               </button>
             </span>

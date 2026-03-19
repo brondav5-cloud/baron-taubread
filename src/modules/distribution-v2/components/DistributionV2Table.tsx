@@ -281,7 +281,7 @@ function SortableTh({
         <span
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing touch-none p-0.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
+          className="hidden sm:flex cursor-grab active:cursor-grabbing touch-none p-1.5 rounded text-slate-400 hover:text-slate-600 hover:bg-slate-200/60"
           aria-label="גרור לשינוי סדר עמודה"
         >
           <GripVertical className="w-4 h-4 shrink-0" />
@@ -581,12 +581,12 @@ export function DistributionV2Table({
               type="button"
               onClick={expandAllOnPage}
               disabled={isExpanding}
-              className="text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-wait"
+              className="text-primary-600 hover:text-primary-700 disabled:opacity-50 disabled:cursor-wait px-2 py-2 rounded-md hover:bg-primary-50"
             >
               {isExpanding ? "פותח…" : "פתח הכל"}
             </button>
             <span className="text-slate-200">|</span>
-            <button type="button" onClick={collapseAllOnPage} className="text-slate-500 hover:text-slate-800">
+            <button type="button" onClick={collapseAllOnPage} className="text-slate-500 hover:text-slate-800 px-2 py-2 rounded-md hover:bg-primary-50">
               סגור הכל
             </button>
             <span className="text-slate-200">|</span>
@@ -839,7 +839,7 @@ export function DistributionV2Table({
                         <button
                           type="button"
                           onClick={() => toggleGroup(block.id)}
-                          className="flex items-center gap-2.5 text-right rounded-xl px-1 py-0.5 hover:bg-white/70 min-w-0 transition-colors"
+                          className="flex items-center gap-2.5 text-right rounded-xl px-1 py-2 hover:bg-white/70 min-w-0 transition-colors"
                           aria-expanded={expanded}
                           aria-label={expanded ? "צמצם קבוצה" : "הרחב קבוצה"}
                         >
@@ -999,8 +999,52 @@ function ColumnFilterCell({
   const [draftText, setDraftText] = useState("");
   const [listSearch, setListSearch] = useState("");
   const [position, setPosition] = useState({ top: 0, left: 0, width: 280, maxHeight: 360 });
+  const triggerBtnRef = useRef<HTMLButtonElement>(null);
 
   const active = hasPicklist || hasText;
+
+  // Recalculate popover position when the user scrolls/resizes while it's open
+  useEffect(() => {
+    if (!isOpen) return;
+    const recalc = () => {
+      const btn = triggerBtnRef.current;
+      if (!btn) return;
+      const r = btn.getBoundingClientRect();
+      const margin = 8;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const w = Math.min(320, Math.max(260, vw - 2 * margin));
+      let left = r.right - w;
+      if (left < margin) left = margin;
+      if (left + w > vw - margin) left = vw - w - margin;
+      const capH = Math.min(420, Math.floor(vh * 0.80));
+      const spaceBelow = vh - r.bottom - margin;
+      const spaceAbove = r.top - margin;
+      const minUseful = 140;
+      const openAbove = spaceAbove > spaceBelow + 60 || (spaceBelow < 300 && spaceAbove >= minUseful);
+      let top: number;
+      let maxHeight: number;
+      if (!openAbove && spaceBelow >= minUseful) {
+        top = r.bottom + margin;
+        maxHeight = Math.min(capH, spaceBelow);
+      } else if (spaceAbove >= minUseful) {
+        maxHeight = Math.min(capH, spaceAbove);
+        top = r.top - maxHeight - margin;
+      } else {
+        maxHeight = Math.max(minUseful, vh - 2 * margin);
+        top = margin;
+      }
+      if (top < margin) top = margin;
+      if (top + maxHeight > vh - margin) maxHeight = Math.max(minUseful, vh - margin - top);
+      setPosition({ top, left, width: w, maxHeight });
+    };
+    window.addEventListener("scroll", recalc, { passive: true });
+    window.addEventListener("resize", recalc, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", recalc);
+      window.removeEventListener("resize", recalc);
+    };
+  }, [isOpen]);
 
   const syncDraftFromProps = useCallback(() => {
     const p = columnPicklists[col];
@@ -1026,15 +1070,19 @@ function ColumnFilterCell({
       if (left < margin) left = margin;
       if (left + w > vw - margin) left = vw - w - margin;
 
-      const capH = Math.min(380, Math.floor(vh * 0.72));
+      const capH = Math.min(420, Math.floor(vh * 0.80));
       const spaceBelow = vh - r.bottom - margin;
       const spaceAbove = r.top - margin;
       const minUseful = 140;
+      // Prefer the direction with more space; always open above when it gives
+      // significantly more room (avoids the truncated-list problem when the
+      // button is in the lower half of the viewport on first load).
+      const openAbove = spaceAbove > spaceBelow + 60 || (spaceBelow < 300 && spaceAbove >= minUseful);
 
       let top: number;
       let maxHeight: number;
 
-      if (spaceBelow >= minUseful) {
+      if (!openAbove && spaceBelow >= minUseful) {
         top = r.bottom + margin;
         maxHeight = Math.min(capH, spaceBelow);
       } else if (spaceAbove >= minUseful) {
@@ -1100,6 +1148,7 @@ function ColumnFilterCell({
   return (
     <>
       <button
+        ref={triggerBtnRef}
         type="button"
         data-dv2-filter-trigger
         onClick={openPopover}

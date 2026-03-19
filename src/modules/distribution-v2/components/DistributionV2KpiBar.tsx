@@ -170,10 +170,10 @@ export function DistributionV2KpiBar({ summaryStats }: DistributionV2KpiBarProps
                 ))}
               </ul>
               <div className="flex flex-wrap gap-3 pt-3 border-t border-slate-100">
-                <button type="button" onClick={selectAll} className="text-xs font-semibold text-primary-600 hover:text-primary-700">
+                <button type="button" onClick={selectAll} className="text-xs font-semibold text-primary-600 hover:text-primary-700 px-2 py-1.5 rounded hover:bg-slate-100">
                   הכל
                 </button>
-                <button type="button" onClick={selectDefaults} className="text-xs font-medium text-slate-500 hover:text-slate-700">
+                <button type="button" onClick={selectDefaults} className="text-xs font-medium text-slate-500 hover:text-slate-700 px-2 py-1.5 rounded hover:bg-slate-100">
                   ברירת מחדל
                 </button>
               </div>
