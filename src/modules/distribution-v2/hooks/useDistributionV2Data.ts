@@ -460,26 +460,10 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       const products = (spRes.data ?? []) as StoreProductRow[];
 
       if (!seededDateFilterRef.current && products.length > 0) {
-        let maxTs = 0;
-        for (const p of products) {
-          if (!p.updated_at) continue;
-          const t = new Date(p.updated_at).getTime();
-          if (!Number.isNaN(t) && t > maxTs) maxTs = t;
-        }
-        if (maxTs > 0) {
-          const jp = jerusalemYmdFromIso(new Date(maxTs).toISOString());
-          if (jp) {
-            const dateTo = `${jp.y}-${pad2(jp.m)}-${pad2(jp.d)}`;
-            const dateFrom = `${jp.y}-${pad2(jp.m)}-01`;
-            setFiltersState((prev) => ({ ...prev, dateFrom, dateTo }));
-          } else {
-            const fb = latestMonthRangeFromQty(products);
-            if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
-          }
-        } else {
-          const fb = latestMonthRangeFromQty(products);
-          if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
-        }
+        // Seed the date filter to the latest month that actually has qty data,
+        // NOT the upload date — upload can happen in a different month than the data.
+        const fb = latestMonthRangeFromQty(products);
+        if (fb) setFiltersState((prev) => ({ ...prev, ...fb }));
         seededDateFilterRef.current = true;
       }
 

@@ -43,10 +43,27 @@ function loadColumnOrder(): DistributionV2ColumnKey[] {
     if (!raw) return [...DISTRIBUTION_V2_COLUMNS];
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return [...DISTRIBUTION_V2_COLUMNS];
-    const set = new Set(DISTRIBUTION_V2_COLUMNS);
-    const ordered = parsed.filter((c: unknown) => typeof c === "string" && set.has(c as DistributionV2ColumnKey));
-    if (ordered.length !== set.size) return [...DISTRIBUTION_V2_COLUMNS];
-    return ordered as DistributionV2ColumnKey[];
+    const allCols = new Set(DISTRIBUTION_V2_COLUMNS);
+    const saved = parsed.filter(
+      (c: unknown): c is DistributionV2ColumnKey =>
+        typeof c === "string" && allCols.has(c as DistributionV2ColumnKey),
+    );
+    if (saved.length === 0) return [...DISTRIBUTION_V2_COLUMNS];
+    // Merge: keep saved order, insert newly-added columns at their natural position
+    const savedSet = new Set(saved);
+    const newCols = DISTRIBUTION_V2_COLUMNS.filter((c) => !savedSet.has(c));
+    if (newCols.length === 0) return saved;
+    const result = [...saved];
+    for (const col of newCols) {
+      const defaultIdx = DISTRIBUTION_V2_COLUMNS.indexOf(col);
+      let insertAt = result.length;
+      for (let i = defaultIdx - 1; i >= 0; i--) {
+        const pos = result.indexOf(DISTRIBUTION_V2_COLUMNS[i]!);
+        if (pos !== -1) { insertAt = pos + 1; break; }
+      }
+      result.splice(insertAt, 0, col);
+    }
+    return result;
   } catch {
     return [...DISTRIBUTION_V2_COLUMNS];
   }
@@ -75,6 +92,13 @@ function loadHiddenColumns(): DistributionV2ColumnKey[] {
   } catch {
     return [];
   }
+}
+
+const FIT_TO_SCREEN_KEY = "distribution-v2-fit-to-screen";
+
+function loadFitToScreen(): boolean {
+  if (typeof window === "undefined") return false;
+  try { return localStorage.getItem(FIT_TO_SCREEN_KEY) === "true"; } catch { return false; }
 }
 
 const COLUMN_LABELS: Record<DistributionV2ColumnKey, string> = {
@@ -311,7 +335,9 @@ export function DistributionV2Table({
 }: DistributionV2TableProps) {
   const [columnOrder, setColumnOrder] = useState<DistributionV2ColumnKey[]>(loadColumnOrder);
   const [hiddenColumns, setHiddenColumns] = useState<DistributionV2ColumnKey[]>(loadHiddenColumns);
+  const [fitToScreen, setFitToScreen] = useState<boolean>(loadFitToScreen);
   const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+  const [columnsSavedFlash, setColumnsSavedFlash] = useState(false);
   const [openColumn, setOpenColumn] = useState<DistributionV2ColumnKey | null>(null);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const [expandAllBlocked, setExpandAllBlocked] = useState(false);
@@ -320,6 +346,21 @@ export function DistributionV2Table({
   const expandingRef = useRef(false);
   const columnsMenuBtnRef = useRef<HTMLButtonElement>(null);
   const columnsMenuRef = useRef<HTMLDivElement>(null);
+  const columnsSavedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flashColumnsSaved = useCallback(() => {
+    if (columnsSavedTimerRef.current) clearTimeout(columnsSavedTimerRef.current);
+    setColumnsSavedFlash(true);
+    columnsSavedTimerRef.current = setTimeout(() => setColumnsSavedFlash(false), 1800);
+  }, []);
+
+  const toggleFitToScreen = useCallback(() => {
+    setFitToScreen((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(FIT_TO_SCREEN_KEY, String(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }, []);
 
   const hiddenSet = useMemo(() => new Set(hiddenColumns), [hiddenColumns]);
 
@@ -328,21 +369,26 @@ export function DistributionV2Table({
     return v.length > 0 ? v : [...columnOrder];
   }, [columnOrder, hiddenSet]);
 
+  const isMounted = useRef(false);
   useEffect(() => {
     try {
       localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(columnOrder));
+      if (isMounted.current) flashColumnsSaved();
     } catch {
       /* ignore */
     }
-  }, [columnOrder]);
+  }, [columnOrder, flashColumnsSaved]);
 
   useEffect(() => {
     try {
       localStorage.setItem(COLUMN_HIDDEN_STORAGE_KEY, JSON.stringify(hiddenColumns));
+      if (isMounted.current) flashColumnsSaved();
     } catch {
       /* ignore */
     }
-  }, [hiddenColumns]);
+  }, [hiddenColumns, flashColumnsSaved]);
+
+  useEffect(() => { isMounted.current = true; }, []);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
@@ -555,6 +601,9 @@ export function DistributionV2Table({
               >
                 <Table2 className="w-3.5 h-3.5" />
                 עמודות
+                {columnsSavedFlash && (
+                  <span className="text-[11px] font-medium text-emerald-600">✓ נשמר</span>
+                )}
               </button>
               {columnsMenuOpen && (
                 <ColumnsVisibilityPanel
@@ -575,6 +624,20 @@ export function DistributionV2Table({
               title="החזר סדר עמודות לברירת מחדל"
             >
               איפוס סדר עמודות
+            </button>
+            <span className="text-slate-200">|</span>
+            <button
+              type="button"
+              onClick={toggleFitToScreen}
+              title={fitToScreen ? "חזור לגלילה אופקית חופשית" : "התאם גודל עמודות לרוחב המסך"}
+              className={[
+                "inline-flex items-center gap-1 text-xs font-semibold transition-colors",
+                fitToScreen
+                  ? "text-primary-700 hover:text-primary-900"
+                  : "text-slate-500 hover:text-slate-800",
+              ].join(" ")}
+            >
+              {fitToScreen ? "⇔ גלילה חופשית" : "⊡ התאם למסך"}
             </button>
           </div>
         </div>
@@ -597,6 +660,9 @@ export function DistributionV2Table({
               >
                 <Table2 className="w-3.5 h-3.5" />
                 עמודות
+                {columnsSavedFlash && (
+                  <span className="text-[11px] font-medium text-emerald-600">✓ נשמר</span>
+                )}
               </button>
               {columnsMenuOpen && (
                 <ColumnsVisibilityPanel
@@ -617,6 +683,19 @@ export function DistributionV2Table({
             >
               איפוס סדר עמודות
             </button>
+            <button
+              type="button"
+              onClick={toggleFitToScreen}
+              title={fitToScreen ? "חזור לגלילה אופקית חופשית" : "התאם גודל עמודות לרוחב המסך"}
+              className={[
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-semibold transition-colors",
+                fitToScreen
+                  ? "border-primary-300 bg-primary-50 text-primary-700 hover:bg-primary-100"
+                  : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:border-slate-300",
+              ].join(" ")}
+            >
+              {fitToScreen ? "⇔ גלילה חופשית" : "⊡ התאם למסך"}
+            </button>
           </div>
         </div>
       )}
@@ -633,13 +712,19 @@ export function DistributionV2Table({
         </div>
       )}
       <div
-        className="overflow-x-auto rounded-b-2xl"
+        className="overflow-x-auto overflow-y-auto max-h-[70vh] rounded-b-2xl"
         role="region"
         aria-label="טבלת נתוני חלוקה"
       >
         <DndContext sensors={dndSensors} onDragEnd={handleDragEnd}>
           <SortableContext items={visibleColumnOrder} strategy={horizontalListSortingStrategy}>
-            <table className="w-full text-[13px] text-right border-collapse min-w-[960px]" role="table">
+            <table
+              className={[
+                "w-full text-[13px] text-right border-collapse",
+                fitToScreen ? "table-fixed" : "min-w-[960px]",
+              ].join(" ")}
+              role="table"
+            >
               <thead>
                 <tr className="border-b border-slate-200">
                   {visibleColumnOrder.map((col) => (

@@ -45,21 +45,20 @@ interface DistributionV2KpiBarProps {
 }
 
 export function DistributionV2KpiBar({ summaryStats }: DistributionV2KpiBarProps) {
-  const [selectedKeys, setSelectedKeys] = useState<DistributionV2SummaryMetricKey[]>(
-    DISTRIBUTION_V2_SUMMARY_DEFAULT_KEYS,
-  );
+  const [selectedKeys, setSelectedKeys] = useState<DistributionV2SummaryMetricKey[]>(loadSelectedKeys);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => {
-    setSelectedKeys(loadSelectedKeys());
-  }, []);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const persist = useCallback((keys: DistributionV2SummaryMetricKey[]) => {
     setSelectedKeys(keys);
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(keys));
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      setSavedFlash(true);
+      savedTimerRef.current = setTimeout(() => setSavedFlash(false), 1800);
     } catch {
       /* ignore */
     }
@@ -142,6 +141,9 @@ export function DistributionV2KpiBar({ summaryStats }: DistributionV2KpiBarProps
           >
             <LayoutGrid className="w-4 h-4 text-slate-500" />
             בחר מדדים
+            {savedFlash && (
+              <span className="text-[11px] font-medium text-emerald-600 animate-fade-in">✓ נשמר</span>
+            )}
           </button>
           {pickerOpen && (
             <div
