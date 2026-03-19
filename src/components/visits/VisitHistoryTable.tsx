@@ -9,6 +9,7 @@ import {
   Calendar,
   Store,
   ChevronLeft,
+  LayoutList,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useVisits } from "@/context/VisitsContext";
@@ -349,6 +350,62 @@ export function VisitHistoryTable() {
             <p>לא נמצאו תוצאות לפי הסינון</p>
           </div>
         )}
+      </div>
+
+      {/* General visits section */}
+      <GeneralVisitsSection visits={visits} />
+    </div>
+  );
+}
+
+function GeneralVisitsSection({
+  visits,
+}: {
+  visits: ReturnType<typeof useVisits>["visits"];
+}) {
+  const generalVisits = useMemo(
+    () =>
+      visits
+        .filter((v) => v.visitType === "general")
+        .sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime(),
+        ),
+    [visits],
+  );
+
+  if (generalVisits.length === 0) return null;
+
+  return (
+    <div className="border-t bg-gray-50 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <LayoutList className="w-5 h-5 text-purple-500" />
+        <h3 className="font-bold text-gray-800">ביקורים כלליים</h3>
+        <span className="text-sm text-gray-500">({generalVisits.length})</span>
+      </div>
+      <div className="space-y-2">
+        {generalVisits.map((visit) => (
+          <div
+            key={visit.id}
+            className="flex items-center gap-4 p-3 bg-white rounded-xl text-sm border border-gray-100"
+          >
+            <Calendar className="w-4 h-4 text-gray-400 shrink-0" />
+            <span className="text-gray-600 w-24 shrink-0">
+              {formatDate(visit.date)}
+            </span>
+            <span className="font-medium text-purple-700 shrink-0">
+              {visit.generalActivityLabel ?? "פעילות כללית"}
+            </span>
+            <span className="text-gray-500 shrink-0">{visit.agentName}</span>
+            {visit.notes && (
+              <span
+                className="text-gray-500 truncate"
+                title={visit.notes}
+              >
+                {visit.notes}
+              </span>
+            )}
+          </div>
+        ))}
       </div>
     </div>
   );

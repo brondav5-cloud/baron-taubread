@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { ClipboardList, Search, Filter, Plus, X } from "lucide-react";
+import { ClipboardList, Search, Filter, Plus, X, Calendar } from "lucide-react";
 
 import { useVisits } from "@/context/VisitsContext";
 import {
@@ -33,6 +33,10 @@ export default function VisitsPage() {
   const [agentFilter, setAgentFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [storeFilter, setStoreFilter] = useState<number | null>(storeIdFromUrl);
+  const [dateFilter, setDateFilter] = useState<string>(() => {
+    const today = new Date();
+    return today.toISOString().slice(0, 10);
+  });
 
   useEffect(() => {
     if (storeIdFromUrl != null && !Number.isNaN(storeIdFromUrl)) {
@@ -52,6 +56,8 @@ export default function VisitsPage() {
   // Filter all visits together (store + general)
   const filteredVisits = useMemo(() => {
     return visits.filter((visit) => {
+      // Date filter
+      if (dateFilter && visit.date !== dateFilter) return false;
       // Store filter — applies only to store visits
       if (
         storeFilter != null &&
@@ -74,7 +80,7 @@ export default function VisitsPage() {
       if (statusFilter && visit.status !== statusFilter) return false;
       return true;
     });
-  }, [visits, search, agentFilter, statusFilter, storeFilter]);
+  }, [visits, search, agentFilter, statusFilter, storeFilter, dateFilter]);
 
   // Get stores with visit info for second tab
   const storesWithVisitInfo = useMemo(
@@ -169,6 +175,31 @@ export default function VisitsPage() {
       {/* Tab Content */}
       {activeTab === "visits" && (
         <>
+          {/* Date selector bar */}
+          <div className="bg-white rounded-2xl shadow-card p-3">
+            <div className="flex items-center gap-3">
+              <Calendar className="w-5 h-5 text-primary-500 shrink-0" />
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+                className="flex-1 bg-gray-50 border-0 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter("")}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1 shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  כל הזמנים
+                </button>
+              )}
+              <span className="text-sm text-gray-500 shrink-0">
+                {filteredVisits.length} ביקורים
+              </span>
+            </div>
+          </div>
+
           {/* Search & Filters */}
           <div className="bg-white rounded-2xl shadow-card p-4 space-y-4">
             <div className="flex flex-col sm:flex-row gap-3">
