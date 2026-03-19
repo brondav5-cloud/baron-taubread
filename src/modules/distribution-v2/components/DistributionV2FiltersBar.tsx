@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { X, Calendar, Star } from "lucide-react";
 import type { DistributionV2Filters, DistributionV2FilterOptions } from "../types";
 import {
@@ -73,6 +73,14 @@ export function DistributionV2FiltersBar({
   const yNow = new Date().getFullYear();
   const [holidayOpen, setHolidayOpen] = useState(false);
   const [hYear, setHYear] = useState(yNow);
+
+  // Draft dates: user edits without triggering fetch; "הצג" applies them
+  const [draftDateFrom, setDraftDateFrom] = useState(filters.dateFrom ?? "");
+  const [draftDateTo, setDraftDateTo] = useState(filters.dateTo ?? "");
+  useEffect(() => {
+    setDraftDateFrom(filters.dateFrom ?? "");
+    setDraftDateTo(filters.dateTo ?? "");
+  }, [filters.dateFrom, filters.dateTo]);
   const [hHolidayId, setHHolidayId] = useState(HOLIDAY_DEFINITIONS[0]!.id);
   const [hMode, setHMode] = useState<HolidayWindowMode>("week_of");
   const [hDayCount, setHDayCount] = useState(7);
@@ -330,8 +338,8 @@ export function DistributionV2FiltersBar({
           <label className="block text-xs font-semibold text-slate-500">מתאריך</label>
           <input
             type="date"
-            value={filters.dateFrom}
-            onChange={(e) => onUpdate("dateFrom", e.target.value)}
+            value={draftDateFrom}
+            onChange={(e) => setDraftDateFrom(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 bg-slate-50/30 focus:ring-2 focus:ring-primary-500/15 focus:border-primary-400"
           />
         </div>
@@ -339,10 +347,23 @@ export function DistributionV2FiltersBar({
           <label className="block text-xs font-semibold text-slate-500">עד תאריך</label>
           <input
             type="date"
-            value={filters.dateTo}
-            onChange={(e) => onUpdate("dateTo", e.target.value)}
+            value={draftDateTo}
+            onChange={(e) => setDraftDateTo(e.target.value)}
             className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium text-slate-800 bg-slate-50/30 focus:ring-2 focus:ring-primary-500/15 focus:border-primary-400"
           />
+        </div>
+        <div className="space-y-2 flex flex-col justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              onUpdate("dateFrom", draftDateFrom);
+              onUpdate("dateTo", draftDateTo);
+            }}
+            disabled={!draftDateFrom || !draftDateTo}
+            className="px-4 py-2.5 rounded-xl text-sm font-bold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            הצג
+          </button>
         </div>
         <FilterSelect
           label="עיר"

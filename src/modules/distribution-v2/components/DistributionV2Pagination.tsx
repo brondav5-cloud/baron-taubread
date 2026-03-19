@@ -22,8 +22,9 @@ export function DistributionV2Pagination({
   onPageChange,
   onPageSizeChange,
 }: DistributionV2PaginationProps) {
-  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const endItem = Math.min(currentPage * pageSize, totalItems);
+  const effectiveSize = pageSize <= 0 ? totalItems : pageSize;
+  const startItem = totalItems === 0 ? 0 : (currentPage - 1) * effectiveSize + 1;
+  const endItem = totalItems === 0 ? 0 : (pageSize <= 0 ? totalItems : Math.min(currentPage * pageSize, totalItems));
 
   const [inputVal, setInputVal] = useState(String(currentPage));
 
@@ -58,6 +59,7 @@ export function DistributionV2Pagination({
             <option value={50}>50</option>
             <option value={100}>100</option>
             <option value={200}>200</option>
+            <option value={-1}>הכל</option>
           </select>
         </div>
         <div className="flex flex-wrap justify-center items-center gap-0.5 rounded-xl border border-slate-200 bg-slate-50/30 p-0.5">

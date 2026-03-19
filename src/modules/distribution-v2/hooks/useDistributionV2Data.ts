@@ -572,23 +572,24 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const groupCount = groupBlocks.length;
 
   const totalItems = viewMode === "flat" ? totalRows : groupCount;
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const effectivePageSize = pageSize <= 0 ? totalItems : pageSize;
+  const totalPages = Math.max(1, Math.ceil(totalItems / (effectivePageSize || 1)));
   const effectivePage = totalPages < 1 ? 1 : Math.min(currentPage, totalPages);
 
   const displayRows = useMemo(
     () =>
       viewMode === "flat"
-        ? sortedRows.slice((effectivePage - 1) * pageSize, effectivePage * pageSize)
+        ? sortedRows.slice((effectivePage - 1) * effectivePageSize, effectivePage * effectivePageSize)
         : [],
-    [viewMode, sortedRows, effectivePage, pageSize],
+    [viewMode, sortedRows, effectivePage, effectivePageSize],
   );
 
   const displayGroupBlocks = useMemo(
     () =>
       viewMode === "grouped"
-        ? groupBlocks.slice((effectivePage - 1) * pageSize, effectivePage * pageSize)
+        ? groupBlocks.slice((effectivePage - 1) * effectivePageSize, effectivePage * effectivePageSize)
         : [],
-    [viewMode, groupBlocks, effectivePage, pageSize],
+    [viewMode, groupBlocks, effectivePage, effectivePageSize],
   );
 
   const summaryStats: DistributionV2SummaryStats | null = useMemo(() => {
