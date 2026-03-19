@@ -118,8 +118,10 @@ export async function POST(request: NextRequest) {
     const totalChunks = payload.totalChunks ?? 1;
     const isLastChunk = chunkIndex === totalChunks - 1;
 
-    // Allow empty records only on the final chunk (storeDeliveries-only request)
-    if (!payload.records || (payload.records.length === 0 && !isLastChunk)) {
+    // A chunk must carry at least one of: records, distRecords, or be the final storeDeliveries chunk
+    const hasRecords      = (payload.records?.length ?? 0) > 0;
+    const hasDistRecords  = (payload.distRecords?.length ?? 0) > 0;
+    if (!hasRecords && !hasDistRecords && !isLastChunk) {
       return NextResponse.json(
         { error: "אין נתונים בבקשה" },
         { status: 400 },
