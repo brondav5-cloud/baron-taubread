@@ -340,59 +340,61 @@ export default function NewVisitPage() {
           )}
         </div>
 
-        {/* Checklist */}
-        <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-gray-900">צ&apos;קליסט</h2>
-            <Link
-              href="/dashboard/settings/checklist"
-              className="text-xs text-primary-600 hover:underline flex items-center gap-1"
-            >
-              <LinkIcon className="w-3 h-3" />
-              ערוך צ&apos;קליסט
-            </Link>
-          </div>
-          {checklist.length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-4">
-              לא הוגדרו פריטים בצ&apos;קליסט.{" "}
+        {/* Checklist — store visits only */}
+        {visitType === "store" && (
+          <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900">צ&apos;קליסט</h2>
               <Link
                 href="/dashboard/settings/checklist"
-                className="text-primary-600 hover:underline"
+                className="text-xs text-primary-600 hover:underline flex items-center gap-1"
               >
-                הגדר
+                <LinkIcon className="w-3 h-3" />
+                ערוך צ&apos;קליסט
               </Link>
-            </p>
-          ) : (
-            <div className="space-y-2">
-              {checklist.map((item) => (
-                <label
-                  key={item.id}
-                  className={clsx(
-                    "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors",
-                    item.checked
-                      ? "bg-green-50"
-                      : "bg-gray-50 hover:bg-gray-100",
-                  )}
+            </div>
+            {checklist.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">
+                לא הוגדרו פריטים בצ&apos;קליסט.{" "}
+                <Link
+                  href="/dashboard/settings/checklist"
+                  className="text-primary-600 hover:underline"
                 >
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={() => toggleChecklistItem(item.id)}
-                    className="w-5 h-5 rounded border-gray-300 text-green-600"
-                  />
-                  <span
+                  הגדר
+                </Link>
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {checklist.map((item) => (
+                  <label
+                    key={item.id}
                     className={clsx(
-                      "text-sm",
-                      item.checked ? "text-green-700" : "text-gray-700",
+                      "flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors",
+                      item.checked
+                        ? "bg-green-50"
+                        : "bg-gray-50 hover:bg-gray-100",
                     )}
                   >
-                    {item.label}
-                  </span>
-                </label>
-              ))}
-            </div>
-          )}
-        </div>
+                    <input
+                      type="checkbox"
+                      checked={item.checked}
+                      onChange={() => toggleChecklistItem(item.id)}
+                      className="w-5 h-5 rounded border-gray-300 text-green-600"
+                    />
+                    <span
+                      className={clsx(
+                        "text-sm",
+                        item.checked ? "text-green-700" : "text-gray-700",
+                      )}
+                    >
+                      {item.label}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Photos */}
         <VisitPhotosSection
@@ -405,12 +407,14 @@ export default function NewVisitPage() {
           onRemovePhoto={removePhoto}
         />
 
-        {/* Competitors */}
-        <VisitCompetitorsSection
-          competitors={competitors}
-          onToggle={toggleCompetitor}
-          onUpdateNotes={updateCompetitorNotes}
-        />
+        {/* Competitors — store visits only */}
+        {visitType === "store" && (
+          <VisitCompetitorsSection
+            competitors={competitors}
+            onToggle={toggleCompetitor}
+            onUpdateNotes={updateCompetitorNotes}
+          />
+        )}
 
         {/* Notes */}
         <div className="bg-white rounded-2xl shadow-card p-6 space-y-4">

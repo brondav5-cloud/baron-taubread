@@ -191,6 +191,5 @@ export function getAvailableStores(
     .filter((s) => !plannedStoreIds.has(s.id))
     .filter((s) => !selectedCity || s.city === selectedCity)
     .filter((s) => !selectedAgent || s.agent === selectedAgent)
-    .sort((a, b) => (b.metric_12v12 ?? 0) - (a.metric_12v12 ?? 0))
-    .slice(0, 20);
+    .sort((a, b) => (b.metric_12v12 ?? 0) - (a.metric_12v12 ?? 0));
 }

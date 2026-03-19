@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   Store,
   LayoutList,
+  Search,
+  X,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -70,16 +72,17 @@ export default function WorkPlanPage() {
   const [duplicatingItem, setDuplicatingItem] = useState<PlanItem | null>(null);
 
   // State for modal tab
-  const [modalTab, setModalTab] = useState<"all" | "treatment">("all");
+  const [modalTab, setModalTab] = useState<"all" | "treatment" | "general">("all");
 
-  // General visit activity options (same as new visit form)
+  // General visit activity options
   const GENERAL_ACTIVITY_OPTIONS = [
     { value: "team_meeting", label: "ישיבת צוות" },
     { value: "errands", label: "שליחות" },
     { value: "general_task", label: "משימה כללית" },
     { value: "other", label: "אחר" },
   ];
-  const [generalActivityLabel, setGeneralActivityLabel] = useState<string>("");
+  // Store search inside modal
+  const [modalStoreSearch, setModalStoreSearch] = useState<string>("");
 
   // Filter treatment stores that aren't already planned (only store visits have storeId)
   const plannedStoreIds = useMemo(() => {
@@ -230,188 +233,233 @@ export default function WorkPlanPage() {
                 הוסף ביקור ליום {DAYS[selectedDay]}
               </h3>
               <button
-                onClick={closeAddModal}
+                onClick={() => {
+                  closeAddModal();
+                  setModalStoreSearch("");
+                }}
                 className="p-2 hover:bg-gray-100 rounded-lg"
               >
                 ✕
               </button>
             </div>
 
+            {/* Tabs: all stores / treatment / general */}
             <div className="flex border-b">
               <button
                 onClick={() => setModalTab("all")}
                 className={clsx(
-                  "flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2",
+                  "flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1",
                   modalTab === "all"
                     ? "text-primary-600 border-b-2 border-primary-600 bg-primary-50"
                     : "text-gray-500 hover:bg-gray-50",
                 )}
               >
-                <Store className="w-4 h-4" />
+                <Store className="w-3.5 h-3.5" />
                 כל החנויות ({availableStores.length})
               </button>
               <button
                 onClick={() => setModalTab("treatment")}
                 className={clsx(
-                  "flex-1 py-3 text-sm font-medium transition-colors flex items-center justify-center gap-2",
+                  "flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1",
                   modalTab === "treatment"
                     ? "text-red-600 border-b-2 border-red-600 bg-red-50"
                     : "text-gray-500 hover:bg-gray-50",
                 )}
               >
-                <AlertTriangle className="w-4 h-4" />
+                <AlertTriangle className="w-3.5 h-3.5" />
                 בטיפול ({availableTreatmentStores.length})
+              </button>
+              <button
+                onClick={() => setModalTab("general")}
+                className={clsx(
+                  "flex-1 py-2.5 text-xs font-medium transition-colors flex items-center justify-center gap-1",
+                  modalTab === "general"
+                    ? "text-primary-600 border-b-2 border-primary-600 bg-primary-50"
+                    : "text-gray-500 hover:bg-gray-50",
+                )}
+              >
+                <LayoutList className="w-3.5 h-3.5" />
+                כללי
               </button>
             </div>
 
-            {modalTab === "all" && (
-              <div className="p-4 border-b bg-gray-50">
-                <div className="flex gap-3">
-                  <select
-                    value={selectedCity}
-                    onChange={(e) => setSelectedCity(e.target.value)}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                  >
-                    <option value="">כל הערים</option>
-                    {cities.map((city) => (
-                      <option key={city} value={city}>
-                        {city}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={selectedAgent}
-                    onChange={(e) => setSelectedAgent(e.target.value)}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm"
-                  >
-                    <option value="">כל הסוכנים</option>
-                    {agents.map((agent) => (
-                      <option key={agent} value={agent}>
-                        {agent}
-                      </option>
-                    ))}
-                  </select>
+            {/* Filters for store tabs */}
+            {(modalTab === "all" || modalTab === "treatment") && (
+              <div className="p-3 border-b bg-gray-50 space-y-2">
+                {/* Search by name */}
+                <div className="relative">
+                  <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={modalStoreSearch}
+                    onChange={(e) => setModalStoreSearch(e.target.value)}
+                    placeholder="חיפוש חנות לפי שם / עיר / סוכן..."
+                    className="w-full pr-8 pl-3 py-1.5 border rounded-lg text-sm"
+                  />
+                  {modalStoreSearch && (
+                    <button
+                      type="button"
+                      onClick={() => setModalStoreSearch("")}
+                      className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
+                {/* City / agent dropdowns — only for "all" tab */}
+                {modalTab === "all" && (
+                  <div className="flex gap-2">
+                    <select
+                      value={selectedCity}
+                      onChange={(e) => setSelectedCity(e.target.value)}
+                      className="flex-1 px-2 py-1.5 border rounded-lg text-sm"
+                    >
+                      <option value="">כל הערים</option>
+                      {cities.map((city) => (
+                        <option key={city} value={city}>
+                          {city}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedAgent}
+                      onChange={(e) => setSelectedAgent(e.target.value)}
+                      className="flex-1 px-2 py-1.5 border rounded-lg text-sm"
+                    >
+                      <option value="">כל הסוכנים</option>
+                      {agents.map((agent) => (
+                        <option key={agent} value={agent}>
+                          {agent}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             )}
 
-            <div className="overflow-y-auto max-h-96 p-4 space-y-2">
-              {/* General visit option - show in both tabs */}
-              <div className="p-3 bg-primary-50 rounded-xl border border-primary-100 space-y-2 mb-3">
-                <p className="text-sm font-medium text-primary-900 flex items-center gap-2">
-                  <LayoutList className="w-4 h-4" />
-                  ביקור כללי
-                </p>
-                <div className="flex gap-2">
-                  <select
-                    value={
-                      GENERAL_ACTIVITY_OPTIONS.find(
-                        (o) => o.label === generalActivityLabel,
-                      )?.value ?? ""
-                    }
-                    onChange={(e) => {
-                      const opt = GENERAL_ACTIVITY_OPTIONS.find(
-                        (o) => o.value === e.target.value,
-                      );
-                      setGeneralActivityLabel(opt ? opt.label : "");
-                    }}
-                    className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white"
-                  >
-                    <option value="">בחר סוג פעילות...</option>
-                    {GENERAL_ACTIVITY_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (generalActivityLabel && selectedDay !== null) {
-                        addGeneralVisit(generalActivityLabel, selectedDay);
-                        setGeneralActivityLabel("");
-                      }
-                    }}
-                    disabled={!generalActivityLabel}
-                    className="px-4 py-2 bg-primary-500 text-white rounded-lg text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary-600"
-                  >
-                    הוסף
-                  </button>
-                </div>
-              </div>
-
-              {modalTab === "all" ? (
-                availableStores.length === 0 ? (
-                  <p className="text-center text-gray-500 py-8">
-                    אין חנויות זמינות
-                  </p>
-                ) : (
-                  availableStores.map((store) => (
+            <div className="overflow-y-auto max-h-96 p-3 space-y-2">
+              {modalTab === "general" ? (
+                /* ── General visit tab ── */
+                <div className="space-y-3 pt-1">
+                  <p className="text-sm text-gray-600">בחר את סוג הפעילות הכללית:</p>
+                  {GENERAL_ACTIVITY_OPTIONS.map((o) => (
                     <button
-                      key={store.id}
-                      onClick={() => addVisit(store, selectedDay)}
-                      className="w-full p-3 bg-gray-50 rounded-xl flex items-center justify-between hover:bg-gray-100 transition-colors text-right"
+                      key={o.value}
+                      type="button"
+                      onClick={() => {
+                        if (selectedDay !== null) {
+                          addGeneralVisit(o.label, selectedDay);
+                        }
+                      }}
+                      className="w-full p-3 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-xl text-right text-sm font-medium text-primary-800 transition-colors"
                     >
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {store.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {store.city} | {store.agent}
-                        </p>
-                      </div>
-                      <div className="text-left">
-                        <p
-                          className={clsx(
-                            "font-bold",
-                            getMetricColor(store.metric_12v12),
-                          )}
-                        >
-                          {formatPercent(store.metric_12v12)}
-                        </p>
-                        <p className="text-xs text-gray-500">12v12</p>
-                      </div>
+                      {o.label}
                     </button>
-                  ))
-                )
-              ) : availableTreatmentStores.length === 0 ? (
-                <div className="text-center py-8">
-                  <AlertTriangle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">אין חנויות בטיפול זמינות</p>
+                  ))}
                 </div>
+              ) : modalTab === "all" ? (
+                /* ── All stores tab ── */
+                (() => {
+                  const term = modalStoreSearch.trim().toLowerCase();
+                  const filtered = term
+                    ? availableStores.filter(
+                        (s) =>
+                          s.name.toLowerCase().includes(term) ||
+                          s.city.toLowerCase().includes(term) ||
+                          s.agent.toLowerCase().includes(term),
+                      )
+                    : availableStores;
+                  return filtered.length === 0 ? (
+                    <p className="text-center text-gray-500 py-8 text-sm">
+                      לא נמצאו חנויות
+                    </p>
+                  ) : (
+                    <>
+                      {filtered.map((store) => (
+                        <button
+                          key={store.id}
+                          onClick={() => addVisit(store, selectedDay)}
+                          className="w-full p-3 bg-gray-50 rounded-xl flex items-center justify-between hover:bg-gray-100 transition-colors text-right"
+                        >
+                          <div>
+                            <p className="font-medium text-gray-900 text-sm">
+                              {store.name}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {store.city} | {store.agent}
+                            </p>
+                          </div>
+                          <div className="text-left">
+                            <p
+                              className={clsx(
+                                "font-bold text-sm",
+                                getMetricColor(store.metric_12v12),
+                              )}
+                            >
+                              {formatPercent(store.metric_12v12)}
+                            </p>
+                            <p className="text-xs text-gray-400">12v12</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()
               ) : (
-                availableTreatmentStores.map((store) => (
-                  <button
-                    key={store.id}
-                    onClick={() => {
-                      addVisitFromTreatment(store.id, selectedDay);
-                    }}
-                    className="w-full p-3 bg-red-50 rounded-xl flex items-center justify-between hover:bg-red-100 transition-colors text-right border border-red-200"
-                  >
-                    <div className="flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-red-500" />
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {store.name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {store.city} | {store.agent}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-left">
-                      <p
-                        className={clsx(
-                          "font-bold",
-                          getMetricColor(store.metric_12v12),
-                        )}
-                      >
-                        {formatPercent(store.metric_12v12)}
+                /* ── Treatment tab ── */
+                (() => {
+                  const term = modalStoreSearch.trim().toLowerCase();
+                  const filtered = term
+                    ? availableTreatmentStores.filter(
+                        (s) =>
+                          s.name.toLowerCase().includes(term) ||
+                          s.city.toLowerCase().includes(term) ||
+                          s.agent.toLowerCase().includes(term),
+                      )
+                    : availableTreatmentStores;
+                  return filtered.length === 0 ? (
+                    <div className="text-center py-8">
+                      <AlertTriangle className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500 text-sm">
+                        {term ? "לא נמצאו חנויות" : "אין חנויות בטיפול זמינות"}
                       </p>
-                      <p className="text-xs text-red-600">בטיפול</p>
                     </div>
-                  </button>
-                ))
+                  ) : (
+                    <>
+                      {filtered.map((store) => (
+                        <button
+                          key={store.id}
+                          onClick={() => addVisitFromTreatment(store.id, selectedDay)}
+                          className="w-full p-3 bg-red-50 rounded-xl flex items-center justify-between hover:bg-red-100 transition-colors text-right border border-red-200"
+                        >
+                          <div className="flex items-center gap-2">
+                            <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                            <div>
+                              <p className="font-medium text-gray-900 text-sm">
+                                {store.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {store.city} | {store.agent}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-left">
+                            <p
+                              className={clsx(
+                                "font-bold text-sm",
+                                getMetricColor(store.metric_12v12),
+                              )}
+                            >
+                              {formatPercent(store.metric_12v12)}
+                            </p>
+                            <p className="text-xs text-red-500">בטיפול</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  );
+                })()
               )}
             </div>
           </div>
