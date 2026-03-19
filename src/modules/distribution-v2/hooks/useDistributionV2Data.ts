@@ -45,16 +45,6 @@ function toDdMmYyyyFromParts(p: { y: number; m: number; d: number }): string {
 }
 
 
-/** Max YYYYMM from weekly rows (year + month) */
-function maxMonthKeyFromWeekly(rows: StoreProductWeeklyRow[]): string | null {
-  let max = "";
-  for (const r of rows) {
-    const yyyymm = `${r.year}${String(r.month).padStart(2, "0")}`;
-    if (yyyymm > max) max = yyyymm;
-  }
-  return max || null;
-}
-
 /** Default filters before first load (no date filter until data seeds). */
 function emptyFilters(): DistributionV2Filters {
   return {
@@ -137,119 +127,58 @@ interface StoreLite {
   agent: string | null;
 }
 
-/** One row from store_product_weekly (source: פירוט מוצרים) */
-interface StoreProductWeeklyRow {
+/** One row returned by the get_monthly_distribution RPC (already aggregated server-side). */
+interface MonthlyDistributionRow {
   store_external_id: number;
   store_name: string;
   product_name: string;
   product_name_normalized: string;
-  week_start_date: string;
   year: number;
   month: number;
   gross_qty: number;
   returns_qty: number;
   net_qty: number;
-  delivery_count: number;
   total_value: number;
-  updated_at?: string | null;
+  delivery_count: number;
+  city: string | null;
+  network: string | null;
+  driver: string | null;
+  agent: string | null;
+  product_external_id: number | null;
+  product_category: string | null;
+  max_updated_at: string | null;
 }
 
-/** Product lookup for join (name -> id, category) */
-interface ProductLookup {
-  external_id: number;
-  category: string | null;
-}
-
-function normalizeProductNameForMatch(name: string): string {
-  return name.trim().toLowerCase();
-}
-
-function buildRowsFromWeekly(
-  weeklyRows: StoreProductWeeklyRow[],
-  stores: StoreLite[],
-  productsByNormalizedName: Map<string, ProductLookup>,
+function buildRowsFromMonthly(
+  monthlyRows: MonthlyDistributionRow[],
 ): DistributionV2Row[] {
-  const storeMap = new Map<number, StoreLite>();
-  stores.forEach((s) => storeMap.set(s.external_id, s));
-
-  // Group by store_external_id + product_name_normalized + year + month
-  const groupKey = (r: StoreProductWeeklyRow) =>
-    `${r.store_external_id}|${r.product_name_normalized}|${r.year}|${r.month}`;
-  const aggregates = new Map<
-    string,
-    {
-      storeExternalId: number;
-      storeName: string;
-      productName: string;
-      productNameNormalized: string;
-      year: number;
-      month: number;
-      grossQty: number;
-      returnsQty: number;
-      netQty: number;
-      totalValue: number;
-    }
-  >();
-
-  for (const r of weeklyRows) {
-    const key = groupKey(r);
-    const existing = aggregates.get(key);
-    if (existing) {
-      existing.grossQty += r.gross_qty ?? 0;
-      existing.returnsQty += r.returns_qty ?? 0;
-      existing.netQty += r.net_qty ?? 0;
-      existing.totalValue += r.total_value ?? 0;
-    } else {
-      aggregates.set(key, {
-        storeExternalId: r.store_external_id,
-        storeName: r.store_name,
-        productName: r.product_name,
-        productNameNormalized: r.product_name_normalized,
-        year: r.year,
-        month: r.month,
-        grossQty: r.gross_qty ?? 0,
-        returnsQty: r.returns_qty ?? 0,
-        netQty: r.net_qty ?? 0,
-        totalValue: r.total_value ?? 0,
-      });
-    }
-  }
-
-  const rows: DistributionV2Row[] = [];
-  let id = 0;
-  const monthKey = (y: number, m: number) => `${y}${String(m).padStart(2, "0")}`;
-
-  for (const agg of Array.from(aggregates.values())) {
-    const store = storeMap.get(agg.storeExternalId);
-    const productLookup = productsByNormalizedName.get(agg.productNameNormalized);
-    const gross = agg.grossQty;
-    const returnsQty = agg.returnsQty;
-    const netQty = agg.netQty;
+  return monthlyRows.map((r, idx) => {
+    const gross = Number(r.gross_qty) || 0;
+    const returnsQty = Number(r.returns_qty) || 0;
+    const netQty = Number(r.net_qty) || 0;
     const returnsPct = gross > 0 ? (returnsQty / gross) * 100 : 0;
-    const keyForPeriod = monthKey(agg.year, agg.month);
+    const key = `${r.year}${String(r.month).padStart(2, "0")}`;
 
-    rows.push({
-      id: String(++id),
-      month: monthKeyToLabel(keyForPeriod),
-      periodDate: monthKeyToPeriodEndDisplay(keyForPeriod),
-      customerId: store?.external_id ?? agg.storeExternalId,
-      customer: store?.name ?? agg.storeName,
-      network: store?.network ?? undefined,
-      city: store?.city ?? undefined,
-      productId: productLookup?.external_id,
-      product: agg.productName,
-      productCategory: productLookup?.category ?? undefined,
+    return {
+      id: String(idx + 1),
+      month: monthKeyToLabel(key),
+      periodDate: monthKeyToPeriodEndDisplay(key),
+      customerId: r.store_external_id,
+      customer: r.store_name,
+      network: r.network ?? undefined,
+      city: r.city ?? undefined,
+      productId: r.product_external_id ?? undefined,
+      product: r.product_name,
+      productCategory: r.product_category ?? undefined,
       grossQuantity: gross,
       quantity: netQty,
       returns: returnsQty,
       returnsPct: Math.round(returnsPct * 10) / 10,
-      sales: agg.totalValue,
-      driver: store?.driver ?? undefined,
-      agent: store?.agent ?? undefined,
-    });
-  }
-
-  return rows;
+      sales: Number(r.total_value) || 0,
+      driver: r.driver ?? undefined,
+      agent: r.agent ?? undefined,
+    };
+  });
 }
 
 function getCellValue(row: DistributionV2Row, column: DistributionV2ColumnKey): string {
@@ -387,9 +316,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   // Tracks which date range is currently loaded (to avoid duplicate fetches)
   const fetchedRangeRef = useRef<{ from: string; to: string } | null>(null);
 
-  const [stores, setStores] = useState<StoreLite[]>([]);
-  const [weeklyRows, setWeeklyRows] = useState<StoreProductWeeklyRow[]>([]);
-  const [productsList, setProductsList] = useState<{ name: string; external_id: number; category: string | null }[]>([]);
+  const [monthlyRows, setMonthlyRows] = useState<MonthlyDistributionRow[]>([]);
   const [filterOptions, setFilterOptions] = useState<DistributionV2FilterOptions>({
     cities: [],
     networks: [],
@@ -457,25 +384,23 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     setCurrentPage(1);
   }, []);
 
-  /** Fetch weekly rows for a specific date range (server-side filtered). */
-  const fetchWeeklyForRange = useCallback(async (dateFrom: string, dateTo: string) => {
+  /** Fetch monthly-aggregated rows via server-side RPC. */
+  const fetchMonthlyForRange = useCallback(async (dateFrom: string, dateTo: string) => {
     if (!companyId) return;
-    // Mark range immediately to prevent duplicate concurrent fetches
     fetchedRangeRef.current = { from: dateFrom, to: dateTo };
     setLoading(true);
     setError(null);
     try {
       const supabase = createClient();
-      const weeklyRes = await supabase
-        .from("store_product_weekly")
-        .select(
-          "store_external_id, store_name, product_name, product_name_normalized, week_start_date, year, month, gross_qty, returns_qty, net_qty, delivery_count, total_value, updated_at",
-        )
-        .eq("company_id", companyId)
-        .gte("week_start_date", dateFrom)
-        .lte("week_start_date", dateTo);
-      if (weeklyRes.error) throw new Error(weeklyRes.error.message);
-      setWeeklyRows((weeklyRes.data ?? []) as StoreProductWeeklyRow[]);
+      const { data, error: rpcError } = await supabase
+        .rpc("get_monthly_distribution", {
+          p_company_id: companyId,
+          p_date_from: dateFrom,
+          p_date_to: dateTo,
+        })
+        .limit(100000);
+      if (rpcError) throw new Error(rpcError.message);
+      setMonthlyRows((data ?? []) as MonthlyDistributionRow[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "שגיאה בטעינת נתונים");
     } finally {
@@ -486,9 +411,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
   const fetchData = useCallback(async () => {
     if (!companyId) {
       setLoading(false);
-      setStores([]);
-      setWeeklyRows([]);
-      setProductsList([]);
+      setMonthlyRows([]);
       setFiltersState(emptyFilters());
       setFilterOptions({ cities: [], networks: [], drivers: [], agents: [] });
       setError(null);
@@ -501,19 +424,13 @@ export function useDistributionV2Data(): UseDistributionV2Return {
     try {
       const supabase = createClient();
 
-      // Fetch metadata in parallel: stores, products, filter options, latest available month
-      const [storesRes, productsRes, filtersRes, latestMonthRes] = await Promise.all([
+      const [storesRes, filtersRes, latestMonthRes] = await Promise.all([
         supabase
           .from("stores")
           .select("external_id, name, city, network, driver, agent")
           .eq("company_id", companyId)
           .order("name"),
-        supabase
-          .from("products")
-          .select("name, external_id, category")
-          .eq("company_id", companyId),
         supabase.from("filters").select("cities, networks, drivers, agents").eq("company_id", companyId).single(),
-        // Cheap query — one row only — to discover the latest available month
         supabase
           .from("store_product_weekly")
           .select("year, month")
@@ -526,13 +443,10 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       if (storesRes.error) throw new Error(storesRes.error.message);
 
       const st = (storesRes.data ?? []) as StoreLite[];
-      const prods = (productsRes.data ?? []) as { name: string; external_id: number; category: string | null }[];
       const filtersData = filtersRes.data as { cities?: string[]; networks?: string[]; drivers?: string[]; agents?: string[] } | null;
       const sortHe = (a: string, b: string) => String(a).localeCompare(String(b), "he");
       const uniq = (arr: (string | null)[]) => Array.from(new Set(arr.filter((x): x is string => Boolean(x)))).sort(sortHe);
 
-      setStores(st);
-      setProductsList(prods);
       setFilterOptions({
         cities: filtersData?.cities?.length ? [...filtersData.cities].sort(sortHe) : uniq(st.map((s) => s.city)),
         networks: filtersData?.networks?.length ? [...filtersData.networks].sort(sortHe) : uniq(st.map((s) => s.network)),
@@ -540,7 +454,6 @@ export function useDistributionV2Data(): UseDistributionV2Return {
         agents: filtersData?.agents?.length ? [...filtersData.agents].sort(sortHe) : uniq(st.map((s) => s.agent)),
       });
 
-      // Determine the default date range (latest month available)
       let seedFrom = "";
       let seedTo = "";
       if (!seededDateFilterRef.current && latestMonthRes.data?.[0]) {
@@ -552,9 +465,8 @@ export function useDistributionV2Data(): UseDistributionV2Return {
         setFiltersState((prev) => ({ ...prev, dateFrom: seedFrom, dateTo: seedTo }));
       }
 
-      // Fetch weekly data for the seeded range (server-side filtered)
       if (seedFrom && seedTo) {
-        await fetchWeeklyForRange(seedFrom, seedTo);
+        await fetchMonthlyForRange(seedFrom, seedTo);
       } else {
         setLoading(false);
       }
@@ -562,7 +474,7 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       setError(err instanceof Error ? err.message : "שגיאה בטעינת נתונים");
       setLoading(false);
     }
-  }, [companyId, fetchWeeklyForRange]);
+  }, [companyId, fetchMonthlyForRange]);
 
   // Initial load
   useEffect(() => {
@@ -577,8 +489,8 @@ export function useDistributionV2Data(): UseDistributionV2Return {
       fetchedRangeRef.current?.from === filters.dateFrom &&
       fetchedRangeRef.current?.to === filters.dateTo
     ) return;
-    fetchWeeklyForRange(filters.dateFrom, filters.dateTo);
-  }, [filters.dateFrom, filters.dateTo, fetchWeeklyForRange]);
+    fetchMonthlyForRange(filters.dateFrom, filters.dateTo);
+  }, [filters.dateFrom, filters.dateTo, fetchMonthlyForRange]);
 
   const setFilters = useCallback(
     (updater: (prev: DistributionV2Filters) => DistributionV2Filters) => {
@@ -590,25 +502,16 @@ export function useDistributionV2Data(): UseDistributionV2Return {
 
   const refetch = useCallback(() => {
     if (filters.dateFrom && filters.dateTo) {
-      fetchedRangeRef.current = null; // force re-fetch even for same range
-      fetchWeeklyForRange(filters.dateFrom, filters.dateTo);
+      fetchedRangeRef.current = null;
+      fetchMonthlyForRange(filters.dateFrom, filters.dateTo);
     } else {
       fetchData();
     }
-  }, [fetchData, fetchWeeklyForRange, filters.dateFrom, filters.dateTo]);
-
-  const productsByNormalizedName = useMemo(() => {
-    const map = new Map<string, ProductLookup>();
-    for (const p of productsList) {
-      const key = normalizeProductNameForMatch(p.name);
-      if (!map.has(key)) map.set(key, { external_id: p.external_id, category: p.category });
-    }
-    return map;
-  }, [productsList]);
+  }, [fetchData, fetchMonthlyForRange, filters.dateFrom, filters.dateTo]);
 
   const allRows = useMemo(
-    () => buildRowsFromWeekly(weeklyRows, stores, productsByNormalizedName),
-    [weeklyRows, stores, productsByNormalizedName],
+    () => buildRowsFromMonthly(monthlyRows),
+    [monthlyRows],
   );
 
   const rowsBeforeColumnFilter = useMemo(
@@ -754,21 +657,25 @@ export function useDistributionV2Data(): UseDistributionV2Return {
    * else end of latest month. Independent of current filters.
    */
   const dataLastDate = useMemo(() => {
-    if (weeklyRows.length === 0) return null;
+    if (monthlyRows.length === 0) return null;
     let maxTs = 0;
-    for (const r of weeklyRows) {
-      if (!r.updated_at) continue;
-      const t = new Date(r.updated_at).getTime();
+    for (const r of monthlyRows) {
+      if (!r.max_updated_at) continue;
+      const t = new Date(r.max_updated_at).getTime();
       if (!Number.isNaN(t) && t > maxTs) maxTs = t;
     }
     if (maxTs > 0) {
       const jp = jerusalemYmdFromIso(new Date(maxTs).toISOString());
       if (jp) return toDdMmYyyyFromParts(jp);
     }
-    const maxKey = maxMonthKeyFromWeekly(weeklyRows);
+    let maxKey = "";
+    for (const r of monthlyRows) {
+      const ym = `${r.year}${String(r.month).padStart(2, "0")}`;
+      if (ym > maxKey) maxKey = ym;
+    }
     if (!maxKey) return null;
     return monthKeyToPeriodEndDisplay(maxKey);
-  }, [weeklyRows]);
+  }, [monthlyRows]);
 
   return {
     isLoading,
