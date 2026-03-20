@@ -6,7 +6,11 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { processProductDeliveryExcel, type ProcessorExclusions } from "@/lib/productDeliveryExcelProcessor";
+import {
+  processProductDeliveryExcel,
+  type ProcessorExclusions,
+  normalizeExclusionValue,
+} from "@/lib/productDeliveryExcelProcessor";
 import { createClient } from "@/lib/supabase/client";
 import type {
   ProductDeliveryProcessingResult,
@@ -100,7 +104,9 @@ async function fetchExclusions(companyId: string): Promise<ProcessorExclusions> 
   };
   for (const row of data ?? []) {
     const key = typeMap[row.entity_type as string];
-    if (key) excl[key].add(row.entity_value as string);
+    if (!key) continue;
+    const canon = normalizeExclusionValue(row.entity_value);
+    if (canon) excl[key].add(canon);
   }
   return excl;
 }

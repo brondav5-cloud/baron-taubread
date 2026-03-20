@@ -92,6 +92,26 @@ function normalizeProductName(name: string): string {
   return name.trim().toLowerCase();
 }
 
+/**
+ * Stable key for exclusion matching: ignores bidirectional marks, collapses
+ * whitespace, lowercases Latin tokens, and sorts tokens so "אביחי AVICHAY"
+ * matches "AVICHAY אביחי" (common Excel vs UI ordering difference).
+ */
+export function normalizeExclusionValue(raw: unknown): string {
+  const s = String(raw ?? "")
+    .replace(/[\u200e\u200f\u202a-\u202e\ufeff]/g, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (!s) return "";
+  const tokens = s.split(" ").filter(Boolean).map((t) => {
+    const u = t.trim();
+    if (/^[A-Za-z0-9.\-_'`]+$/.test(u)) return u.toLowerCase();
+    return u;
+  });
+  tokens.sort((a, b) => a.localeCompare(b, "he", { sensitivity: "accent" }));
+  return tokens.join(" ");
+}
+
 // Parse only the year from the "תאריך מסמך" (document date) column.
 // Used to override the year derived from the week start date.
 function parseDocumentYear(v: unknown): number | null {
@@ -211,6 +231,8 @@ interface ColMap {
   totalValue:   number; // -1 if column not present (סהכ)
   monthCol:     number; // -1 if column not present — "חודש" (col C)
   lineCol:      number; // -1 if column not present — "קו" (col 18)
+  driverCol:    number; // -1 if not present — "נהג" (col 19)
+  agentCol:     number; // -1 if not present — "סוכן"
 }
 
 function findHeaderRow(rawRows: unknown[][]): {
@@ -255,11 +277,22 @@ function findHeaderRow(rawRows: unknown[][]): {
       totalValue:   findTotalValue(),
       monthCol:     findOptional("חודש"),
       lineCol:      findOptional("קו"),
+      driverCol:    findOptional("נהג"),
+      agentCol:     findOptional("סוכן"),
     };
 
     const missing: string[] = [];
     for (const [k, idx] of Object.entries(colMap)) {
-      if (k === "network" || k === "totalValue") continue; // optional columns
+      if (
+        k === "network" ||
+        k === "totalValue" ||
+        k === "monthCol" ||
+        k === "lineCol" ||
+        k === "driverCol" ||
+        k === "agentCol"
+      ) {
+        continue; // optional columns
+      }
       if (idx === -1) missing.push(REQUIRED_COLS[k as keyof typeof REQUIRED_COLS]);
     }
 
@@ -350,17 +383,28 @@ function aggregateRecords(
     if (!storeId || isNaN(storeId) || storeId <= 0) { rowsSkipped++; continue; }
 
     // Skip excluded entities (networks, drivers, stores, agents, lines)
-    if (colMap.network >= 0) {
+    if (colMap.network >= 0 && exclusions.networks.size > 0) {
       const network = String(row[colMap.network] ?? "").trim();
-      if (exclusions.networks.has(network)) { rowsSkipped++; continue; }
+      if (exclusions.networks.has(normalizeExclusionValue(network))) { rowsSkipped++; continue; }
     }
-    if (colMap.customerId >= 0 && exclusions.stores.size > 0) {
-      const storeName = String(row[colMap.customerName] ?? "").trim();
-      if (exclusions.stores.has(storeName)) { rowsSkipped++; continue; }
+    if (colMap.customerName >= 0 && exclusions.stores.size > 0) {
+      const storeNameEarly = String(row[colMap.customerName] ?? "").trim();
+      if (storeNameEarly && exclusions.stores.has(normalizeExclusionValue(storeNameEarly))) {
+        rowsSkipped++;
+        continue;
+      }
+    }
+    if (colMap.driverCol >= 0 && exclusions.drivers.size > 0) {
+      const driver = String(row[colMap.driverCol] ?? "").trim();
+      if (driver && exclusions.drivers.has(normalizeExclusionValue(driver))) { rowsSkipped++; continue; }
+    }
+    if (colMap.agentCol >= 0 && exclusions.agents.size > 0) {
+      const agent = String(row[colMap.agentCol] ?? "").trim();
+      if (agent && exclusions.agents.has(normalizeExclusionValue(agent))) { rowsSkipped++; continue; }
     }
     if (colMap.lineCol >= 0 && exclusions.lines.size > 0) {
       const line = String(row[colMap.lineCol] ?? "").trim();
-      if (exclusions.lines.has(line)) { rowsSkipped++; continue; }
+      if (line && exclusions.lines.has(normalizeExclusionValue(line))) { rowsSkipped++; continue; }
     }
 
     const storeName = String(row[colMap.customerName] ?? "").trim();

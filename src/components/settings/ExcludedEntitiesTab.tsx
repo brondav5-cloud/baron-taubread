@@ -157,6 +157,9 @@ export function ExcludedEntitiesTab() {
                 placeholder={`שם ה${TYPE_LABELS[newType]}...`}
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm font-medium bg-white"
               />
+              <p className="text-xs text-slate-400 leading-snug">
+                ההתאמה מתעלמת מרווחים מיותרים, מאותיות גדולות/קטנות באנגלית, ומסדר המילים (למשל &quot;אביחי AVICHAY&quot; ו־&quot;AVICHAY אביחי&quot; זהים).
+              </p>
             </div>
           </div>
           <div className="space-y-1.5">
