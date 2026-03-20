@@ -45,10 +45,11 @@ interface UploadState {
   } | null;
 }
 
-// Target 2MB per chunk (actual UTF-8 bytes), safely under Vercel's 4.5MB limit.
+// Target 1MB per chunk (actual UTF-8 bytes), safely under Vercel's 4.5MB limit.
+// Smaller chunks = faster DB upsert per request = less chance of 60s timeout.
 // Hebrew chars are 2 bytes in UTF-8 but count as 1 in JS string.length —
 // so we measure with TextEncoder to get the real byte count.
-const CHUNK_MAX_BYTES = 2 * 1024 * 1024;
+const CHUNK_MAX_BYTES = 1 * 1024 * 1024;
 const encoder = typeof TextEncoder !== "undefined" ? new TextEncoder() : null;
 
 function utf8ByteSize(s: string): number {
@@ -111,20 +112,47 @@ async function fetchExclusions(companyId: string): Promise<ProcessorExclusions> 
   return excl;
 }
 
+const RETRYABLE_STATUSES = new Set([503, 504, 429]);
+const MAX_RETRIES = 3;
+
 async function postChunk(
   payload: ProductDeliveryUploadPayload,
 ): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
-  const response = await fetch("/api/upload-product-deliveries", {
-    method:  "POST",
-    headers: { "Content-Type": "application/json" },
-    body:    JSON.stringify(payload),
-  });
-  if (!response.ok) {
+  let attempt = 0;
+
+  while (attempt <= MAX_RETRIES) {
+    let response: Response;
+    try {
+      response = await fetch("/api/upload-product-deliveries", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+    } catch {
+      // Network-level failure (offline, proxy error)
+      if (attempt < MAX_RETRIES) {
+        await new Promise<void>((r) => setTimeout(r, 2000 * 2 ** attempt));
+        attempt++;
+        continue;
+      }
+      return { ok: false, error: "שגיאת רשת — בדוק חיבור לאינטרנט" };
+    }
+
+    if (response.ok) return { ok: true, data: await response.json() };
+
+    // Retry on gateway timeouts / rate limits (3s → 6s → 12s)
+    if (RETRYABLE_STATUSES.has(response.status) && attempt < MAX_RETRIES) {
+      await new Promise<void>((r) => setTimeout(r, 3000 * 2 ** attempt));
+      attempt++;
+      continue;
+    }
+
     let errMsg = `שגיאת שרת (${response.status})`;
     try { const d = await response.json(); if (d?.error) errMsg = d.error; } catch { /* ignore */ }
     return { ok: false, error: errMsg };
   }
-  return { ok: true, data: await response.json() };
+
+  return { ok: false, error: "הצ'אנק נכשל לאחר מספר ניסיונות — נסה שוב" };
 }
 
 export async function uploadProductDeliveryFile(
