@@ -14,6 +14,7 @@ import {
   CheckCircle,
   Users,
   XCircle,
+  Percent,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -48,6 +49,11 @@ const TABS = [
     label: "חריגי העלאה",
     icon: XCircle,
   },
+  {
+    href: "/dashboard/settings/returns-policy",
+    label: "נורמת חזרות",
+    icon: Percent,
+  },
 ];
 
 const ADMIN_ONLY_TABS = new Set([
@@ -55,6 +61,7 @@ const ADMIN_ONLY_TABS = new Set([
   "/dashboard/settings/pricing",
   "/dashboard/settings/costs",
   "/dashboard/settings/exclusions",
+  "/dashboard/settings/returns-policy",
 ]);
 
 export function SettingsTabs() {

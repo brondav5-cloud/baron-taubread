@@ -3,6 +3,7 @@
 import { AlertTriangle, ChevronDown, ChevronRight, Minus, TrendingDown, TrendingUp } from "lucide-react";
 import { clsx } from "clsx";
 import type { StoreWeekComparison, ProductWeekComparison, TrendResult } from "@/hooks/useWeeklyComparison";
+import { SmartOrderPanel } from "@/components/weekly/SmartOrderPanel";
 
 // ── Hebrew month helpers ──────────────────────────────────────────────────────
 
@@ -35,11 +36,11 @@ export function StoreRow({
   selectedWeek,
   weeksCount = 1,
 }: {
-  store: StoreWeekComparison;
-  isExpanded: boolean;
-  onToggle: () => void;
+  store:        StoreWeekComparison;
+  isExpanded:   boolean;
+  onToggle:     () => void;
   selectedWeek?: string;
-  weeksCount?: number;
+  weeksCount?:   number;
 }) {
   const trendBg =
     store.overallTrend.direction === "down"
@@ -78,7 +79,8 @@ export function StoreRow({
       </button>
 
       {isExpanded && (
-        <div className="border-t border-gray-200 overflow-x-auto">
+        <div className="border-t border-gray-200">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-xs text-gray-500">
               <tr>
@@ -118,6 +120,15 @@ export function StoreRow({
               weeksCount={weeksCount}
             />
           </table>
+          </div>
+          {/* Smart order recommendations panel — lazy-loads when store is open */}
+          {selectedWeek && (
+            <SmartOrderPanel
+              storeExternalId={store.storeExternalId}
+              selectedWeek={selectedWeek}
+              products={store.products}
+            />
+          )}
         </div>
       )}
     </div>

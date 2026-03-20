@@ -4,7 +4,7 @@
 // ============================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AggregatedWeeklyRecord, MonthlyDistRecord } from "@/types/productDeliveries";
+import type { AggregatedWeeklyRecord, DailyDeliveryRecord, MonthlyDistRecord } from "@/types/productDeliveries";
 
 const UPSERT_CHUNK_SIZE = 500;
 
@@ -148,6 +148,70 @@ export async function upsertMonthlyDistRecords(
       .from("store_product_monthly_dist")
       .upsert(rows, {
         onConflict:       "company_id,store_external_id,product_name_normalized,year,month",
+        ignoreDuplicates: false,
+      });
+
+    if (error) return { success: false, upserted, error: error.message };
+    upserted += batch.length;
+  }
+
+  return { success: true, upserted };
+}
+
+// ============================================================
+// DELETE + UPSERT — store_product_daily
+// ============================================================
+
+export async function deleteDailyForPeriod(
+  supabase: SupabaseClient,
+  companyId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<{ success: boolean; error?: string }> {
+  const { error } = await supabase
+    .from("store_product_daily")
+    .delete()
+    .eq("company_id", companyId)
+    .gte("week_start_date", periodStart)
+    .lte("week_start_date", periodEnd);
+
+  if (error) return { success: false, error: error.message };
+  return { success: true };
+}
+
+export async function upsertDailyRecords(
+  supabase: SupabaseClient,
+  companyId: string,
+  records: DailyDeliveryRecord[],
+): Promise<{ success: boolean; upserted: number; error?: string }> {
+  if (records.length === 0) return { success: true, upserted: 0 };
+
+  let upserted = 0;
+
+  for (let i = 0; i < records.length; i += UPSERT_CHUNK_SIZE) {
+    const batch = records.slice(i, i + UPSERT_CHUNK_SIZE);
+
+    const rows = batch.map((r) => ({
+      company_id:              companyId,
+      store_external_id:       r.storeExternalId,
+      store_name:              r.storeName,
+      product_name:            r.productName,
+      product_name_normalized: r.productNameNormalized,
+      week_start_date:         r.weekStartDate,
+      day_of_week:             r.dayOfWeek,
+      year:                    r.year,
+      month:                   r.month,
+      gross_qty:               r.grossQty,
+      returns_qty:             r.returnsQty,
+      net_qty:                 r.netQty,
+      delivery_count:          r.deliveryCount,
+      updated_at:              new Date().toISOString(),
+    }));
+
+    const { error } = await supabase
+      .from("store_product_daily")
+      .upsert(rows, {
+        onConflict: "company_id,store_external_id,product_name_normalized,week_start_date,day_of_week",
         ignoreDuplicates: false,
       });
 

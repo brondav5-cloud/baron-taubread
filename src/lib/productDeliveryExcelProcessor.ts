@@ -28,6 +28,7 @@
 import { loadXlsx } from "./loadXlsx";
 import type {
   AggregatedWeeklyRecord,
+  DailyDeliveryRecord,
   MonthlyDistRecord,
   StoreDeliveryAggregate,
   ProductDeliveryProcessingResult,
@@ -233,6 +234,7 @@ interface ColMap {
   lineCol:      number; // -1 if column not present — "קו" (col 18)
   driverCol:    number; // -1 if not present — "נהג" (col 19)
   agentCol:     number; // -1 if not present — "סוכן"
+  dayOfWeekCol: number; // -1 if not present — "יום" (col 4), values 1–7
 }
 
 function findHeaderRow(rawRows: unknown[][]): {
@@ -279,6 +281,7 @@ function findHeaderRow(rawRows: unknown[][]): {
       lineCol:      findOptional("קו"),
       driverCol:    findOptional("נהג"),
       agentCol:     findOptional("סוכן"),
+      dayOfWeekCol: findOptional("יום"),
     };
 
     const missing: string[] = [];
@@ -350,6 +353,17 @@ interface DistAggData {
   uniqueDates: Set<string>;
 }
 
+interface DailyAggData {
+  storeName:   string;
+  productName: string;
+  year:        number;
+  month:       number;
+  grossQty:    number;
+  returnsQty:  number;
+  netQty:      number;
+  uniqueDates: Set<string>;
+}
+
 function aggregateRecords(
   rawRows: unknown[][],
   headerRowIndex: number,
@@ -359,6 +373,7 @@ function aggregateRecords(
 ): {
   records: AggregatedWeeklyRecord[];
   distRecords: MonthlyDistRecord[];
+  dailyRecords: DailyDeliveryRecord[];
   storeDeliveries: StoreDeliveryAggregate[];
   stats: Omit<ProductDeliveryProcessingResult["stats"], "processingTimeMs">;
 } {
@@ -366,6 +381,8 @@ function aggregateRecords(
   const storeWeekMap = new Map<string, StoreWeekData>();
   // Monthly aggregation for store_product_monthly_dist (keyed by dist year/month)
   const distMap = new Map<string, DistAggData>();
+  // Daily aggregation for store_product_daily (keyed by store|product|week|dayOfWeek)
+  const dailyMap = new Map<string, DailyAggData>();
 
   let rowsProcessed = 0;
   let rowsSkipped   = 0;
@@ -485,6 +502,33 @@ function aggregateRecords(
         totalValue:  totalVal,
         uniqueDates: dates,
       });
+    }
+
+    // Daily aggregation for store_product_daily (grouped by day_of_week)
+    const rawDay = colMap.dayOfWeekCol >= 0 ? row[colMap.dayOfWeekCol] : undefined;
+    const dayOfWeek = rawDay !== undefined && rawDay !== "" ? parseInt(String(rawDay), 10) : NaN;
+    if (!isNaN(dayOfWeek) && dayOfWeek >= 1 && dayOfWeek <= 7) {
+      const dailyKey = `${storeId}|${normalized}|${weekInfo.weekStartDate}|${dayOfWeek}`;
+      const existingDaily = dailyMap.get(dailyKey);
+      if (existingDaily) {
+        existingDaily.grossQty   += grossQty;
+        existingDaily.returnsQty += returnsQty;
+        existingDaily.netQty     += netQty;
+        if (deliveryDateRaw && grossQty > 0) existingDaily.uniqueDates.add(deliveryDateRaw);
+      } else {
+        const dates = new Set<string>();
+        if (deliveryDateRaw && grossQty > 0) dates.add(deliveryDateRaw);
+        dailyMap.set(dailyKey, {
+          storeName:   storeName,
+          productName: rawProductName,
+          year:        weekInfo.year,
+          month:       weekInfo.month,
+          grossQty,
+          returnsQty,
+          netQty,
+          uniqueDates: dates,
+        });
+      }
     }
 
     // Store-level aggregation for store_deliveries
@@ -616,9 +660,34 @@ function aggregateRecords(
 
   const storeDeliveries = [...weeklyDeliveries, ...monthlyDeliveries];
 
+  // Build daily records from dailyMap
+  // key format: "${storeId}|${normalized}|${weekStartDate}|${dayOfWeek}"
+  const dailyRecords: DailyDeliveryRecord[] = Array.from(dailyMap.entries()).map(([key, d]) => {
+    const parts      = key.split("|");
+    const sId        = parseInt(parts[0]!, 10);
+    const norm       = parts[1]!;
+    const weekDate   = parts[2]!;
+    const dow        = parseInt(parts[3]!, 10);
+    return {
+      storeExternalId:       sId,
+      storeName:             d.storeName,
+      productName:           d.productName,
+      productNameNormalized: norm,
+      weekStartDate:         weekDate,
+      dayOfWeek:             dow,
+      year:                  d.year,
+      month:                 d.month,
+      grossQty:              d.grossQty,
+      returnsQty:            d.returnsQty,
+      netQty:                d.netQty,
+      deliveryCount:         d.uniqueDates.size,
+    };
+  });
+
   return {
     records,
     distRecords,
+    dailyRecords,
     storeDeliveries,
     stats: {
       rowsProcessed,
@@ -678,7 +747,7 @@ export async function processProductDeliveryExcel(
     }
 
     const { headerRowIndex, colMap } = headerResult;
-    const { records, distRecords, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX, exclusions);
+    const { records, distRecords, dailyRecords, storeDeliveries, stats } = aggregateRecords(rawRows, headerRowIndex, colMap, XLSX, exclusions);
 
     if (records.length === 0) {
       return failure("לא נמצאו שורות תקינות בקובץ");
@@ -688,6 +757,7 @@ export async function processProductDeliveryExcel(
       success: true,
       records,
       distRecords,
+      dailyRecords,
       storeDeliveries,
       stats: { ...stats, processingTimeMs: Math.round(performance.now() - startTime) },
     };
@@ -702,8 +772,9 @@ export async function processProductDeliveryExcel(
 function failure(error: string): ProductDeliveryProcessingResult {
   return {
     success: false,
-    records:      [],
-    distRecords:  [],
+    records:        [],
+    distRecords:    [],
+    dailyRecords:   [],
     storeDeliveries: [],
     stats: {
       rowsProcessed: 0,

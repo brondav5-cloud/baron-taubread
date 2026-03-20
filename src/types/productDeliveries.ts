@@ -52,6 +52,7 @@ export interface ProductDeliveryProcessingResult {
   records: AggregatedWeeklyRecord[];         // → store_product_weekly
   distRecords: MonthlyDistRecord[];           // → store_product_monthly_dist
   storeDeliveries: StoreDeliveryAggregate[];  // → store_deliveries
+  dailyRecords: DailyDeliveryRecord[];        // → store_product_daily
   stats: {
     rowsProcessed: number;
     rowsSkipped: number;
@@ -74,11 +75,28 @@ export interface ProductDeliveryProcessingResult {
 export interface ProductDeliveryUploadPayload {
   filename: string;
   records: AggregatedWeeklyRecord[];
-  distRecords?: MonthlyDistRecord[];          // sent only on last chunk
-  storeDeliveries?: StoreDeliveryAggregate[]; // sent only on last chunk
+  distRecords?: MonthlyDistRecord[];          // sent only on dist chunks
+  dailyRecords?: DailyDeliveryRecord[];        // sent only on daily chunks
+  storeDeliveries?: StoreDeliveryAggregate[]; // sent only on final chunk
   stats: ProductDeliveryProcessingResult["stats"];
   chunkIndex: number;
   totalChunks: number;
+}
+
+// One aggregated record per store × product × week × day_of_week (for store_product_daily)
+export interface DailyDeliveryRecord {
+  storeExternalId:       number;
+  storeName:             string;
+  productName:           string;
+  productNameNormalized: string;
+  weekStartDate:         string;  // ISO "2024-01-28"
+  dayOfWeek:             number;  // 1=Sun … 7=Sat
+  year:                  number;
+  month:                 number;
+  grossQty:              number;
+  returnsQty:            number;
+  netQty:                number;
+  deliveryCount:         number;
 }
 
 // DB row shape

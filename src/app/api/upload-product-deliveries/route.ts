@@ -11,6 +11,8 @@ import {
   upsertWeeklyRecords,
   deleteMonthlyDistForPeriod,
   upsertMonthlyDistRecords,
+  deleteDailyForPeriod,
+  upsertDailyRecords,
   createProductDeliveryUpload,
   verifyProductDeliveryTotals,
 } from "@/lib/db/productDeliveries.repo";
@@ -151,6 +153,20 @@ export async function POST(request: NextRequest) {
             { status: 500 },
           );
         }
+
+        // Delete existing daily records for the same period
+        const delDaily = await deleteDailyForPeriod(
+          supabaseAdmin,
+          companyId,
+          payload.stats.periodStart,
+          payload.stats.periodEnd,
+        );
+        if (!delDaily.success) {
+          return NextResponse.json(
+            { error: delDaily.error ?? "שגיאה במחיקת נתונים יומיים ישנים" },
+            { status: 500 },
+          );
+        }
       }
 
       if (payload.stats?.distYearMonthFrom && payload.stats?.distYearMonthTo) {
@@ -195,6 +211,21 @@ export async function POST(request: NextRequest) {
       if (!distResult.success) {
         return NextResponse.json(
           { error: distResult.error ?? "שגיאה בשמירת נתוני חלוקה חודשית" },
+          { status: 500 },
+        );
+      }
+    }
+
+    // Upsert daily records on any chunk that carries them
+    if (payload.dailyRecords?.length) {
+      const dailyResult = await upsertDailyRecords(
+        supabaseAdmin,
+        companyId,
+        payload.dailyRecords,
+      );
+      if (!dailyResult.success) {
+        return NextResponse.json(
+          { error: dailyResult.error ?? "שגיאה בשמירת נתונים יומיים" },
           { status: 500 },
         );
       }
