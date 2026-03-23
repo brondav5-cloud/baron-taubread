@@ -123,29 +123,24 @@ export async function deleteDeliveriesForPeriod(
   const endYear = parseInt(periodEnd.slice(0, 4));
   const endMonth = parseInt(periodEnd.slice(5, 7));
 
-  const conditions: string[] = [];
+  // One DELETE per month — simpler query, faster execution, avoids large OR clauses.
   let y = startYear;
   let m = startMonth;
   while (y < endYear || (y === endYear && m <= endMonth)) {
-    conditions.push(`and(year.eq.${y},month.eq.${m})`);
-    m++;
-    if (m > 12) {
-      m = 1;
-      y++;
+    const { error } = await supabase
+      .from("store_deliveries")
+      .delete()
+      .eq("company_id", companyId)
+      .eq("year", y)
+      .eq("month", m);
+
+    if (error) {
+      console.error("[deliveries.repo] deleteDeliveriesForPeriod:", error);
+      return { success: false, error: error.message };
     }
-  }
 
-  if (conditions.length === 0) return { success: true };
-
-  const { error } = await supabase
-    .from("store_deliveries")
-    .delete()
-    .eq("company_id", companyId)
-    .or(conditions.join(","));
-
-  if (error) {
-    console.error("[deliveries.repo] deleteDeliveriesForPeriod:", error);
-    return { success: false, error: error.message };
+    m++;
+    if (m > 12) { m = 1; y++; }
   }
   return { success: true };
 }
@@ -168,8 +163,8 @@ export async function upsertDeliveries(
     updated_at: new Date().toISOString(),
   }));
 
-  // Upsert in batches of 500
-  const batchSize = 500;
+  // Upsert in batches of 100 — smaller batches avoid statement timeouts on large datasets.
+  const batchSize = 100;
   for (let i = 0; i < rows.length; i += batchSize) {
     const batch = rows.slice(i, i + batchSize);
     const { error } = await supabase.from("store_deliveries").upsert(batch, {
