@@ -70,6 +70,7 @@ export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, prod
         return `${day}-${m}-${y}`;
       };
       const sheetData = excessProducts.map((rec) => ({
+        "מזהה חנות": storeExternalId,
         חנות: storeName,
         מוצר: rec.productName,
         "אספקה חודשית (יח')": rec.monthlyGrossQty,
@@ -82,7 +83,7 @@ export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, prod
       }));
       const ws = XLSX.utils.json_to_sheet(sheetData);
       ws["!cols"] = [
-        { wch: 20 }, { wch: 28 }, { wch: 14 }, { wch: 14 },
+        { wch: 12 }, { wch: 20 }, { wch: 28 }, { wch: 14 }, { wch: 14 },
         { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 },
       ];
       const wb = XLSX.utils.book_new();

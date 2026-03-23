@@ -18,6 +18,7 @@ import { useStoresAndProducts } from "@/context/StoresAndProductsContext";
 import { StoreRow } from "@/components/weekly/WeeklyStoreRow";
 import { OrderModeTable } from "@/components/weekly/OrderModeTable";
 import { WeeklyHeatmap } from "@/components/weekly/WeeklyHeatmap";
+import { SmartOrderRecommendationsTable } from "@/components/weekly/SmartOrderRecommendationsTable";
 import Link from "next/link";
 
 interface StoreFilters {
@@ -35,8 +36,9 @@ export default function WeeklyPage() {
   const [expandedStores, setExpandedStores] = useState<Set<number>>(new Set());
   const [searchQuery,    setSearchQuery]    = useState("");
   const [filterTrend,    setFilterTrend]    = useState<"all" | "down" | "up" | "stable">("all");
-  const [orderMode,      setOrderMode]      = useState(false);
-  const [heatmapMode,    setHeatmapMode]    = useState(false);
+  const [orderMode,         setOrderMode]         = useState(false);
+  const [heatmapMode,       setHeatmapMode]       = useState(false);
+  const [smartOrderMode,    setSmartOrderMode]    = useState(false);
   const [showFilters,    setShowFilters]    = useState(false);
   const [storeFilters,   setStoreFilters]   = useState<StoreFilters>(EMPTY_FILTERS);
 
@@ -406,7 +408,7 @@ export default function WeeklyPage() {
           </button>
 
           {/* Expand / collapse */}
-          {!orderMode && !heatmapMode && (
+          {!orderMode && !heatmapMode && !smartOrderMode && (
             <>
               <span className="text-gray-200">|</span>
               <button onClick={expandAll}   className="text-xs text-purple-600 hover:text-purple-800 underline">פתח הכל</button>
@@ -419,7 +421,7 @@ export default function WeeklyPage() {
 
           {/* Order mode toggle */}
           <button
-            onClick={() => { setOrderMode((v) => !v); setHeatmapMode(false); }}
+            onClick={() => { setOrderMode((v) => !v); setHeatmapMode(false); setSmartOrderMode(false); }}
             className={clsx(
               "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
               orderMode
@@ -431,9 +433,23 @@ export default function WeeklyPage() {
             {orderMode ? "✕ סגור מצב הזמנה" : "מצב הזמנה"}
           </button>
 
+          {/* Smart Order recommendations mode — one screen by filter */}
+          <button
+            onClick={() => { setSmartOrderMode((v) => !v); setOrderMode(false); setHeatmapMode(false); }}
+            className={clsx(
+              "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
+              smartOrderMode
+                ? "bg-orange-600 text-white hover:bg-orange-700"
+                : "bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200",
+            )}
+          >
+            <span className="text-base leading-none">📋</span>
+            {smartOrderMode ? "✕ סגור המלצות" : "המלצות הזמנה"}
+          </button>
+
           {/* Heatmap toggle */}
           <button
-            onClick={() => { setHeatmapMode((v) => !v); setOrderMode(false); }}
+            onClick={() => { setHeatmapMode((v) => !v); setOrderMode(false); setSmartOrderMode(false); }}
             className={clsx(
               "flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-medium transition-colors",
               heatmapMode
@@ -597,6 +613,11 @@ export default function WeeklyPage() {
           stores={filteredStores}
           selectedWeek={weekly.selectedWeek}
           weeksCount={weekly.weeksCount}
+        />
+      ) : smartOrderMode ? (
+        <SmartOrderRecommendationsTable
+          stores={filteredStores}
+          selectedWeek={weekly.selectedWeek ?? ""}
         />
       ) : heatmapMode ? (
         <WeeklyHeatmap stores={filteredStores} weeksCount={weekly.weeksCount} />
