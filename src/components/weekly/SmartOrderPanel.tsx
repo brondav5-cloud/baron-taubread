@@ -4,26 +4,29 @@
 // SmartOrderPanel
 // Shows inside an expanded store row when there are products
 // with excess returns.  Collapsible, triggered by the user.
+// Export to Excel supported for order recommendations.
 // ============================================================
 
-import { useState } from "react";
-import { ChevronDown, ChevronRight, TrendingDown, AlertCircle, Loader2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ChevronDown, ChevronRight, TrendingDown, AlertCircle, Loader2, Download } from "lucide-react";
 import { clsx } from "clsx";
 import { useOrderRecommendations } from "@/hooks/useOrderRecommendations";
 import type { OrderRecommendation, PolicyBracket } from "@/lib/smartOrderEngine";
 import type { ProductWeekComparison } from "@/hooks/useWeeklyComparison";
+import { loadXlsx } from "@/lib/loadXlsx";
 
 // ── Props ─────────────────────────────────────────────────────────────────
 
 interface SmartOrderPanelProps {
   storeExternalId: number;
+  storeName:       string;
   selectedWeek:    string;
   products:        ProductWeekComparison[];  // for display names
 }
 
 // ── Main component ────────────────────────────────────────────────────────
 
-export function SmartOrderPanel({ storeExternalId, selectedWeek, products }: SmartOrderPanelProps) {
+export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, products }: SmartOrderPanelProps) {
   const [open, setOpen] = useState(false);
   const { recommendations, policy, isLoading, error } = useOrderRecommendations(
     storeExternalId,
@@ -46,7 +49,49 @@ export function SmartOrderPanel({ storeExternalId, selectedWeek, products }: Sma
   // Sort by excess severity descending
   excessProducts.sort((a, b) => b.excessReturnsPct - a.excessReturnsPct);
 
-  if (!isLoading && !error && excessProducts.length === 0) return null;
+  // Always show the panel when store is expanded, so users see the feature exists
+  const hasAnyRecommendations = recommendations.size > 0;
+  const showNoDataMessage = !isLoading && !error && !hasAnyRecommendations;
+  const showNoExcessMessage = !isLoading && !error && hasAnyRecommendations && excessProducts.length === 0;
+
+  // Open by default when we have feedback to show — prevents "disappears" feeling
+  useEffect(() => {
+    if (showNoDataMessage || showNoExcessMessage || (error != null) || excessProducts.length > 0) {
+      setOpen(true);
+    }
+  }, [showNoDataMessage, showNoExcessMessage, error, excessProducts.length]);
+
+  const handleExport = async () => {
+    if (excessProducts.length === 0) return;
+    try {
+      const XLSX = await loadXlsx();
+      const fmtDate = (d: string) => {
+        const [y, m, day] = d.split("-");
+        return `${day}-${m}-${y}`;
+      };
+      const sheetData = excessProducts.map((rec) => ({
+        חנות: storeName,
+        מוצר: rec.productName,
+        "אספקה חודשית (יח')": rec.monthlyGrossQty,
+        "חזרות חודש (יח')": rec.monthlyReturnsQty,
+        "אחוז חזרות": `${rec.monthlyReturnsRate}%`,
+        "נורמה": `${rec.normalReturnsPct}%`,
+        "חריגה": `+${rec.excessReturnsPct}%`,
+        "צמצום חודשי מומלץ": rec.monthlyReductionQty,
+        "צמצום שבועי מומלץ": rec.weeklyReductionQty,
+      }));
+      const ws = XLSX.utils.json_to_sheet(sheetData);
+      ws["!cols"] = [
+        { wch: 20 }, { wch: 28 }, { wch: 14 }, { wch: 14 },
+        { wch: 12 }, { wch: 10 }, { wch: 10 }, { wch: 16 }, { wch: 16 },
+      ];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "המלצות הזמנה");
+      XLSX.writeFile(wb, `המלצות_הזמנה_${storeName.replace(/\s+/g, "_")}_${fmtDate(selectedWeek)}.xlsx`);
+    } catch (err) {
+      console.error("Export failed:", err);
+    }
+  };
 
   return (
     <div className="border-t border-orange-200 bg-orange-50/40" dir="rtl">
@@ -66,16 +111,24 @@ export function SmartOrderPanel({ storeExternalId, selectedWeek, products }: Sma
         </span>
         {isLoading ? (
           <Loader2 className="w-3.5 h-3.5 text-orange-400 animate-spin" />
-        ) : (
-          excessProducts.length > 0 && (
-            <span className="text-xs bg-orange-200 text-orange-800 font-bold px-1.5 py-0.5 rounded-full">
-              {excessProducts.length} מוצרים
-            </span>
-          )
-        )}
+        ) : excessProducts.length > 0 ? (
+          <span className="text-xs bg-orange-200 text-orange-800 font-bold px-1.5 py-0.5 rounded-full">
+            {excessProducts.length} מוצרים
+          </span>
+        ) : null}
         <span className="mr-auto text-xs text-orange-500 font-normal">
-          {open ? "סגור" : "חזרות עודפות — לחץ לפרטים ולהמלצות"}
+          {open ? "סגור" : excessProducts.length > 0 ? "חזרות עודפות — לחץ לפרטים ולהמלצות" : "המלצות הזמנה לפי היסטוריה"}
         </span>
+        {excessProducts.length > 0 && (
+          <button
+            onClick={(e) => { e.stopPropagation(); void handleExport(); }}
+            className="flex items-center gap-1.5 text-xs font-medium text-orange-700 hover:text-orange-900 hover:bg-orange-100 rounded-lg px-2 py-1 transition-colors"
+            title="ייצא לאקסל"
+          >
+            <Download className="w-3.5 h-3.5" />
+            ייצא
+          </button>
+        )}
       </button>
 
       {/* Body */}
@@ -95,6 +148,22 @@ export function SmartOrderPanel({ storeExternalId, selectedWeek, products }: Sma
             <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>{error}</span>
+            </div>
+          )}
+
+          {showNoDataMessage && (
+            <div className="text-sm text-amber-700 bg-amber-50 rounded-lg px-4 py-3 border border-amber-200">
+              <p className="font-medium mb-1">אין עדיין נתונים להמלצות הזמנה</p>
+              <p className="text-xs text-amber-600">
+                העלה קובץ &quot;פירוט מוצרים&quot; בדף העלאת נתונים — ההמלצות יופיעו כאן.
+              </p>
+            </div>
+          )}
+
+          {showNoExcessMessage && (
+            <div className="text-sm text-green-700 bg-green-50 rounded-lg px-4 py-3 border border-green-200">
+              <p className="font-medium">אין מוצרים עם חזרות חריגות</p>
+              <p className="text-xs text-green-600 mt-1">כל המוצרים במסגרת הנורמה. מעולה!</p>
             </div>
           )}
 

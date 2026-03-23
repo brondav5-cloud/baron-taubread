@@ -125,6 +125,7 @@ export function StoreRow({
           {selectedWeek && (
             <SmartOrderPanel
               storeExternalId={store.storeExternalId}
+              storeName={store.storeName}
               selectedWeek={selectedWeek}
               products={store.products}
             />

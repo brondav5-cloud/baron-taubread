@@ -116,8 +116,8 @@ export function useOrderRecommendations(
       .eq("company_id", companyId)
       .order("min_monthly_qty", { ascending: true });
 
-    Promise.all([fetchDaily, fetchMonthly, fetchPolicy]).then(
-      ([dailyRes, monthlyRes, policyRes]) => {
+    Promise.all([fetchDaily, fetchMonthly, fetchPolicy])
+      .then(([dailyRes, monthlyRes, policyRes]) => {
         setIsLoading(false);
         if (dailyRes.error)   { setError(dailyRes.error.message);   return; }
         if (monthlyRes.error) { setError(monthlyRes.error.message); return; }
@@ -125,8 +125,11 @@ export function useOrderRecommendations(
         setDailyRows((dailyRes.data   ?? []) as DailyRow[]);
         setMonthlyRows((monthlyRes.data ?? []) as MonthlyRow[]);
         setPolicyRows((policyRes.data  ?? []) as PolicyRow[]);
-      },
-    );
+      })
+      .catch((err) => {
+        setIsLoading(false);
+        setError(err instanceof Error ? err.message : "שגיאה בטעינת נתונים");
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, storeExternalId, selectedWeek]);
 
