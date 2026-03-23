@@ -234,7 +234,6 @@ export async function POST(request: NextRequest) {
 
     // On the last chunk: replace store-level delivery aggregates → store_deliveries
     if (isLastChunk && payload.storeDeliveries?.length) {
-      console.log("[upload-product-deliveries] final chunk: storeDeliveries", payload.storeDeliveries.length);
       if (payload.stats?.periodStart && payload.stats?.periodEnd) {
         const delDeliveries = await deleteDeliveriesForPeriod(
           supabaseAdmin,
@@ -259,7 +258,6 @@ export async function POST(request: NextRequest) {
         totalValue: sd.totalValue,
         totalQuantity: sd.totalQuantity,
       }));
-      console.log("[upload-product-deliveries] upserting deliveries:", deliveries.length);
       const deliveriesResult = await upsertDeliveries(supabaseAdmin, companyId, deliveries);
       if (!deliveriesResult.success) {
         return NextResponse.json(
