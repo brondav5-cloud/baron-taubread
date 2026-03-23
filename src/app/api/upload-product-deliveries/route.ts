@@ -234,13 +234,20 @@ export async function POST(request: NextRequest) {
 
     // On the last chunk: replace store-level delivery aggregates → store_deliveries
     if (isLastChunk && payload.storeDeliveries?.length) {
+      console.log("[upload-product-deliveries] final chunk: storeDeliveries", payload.storeDeliveries.length);
       if (payload.stats?.periodStart && payload.stats?.periodEnd) {
-        await deleteDeliveriesForPeriod(
+        const delDeliveries = await deleteDeliveriesForPeriod(
           supabaseAdmin,
           companyId,
           payload.stats.periodStart,
           payload.stats.periodEnd,
         );
+        if (!delDeliveries.success) {
+          return NextResponse.json(
+            { error: delDeliveries.error ?? "שגיאה במחיקת נתוני חנויות ישנים" },
+            { status: 500 },
+          );
+        }
       }
       const deliveries: AggregatedDelivery[] = payload.storeDeliveries.map((sd) => ({
         storeExternalId: sd.storeExternalId,
@@ -252,7 +259,14 @@ export async function POST(request: NextRequest) {
         totalValue: sd.totalValue,
         totalQuantity: sd.totalQuantity,
       }));
-      await upsertDeliveries(supabaseAdmin, companyId, deliveries);
+      console.log("[upload-product-deliveries] upserting deliveries:", deliveries.length);
+      const deliveriesResult = await upsertDeliveries(supabaseAdmin, companyId, deliveries);
+      if (!deliveriesResult.success) {
+        return NextResponse.json(
+          { error: deliveriesResult.error ?? "שגיאה בשמירת נתוני חנויות" },
+          { status: 500 },
+        );
+      }
     }
 
     // Log upload record only on the last chunk
