@@ -310,7 +310,8 @@ export function useProductDeliveryUpload() {
 
       const recordChunks = buildChunks(result.records);
       const distChunks   = buildChunks(result.distRecords);
-      const totalChunks  = recordChunks.length + distChunks.length + 1;
+      const dailyChunks  = buildChunks(result.dailyRecords);
+      const totalChunks  = recordChunks.length + distChunks.length + dailyChunks.length + 1;
       let chunksSent = 0;
       let uploadResponse = null;
 
@@ -345,7 +346,20 @@ export function useProductDeliveryUpload() {
         trackProgress();
       }
 
-      // 3. Final chunk: storeDeliveries only → store_deliveries
+      // 3. Daily records → store_product_daily (chunked)
+      for (let i = 0; i < dailyChunks.length; i++) {
+        const res = await postChunk({
+          filename: file.name, records: [],
+          dailyRecords: dailyChunks[i] as import("@/types/productDeliveries").DailyDeliveryRecord[],
+          stats: result.stats,
+          chunkIndex: recordChunks.length + distChunks.length + i,
+          totalChunks,
+        });
+        if (!res.ok) throw new Error(res.error);
+        trackProgress();
+      }
+
+      // 4. Final chunk: storeDeliveries only → store_deliveries
       const finalRes = await postChunk({
         filename: file.name, records: [],
         storeDeliveries: result.storeDeliveries as StoreDeliveryAggregate[],

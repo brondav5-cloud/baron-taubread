@@ -123,7 +123,8 @@ export async function POST(request: NextRequest) {
     // A chunk must carry at least one of: records, distRecords, or be the final storeDeliveries chunk
     const hasRecords      = (payload.records?.length ?? 0) > 0;
     const hasDistRecords  = (payload.distRecords?.length ?? 0) > 0;
-    if (!hasRecords && !hasDistRecords && !isLastChunk) {
+    const hasDailyRecords = (payload.dailyRecords?.length ?? 0) > 0;
+    if (!hasRecords && !hasDistRecords && !hasDailyRecords && !isLastChunk) {
       return NextResponse.json(
         { error: "אין נתונים בבקשה" },
         { status: 400 },

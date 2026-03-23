@@ -3,6 +3,8 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
+export const maxDuration = 30;
+
 export interface WhoamiCompany {
   id: string;
   name: string;
