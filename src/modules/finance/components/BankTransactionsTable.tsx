@@ -1,7 +1,9 @@
 "use client";
 
 import { memo } from "react";
+import { ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import type { BankTransaction, BankCategory, SourceBank } from "../types";
+import type { SortBy, SortDir } from "../hooks/useBankTransactions";
 
 const BANK_LABELS: Record<SourceBank, { label: string; color: string }> = {
   leumi: { label: "לאומי", color: "bg-blue-100 text-blue-700" },
@@ -29,13 +31,26 @@ interface Props {
   transactions: BankTransaction[];
   categories?: BankCategory[];
   isLoading: boolean;
+  sortBy?: SortBy;
+  sortDir?: SortDir;
+  onSort?: (col: SortBy) => void;
   onRowClick?: (tx: BankTransaction) => void;
+}
+
+function SortIcon({ col, sortBy, sortDir }: { col: SortBy; sortBy?: SortBy; sortDir?: SortDir }) {
+  if (sortBy !== col) return <ChevronsUpDown className="w-3.5 h-3.5 text-gray-300 inline ml-1" />;
+  return sortDir === "asc"
+    ? <ChevronUp className="w-3.5 h-3.5 text-blue-500 inline ml-1" />
+    : <ChevronDown className="w-3.5 h-3.5 text-blue-500 inline ml-1" />;
 }
 
 export const BankTransactionsTable = memo(function BankTransactionsTable({
   transactions,
   categories = [],
   isLoading,
+  sortBy,
+  sortDir,
+  onSort,
   onRowClick,
 }: Props) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
@@ -68,14 +83,34 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
         <table className="w-full text-sm text-right" dir="rtl">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold uppercase tracking-wide">
-              <th className="px-4 py-3 whitespace-nowrap">תאריך</th>
+              <th
+                className="px-4 py-3 whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("date")}
+              >
+                תאריך<SortIcon col="date" sortBy={sortBy} sortDir={sortDir} />
+              </th>
               <th className="px-4 py-3">תיאור</th>
               <th className="px-4 py-3 hidden md:table-cell">אסמכתא</th>
-              <th className="px-4 py-3 text-left whitespace-nowrap">חובה ₪</th>
-              <th className="px-4 py-3 text-left whitespace-nowrap">זכות ₪</th>
-              <th className="px-4 py-3 text-left whitespace-nowrap hidden lg:table-cell">יתרה ₪</th>
+              <th
+                className="px-4 py-3 text-left whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("debit")}
+              >
+                חובה ₪<SortIcon col="debit" sortBy={sortBy} sortDir={sortDir} />
+              </th>
+              <th
+                className="px-4 py-3 text-left whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("credit")}
+              >
+                זכות ₪<SortIcon col="credit" sortBy={sortBy} sortDir={sortDir} />
+              </th>
+              <th
+                className="px-4 py-3 text-left whitespace-nowrap hidden lg:table-cell cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("balance")}
+              >
+                יתרה ₪<SortIcon col="balance" sortBy={sortBy} sortDir={sortDir} />
+              </th>
               <th className="px-4 py-3 hidden lg:table-cell">קטגוריה</th>
-          <th className="px-4 py-3 hidden md:table-cell">בנק</th>
+              <th className="px-4 py-3 hidden md:table-cell">בנק</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">

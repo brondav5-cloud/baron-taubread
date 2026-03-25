@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Plus, Trash2, Zap, ChevronRight, Loader2, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { BankCategory, CategoryType } from "@/modules/finance/types";
 
 interface CategoryRule {
@@ -35,7 +37,94 @@ const MATCH_TYPE_LABELS: Record<string, string> = {
   regex: "Regex",
 };
 
+// ─── Smart autocomplete for rule match_value fields ──────────────────────────
+
+interface RuleValueInputProps {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  className?: string;
+  companyId: string | null;
+  matchField: string;
+}
+
+function RuleValueInput({ value, onChange, placeholder, className, companyId, matchField }: RuleValueInputProps) {
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const fetchSuggestions = useCallback(async (text: string, field: string, cid: string) => {
+    if (text.length < 2 || !cid) { setSuggestions([]); setOpen(false); return; }
+    const col = ["description", "details", "reference", "operation_code"].includes(field) ? field : "description";
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("bank_transactions")
+      .select(col)
+      .eq("company_id", cid)
+      .ilike(col, `%${text}%`)
+      .limit(30);
+    if (data) {
+      const unique = Array.from(new Set(
+        (data as unknown as Record<string, string>[]).map((r) => r[col]).filter(Boolean)
+      )).slice(0, 8) as string[];
+      setSuggestions(unique);
+      setOpen(unique.length > 0);
+    }
+  }, []);
+
+  const handleChange = (v: string) => {
+    onChange(v);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      if (companyId) fetchSuggestions(v, matchField, companyId);
+    }, 280);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative flex-1">
+      <input
+        value={value}
+        onChange={(e) => handleChange(e.target.value)}
+        onFocus={() => value.length >= 2 && suggestions.length > 0 && setOpen(true)}
+        placeholder={placeholder}
+        className={className}
+        autoComplete="off"
+      />
+      {open && suggestions.length > 0 && (
+        <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg text-sm overflow-hidden">
+          {suggestions.map((s, i) => (
+            <li
+              key={i}
+              onMouseDown={(e) => { e.preventDefault(); onChange(s); setOpen(false); setSuggestions([]); }}
+              className="px-3 py-2 cursor-pointer hover:bg-blue-50 text-gray-700 truncate border-b border-gray-50 last:border-0"
+            >
+              {s}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function CategoriesPage() {
+  const { state } = useSupabaseAuth();
+  const companyId = state.status === "authed" ? state.user.selectedCompanyId : null;
+
   const [categories, setCategories] = useState<BankCategory[]>([]);
   const [rules, setRules] = useState<CategoryRule[]>([]);
   const [loading, setLoading] = useState(true);
@@ -226,11 +315,13 @@ export default function CategoriesPage() {
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
-            <input
+            <RuleValueInput
               value={newRuleValue}
-              onChange={(e) => setNewRuleValue(e.target.value)}
+              onChange={setNewRuleValue}
               placeholder='כלל אוטומטי — "מכיל..." (אופציונלי)'
-              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              companyId={companyId}
+              matchField={newRuleField}
             />
           </div>
           <button
@@ -291,8 +382,13 @@ export default function CategoriesPage() {
                             className="text-xs border-0 bg-transparent focus:outline-none">
                             {Object.entries(MATCH_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                           </select>
-                          <input value={editValue} onChange={(e) => setEditValue(e.target.value)}
-                            className="text-xs border border-blue-200 rounded px-1 w-24 focus:outline-none" />
+                          <RuleValueInput
+                            value={editValue}
+                            onChange={setEditValue}
+                            className="text-xs border border-blue-200 rounded px-1 w-28 focus:outline-none bg-white"
+                            companyId={companyId}
+                            matchField={editField}
+                          />
                           <button onClick={handleSaveRule} disabled={savingEdit} className="text-green-600 hover:text-green-700">
                             {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
                           </button>
@@ -321,17 +417,23 @@ export default function CategoriesPage() {
                 {addingRuleCatId === cat.id ? (
                   <div className="mt-2 flex items-center gap-2">
                     <select value={addRuleField} onChange={(e) => setAddRuleField(e.target.value)}
-                      className="border border-gray-200 rounded px-2 py-1 text-xs bg-white focus:outline-none w-24">
+                      className="border border-gray-200 rounded px-2 py-1 text-xs bg-white focus:outline-none w-24 shrink-0">
                       {Object.entries(MATCH_FIELD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
-                    <input value={addRuleValue} onChange={(e) => setAddRuleValue(e.target.value)}
-                      placeholder='ערך...' className="border border-gray-200 rounded px-2 py-1 text-xs flex-1 focus:outline-none" />
+                    <RuleValueInput
+                      value={addRuleValue}
+                      onChange={setAddRuleValue}
+                      placeholder="ערך..."
+                      className="w-full border border-gray-200 rounded px-2 py-1 text-xs focus:outline-none"
+                      companyId={companyId}
+                      matchField={addRuleField}
+                    />
                     <button onClick={() => handleAddRule(cat.id)} disabled={savingAddRule || !addRuleValue.trim()}
-                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
+                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50 shrink-0">
                       {savingAddRule ? <Loader2 className="w-3 h-3 animate-spin" /> : "הוסף"}
                     </button>
                     <button onClick={() => { setAddingRuleCatId(null); setAddRuleValue(""); }}
-                      className="text-gray-400 hover:text-gray-600"><X className="w-3 h-3" /></button>
+                      className="text-gray-400 hover:text-gray-600 shrink-0"><X className="w-3 h-3" /></button>
                   </div>
                 ) : (
                   <button onClick={() => { setAddingRuleCatId(cat.id); setAddRuleField("description"); setAddRuleValue(""); }}

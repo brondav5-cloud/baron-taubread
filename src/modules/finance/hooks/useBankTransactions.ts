@@ -12,12 +12,16 @@ export interface BankTransactionFilters {
   bankAccountId: string;   // "" = all
   sourceBank: SourceBank | "";
   search: string;
+  categoryId: string;       // "" = all, "none" = unclassified
 }
+
+export type SortBy = "date" | "debit" | "credit" | "balance";
+export type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 50;
 
 function emptyFilters(): BankTransactionFilters {
-  return { dateFrom: "", dateTo: "", bankAccountId: "", sourceBank: "", search: "" };
+  return { dateFrom: "", dateTo: "", bankAccountId: "", sourceBank: "", search: "", categoryId: "" };
 }
 
 export interface UseBankTransactionsReturn {
@@ -28,10 +32,13 @@ export interface UseBankTransactionsReturn {
   page: number;
   pageSize: number;
   filters: BankTransactionFilters;
+  sortBy: SortBy;
+  sortDir: SortDir;
   isLoading: boolean;
   error: string | null;
   setPage: (p: number) => void;
   setFilters: (f: BankTransactionFilters | ((prev: BankTransactionFilters) => BankTransactionFilters)) => void;
+  setSort: (col: SortBy) => void;
   refresh: () => void;
 }
 
@@ -47,6 +54,8 @@ export function useBankTransactions(): UseBankTransactionsReturn {
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFiltersState] = useState<BankTransactionFilters>(emptyFilters);
+  const [sortBy, setSortBy] = useState<SortBy>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Use a state counter (not ref) so that refresh() triggers useEffect even when page is already 0
@@ -59,6 +68,18 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     },
     []
   );
+
+  const setSort = useCallback((col: SortBy) => {
+    setSortBy((prev) => {
+      if (prev === col) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+        return prev;
+      }
+      setSortDir("desc");
+      return col;
+    });
+    setPage(0);
+  }, []);
 
   const refresh = useCallback(() => {
     setRefreshCounter((c) => c + 1);
@@ -94,7 +115,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
       .from("bank_transactions")
       .select("*", { count: "exact" })
       .eq("company_id", selectedCompanyId)
-      .order("date", { ascending: false })
+      .order(sortBy, { ascending: sortDir === "asc", nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(from, to);
 
@@ -105,6 +126,11 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     if (filters.search.trim()) {
       const s = `%${filters.search.trim()}%`;
       query = query.or(`description.ilike.${s},details.ilike.${s},reference.ilike.${s}`);
+    }
+    if (filters.categoryId === "none") {
+      query = query.is("category_id", null);
+    } else if (filters.categoryId) {
+      query = query.eq("category_id", filters.categoryId);
     }
 
     query.then(({ data, count, error: qErr }) => {
@@ -119,7 +145,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     });
 
     return () => { cancelled = true; };
-  }, [user, selectedCompanyId, page, filters, refreshCounter]);
+  }, [user, selectedCompanyId, page, filters, sortBy, sortDir, refreshCounter]);
 
   return {
     transactions,
@@ -129,10 +155,13 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     page,
     pageSize: PAGE_SIZE,
     filters,
+    sortBy,
+    sortDir,
     isLoading,
     error,
     setPage,
     setFilters,
+    setSort,
     refresh,
   };
 }

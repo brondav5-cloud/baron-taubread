@@ -209,6 +209,23 @@ export default function FinancePage() {
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
         />
 
+        {/* Category filter */}
+        {hook.categories.length > 0 && (
+          <select
+            value={hook.filters.categoryId}
+            onChange={(e) =>
+              hook.setFilters((f) => ({ ...f, categoryId: e.target.value }))
+            }
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          >
+            <option value="">כל הקטגוריות</option>
+            <option value="none">ללא קטגוריה</option>
+            {hook.categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+
         {/* Refresh */}
         <button
           onClick={hook.refresh}
@@ -260,6 +277,9 @@ export default function FinancePage() {
         transactions={hook.transactions}
         categories={hook.categories}
         isLoading={hook.isLoading}
+        sortBy={hook.sortBy}
+        sortDir={hook.sortDir}
+        onSort={hook.setSort}
         onRowClick={setSelectedTx}
       />
 
