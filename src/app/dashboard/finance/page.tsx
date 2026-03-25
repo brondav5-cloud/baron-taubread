@@ -26,6 +26,18 @@ const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
   { value: "mizrahi", label: "מזרחי" },
 ];
 
+const MONTH_NAMES = [
+  "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
+  "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
+];
+
+function getMonthRange(year: number, month: number): { from: string; to: string } {
+  const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  const to = `${year}-${String(month + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  return { from, to };
+}
+
 export default function FinancePage() {
   const hook = useBankTransactions();
   const { state } = useSupabaseAuth();
@@ -35,6 +47,8 @@ export default function FinancePage() {
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const currentYear = new Date().getFullYear();
 
   const totalPages = Math.ceil(hook.totalCount / hook.pageSize);
 
@@ -160,63 +174,107 @@ export default function FinancePage() {
       </div>
 
       {/* ── Filters bar ────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap gap-2 items-center">
-        {/* Account selector */}
-        {hook.accounts.length > 1 && (
+      <div className="flex flex-col gap-2">
+        {/* Quick month selector */}
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-xs text-gray-400 font-medium ml-1">חודש מהיר:</span>
+          {MONTH_NAMES.map((name, idx) => {
+            const isActive = selectedMonth === idx;
+            return (
+              <button
+                key={idx}
+                onClick={() => {
+                  if (isActive) {
+                    setSelectedMonth(null);
+                    hook.setFilters((f) => ({ ...f, dateFrom: "", dateTo: "" }));
+                  } else {
+                    const { from, to } = getMonthRange(currentYear, idx);
+                    setSelectedMonth(idx);
+                    hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  isActive
+                    ? "bg-blue-500 text-white border-blue-500"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600"
+                }`}
+              >
+                {name}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Main filter row */}
+        <div className="flex flex-wrap gap-2 items-center">
+          {/* Account selector */}
+          {hook.accounts.length > 1 && (
+            <select
+              value={hook.filters.bankAccountId}
+              onChange={(e) =>
+                hook.setFilters((f) => ({ ...f, bankAccountId: e.target.value }))
+              }
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+            >
+              <option value="">כל החשבונות</option>
+              {hook.accounts.map((a) => (
+                <option key={a.id} value={a.id}>{a.display_name}</option>
+              ))}
+            </select>
+          )}
+
+          {/* Bank filter */}
           <select
-            value={hook.filters.bankAccountId}
+            value={hook.filters.sourceBank}
             onChange={(e) =>
-              hook.setFilters((f) => ({ ...f, bankAccountId: e.target.value }))
+              hook.setFilters((f) => ({ ...f, sourceBank: e.target.value as SourceBank | "" }))
             }
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
           >
-            <option value="">כל החשבונות</option>
-            {hook.accounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.display_name}</option>
+            {BANK_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
-        )}
 
-        {/* Bank filter */}
-        <select
-          value={hook.filters.sourceBank}
-          onChange={(e) =>
-            hook.setFilters((f) => ({ ...f, sourceBank: e.target.value as SourceBank | "" }))
-          }
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-        >
-          {BANK_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
+          {/* Date from */}
+          <div className="flex flex-col gap-0.5">
+            <label className="text-xs text-gray-400 font-medium">מתאריך</label>
+            <input
+              type="date"
+              value={hook.filters.dateFrom}
+              onChange={(e) => {
+                setSelectedMonth(null);
+                hook.setFilters((f) => ({ ...f, dateFrom: e.target.value }));
+              }}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+            />
+          </div>
 
-        {/* Date from */}
-        <input
-          type="date"
-          value={hook.filters.dateFrom}
-          onChange={(e) =>
-            hook.setFilters((f) => ({ ...f, dateFrom: e.target.value }))
-          }
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-        />
-        <span className="text-gray-400 text-sm">—</span>
-        <input
-          type="date"
-          value={hook.filters.dateTo}
-          onChange={(e) =>
-            hook.setFilters((f) => ({ ...f, dateTo: e.target.value }))
-          }
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-        />
+          <span className="text-gray-400 text-sm mt-4">—</span>
 
-        {/* Refresh */}
-        <button
-          onClick={hook.refresh}
-          className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors"
-          title="רענן"
-        >
-          <RefreshCw className={`w-4 h-4 ${hook.isLoading ? "animate-spin" : ""}`} />
-        </button>
+          {/* Date to */}
+          <div className="flex flex-col gap-0.5">
+            <label className="text-xs text-gray-400 font-medium">עד תאריך</label>
+            <input
+              type="date"
+              value={hook.filters.dateTo}
+              onChange={(e) => {
+                setSelectedMonth(null);
+                hook.setFilters((f) => ({ ...f, dateTo: e.target.value }));
+              }}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+            />
+          </div>
+
+          {/* Refresh */}
+          <button
+            onClick={hook.refresh}
+            className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors mt-4"
+            title="רענן"
+          >
+            <RefreshCw className={`w-4 h-4 ${hook.isLoading ? "animate-spin" : ""}`} />
+          </button>
+        </div>
       </div>
 
       {/* ── File history + accounts panel ──────────────────────────────────── */}

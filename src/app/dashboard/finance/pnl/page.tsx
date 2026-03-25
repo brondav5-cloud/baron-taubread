@@ -1,17 +1,19 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronRight, Loader2, TrendingUp, TrendingDown, Minus,
-  Download, BarChart3,
+  Download, BarChart3, X, ChevronDown, ChevronUp, Calendar,
 } from "lucide-react";
 import Link from "next/link";
 import {
   PieChart, Pie, Cell, Tooltip as ReTooltip,
-  ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis,
+  CartesianGrid,
 } from "recharts";
 import { loadXlsx } from "@/lib/loadXlsx";
 import type { PnlResponse, PnlCategoryLine } from "@/app/api/finance/pnl/route";
+import type { CategoryTransactionsResponse, CategoryTransaction } from "@/app/api/finance/pnl/category/route";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -60,7 +62,14 @@ function DeltaBadge({ curr, prev }: { curr: number; prev: number }) {
 
 // ─── PnL Section ─────────────────────────────────────────────────────────────
 
-function PnlSection({ lines, months, type }: { lines: PnlCategoryLine[]; months: string[]; type: string }) {
+function PnlSection({
+  lines, months, type, onRowClick,
+}: {
+  lines: PnlCategoryLine[];
+  months: string[];
+  type: string;
+  onRowClick: (line: PnlCategoryLine) => void;
+}) {
   const style = TYPE_STYLE[type] ?? TYPE_STYLE["uncategorized"]!;
   const group = lines.filter((l) => l.category_type === type);
   if (group.length === 0) return null;
@@ -91,8 +100,16 @@ function PnlSection({ lines, months, type }: { lines: PnlCategoryLine[]; months:
           )}
           <tbody className="divide-y divide-gray-100/50">
             {group.map((line) => (
-              <tr key={line.category_id ?? "__none__"} className="bg-white/40 hover:bg-white/70 transition-colors">
-                <td className="px-4 py-2.5 font-medium text-gray-700">{line.category_name}</td>
+              <tr
+                key={line.category_id ?? "__none__"}
+                onClick={() => onRowClick(line)}
+                className="bg-white/40 hover:bg-white/80 transition-colors cursor-pointer group"
+                title="לחץ לפירוט תנועות"
+              >
+                <td className="px-4 py-2.5 font-medium text-gray-700">
+                  <span className="group-hover:underline">{line.category_name}</span>
+                  <span className="mr-1.5 text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">←</span>
+                </td>
                 {showMonths && months.map((ym) => (
                   <td key={ym} className={`px-3 py-2.5 text-center font-mono text-xs ${
                     (line.monthly[ym] ?? 0) !== 0 ? style.text : "text-gray-300"}`}>
@@ -195,6 +212,231 @@ function ExpensePie({ lines }: { lines: PnlCategoryLine[] }) {
   );
 }
 
+// ─── Category Drill-Down Modal ────────────────────────────────────────────────
+
+const BANK_LABELS: Record<string, string> = {
+  leumi: "לאומי", hapoalim: "הפועלים", mizrahi: "מזרחי",
+};
+
+function CategoryDrillModal({
+  line, year, onClose,
+}: {
+  line: PnlCategoryLine;
+  year: number;
+  onClose: () => void;
+}) {
+  const style = TYPE_STYLE[line.category_type] ?? TYPE_STYLE["uncategorized"]!;
+  const [data, setData] = useState<CategoryTransactionsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeMonth, setActiveMonth] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const overlayRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    const param = line.category_id
+      ? `categoryId=${line.category_id}`
+      : "categoryId=";
+    fetch(`/api/finance/pnl/category?year=${year}&${param}`)
+      .then((r) => r.json())
+      .then((d) => { setData(d as CategoryTransactionsResponse); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [line, year]);
+
+  // Close on overlay click
+  const handleOverlay = (e: React.MouseEvent) => {
+    if (e.target === overlayRef.current) onClose();
+  };
+
+  // Close on Escape
+  useEffect(() => {
+    const fn = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", fn);
+    return () => window.removeEventListener("keydown", fn);
+  }, [onClose]);
+
+  // Build monthly chart data from the line (already available)
+  const chartData = Object.entries(line.monthly)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, amount]) => ({
+      month: monthLabel(ym),
+      ym,
+      amount: Math.abs(amount),
+    }));
+
+  // Filter transactions by active month
+  const txAll = data?.transactions ?? [];
+  const txFiltered = activeMonth
+    ? txAll.filter((t) => t.date.slice(0, 7) === activeMonth)
+    : txAll;
+  const txSorted = [...txFiltered].sort((a, b) =>
+    sortDir === "desc" ? b.amount - a.amount : a.amount - b.amount
+  );
+
+  const barColor = line.category_type === "expense" ? "#ef4444"
+    : line.category_type === "income" ? "#22c55e"
+    : line.category_type === "transfer" ? "#3b82f6"
+    : "#9ca3af";
+
+  return (
+    <div
+      ref={overlayRef}
+      onClick={handleOverlay}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
+      dir="rtl"
+    >
+      <div className="bg-white w-full sm:max-w-2xl max-h-[92vh] sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className={`flex items-center justify-between px-5 py-4 ${style.bg} border-b border-gray-100`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-3 h-3 rounded-full ${
+              line.category_type === "expense" ? "bg-red-400" :
+              line.category_type === "income" ? "bg-green-400" :
+              line.category_type === "transfer" ? "bg-blue-400" : "bg-gray-300"
+            }`} />
+            <div>
+              <h2 className={`font-bold text-base ${style.text}`}>{line.category_name}</h2>
+              <p className="text-xs text-gray-400">{style.label} · {year}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`font-bold text-lg ${style.text}`}>{fmt(line.total)}</span>
+            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/5 text-gray-400">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto flex-1">
+          {/* Monthly Bar Chart */}
+          {chartData.length > 1 && (
+            <div className="px-5 pt-5 pb-2">
+              <p className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-1.5">
+                <BarChart3 className="w-3.5 h-3.5" />
+                פילוח חודשי — לחץ על עמודה לסינון
+              </p>
+              <ResponsiveContainer width="100%" height={160}>
+                <BarChart data={chartData} barCategoryGap="30%" onClick={(d) => {
+                  if (d?.activePayload) {
+                    const ym = (d.activePayload[0]?.payload as { ym: string }).ym;
+                    setActiveMonth((prev) => prev === ym ? null : ym);
+                  }
+                }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 9, fill: "#d1d5db" }} axisLine={false} tickLine={false}
+                    tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}k`} />
+                  <ReTooltip
+                    formatter={(val: number) => [fmt(val), line.category_name]}
+                    contentStyle={{ fontSize: 12, direction: "rtl", borderRadius: 8 }}
+                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                  />
+                  <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                    {chartData.map((entry) => (
+                      <Cell
+                        key={entry.ym}
+                        fill={activeMonth === entry.ym ? barColor : `${barColor}99`}
+                        cursor="pointer"
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+
+          {/* Month filter chips */}
+          {chartData.length > 0 && (
+            <div className="px-5 py-2 flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveMonth(null)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  !activeMonth ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-500 hover:border-gray-400"
+                }`}
+              >
+                הכל
+              </button>
+              {chartData.map(({ month, ym }) => (
+                <button
+                  key={ym}
+                  onClick={() => setActiveMonth((prev) => prev === ym ? null : ym)}
+                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                    activeMonth === ym ? `${barColor === "#ef4444" ? "bg-red-500 border-red-500" : barColor === "#22c55e" ? "bg-green-500 border-green-500" : "bg-blue-500 border-blue-500"} text-white` : "border-gray-200 text-gray-500 hover:border-gray-400"
+                  }`}
+                >
+                  {month}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="px-5 pb-5 pt-2">
+            {/* Transactions header */}
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5" />
+                תנועות {activeMonth ? `— ${monthLabel(activeMonth)}` : ""}
+                {!loading && <span className="text-gray-300 font-normal">({txFiltered.length})</span>}
+              </p>
+              {txFiltered.length > 1 && (
+                <button
+                  onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
+                  className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-600"
+                >
+                  סכום {sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
+                </button>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex items-center justify-center gap-2 py-10 text-gray-400">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">טוען תנועות...</span>
+              </div>
+            ) : txSorted.length === 0 ? (
+              <div className="text-center py-8 text-gray-300 text-sm">אין תנועות</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {txSorted.map((tx: CategoryTransaction) => (
+                  <div key={tx.id} className="py-2.5 flex items-start gap-3">
+                    <div className="shrink-0 text-xs text-gray-400 w-16 pt-0.5 font-mono">
+                      {tx.date.slice(5).split("-").reverse().join("/")}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-700 font-medium truncate leading-tight">
+                        {tx.supplier_name ?? tx.description}
+                      </p>
+                      {tx.details && tx.details !== tx.description && (
+                        <p className="text-xs text-gray-400 truncate mt-0.5">{tx.details}</p>
+                      )}
+                      {tx.notes && (
+                        <p className="text-xs text-blue-500 mt-0.5 truncate">{tx.notes}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {tx.source_bank && (
+                          <span className="text-xs text-gray-300">
+                            {BANK_LABELS[tx.source_bank] ?? tx.source_bank}
+                          </span>
+                        )}
+                        {tx.reference && (
+                          <span className="text-xs text-gray-300">#{tx.reference}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className={`shrink-0 font-mono font-semibold text-sm ${style.text}`}>
+                      {fmt(tx.amount)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function PnlPage() {
@@ -206,6 +448,7 @@ export default function PnlPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPie, setShowPie] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [drillLine, setDrillLine] = useState<PnlCategoryLine | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -328,6 +571,15 @@ export default function PnlPage() {
         <div className="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-sm">{error}</div>
       )}
 
+      {/* Category drill-down modal */}
+      {drillLine && (
+        <CategoryDrillModal
+          line={drillLine}
+          year={year}
+          onClose={() => setDrillLine(null)}
+        />
+      )}
+
       {data && !loading && (
         <>
           {/* ── KPI Cards ── */}
@@ -440,6 +692,7 @@ export default function PnlPage() {
                     lines={data.lines}
                     months={data.months}
                     type={type}
+                    onRowClick={setDrillLine}
                   />
                 ))}
               </div>
