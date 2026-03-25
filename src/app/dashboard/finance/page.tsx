@@ -9,6 +9,7 @@ import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFile
 import { TransactionDetailModal } from "@/modules/finance/components/TransactionDetailModal";
 import { FileHistoryPanel } from "@/modules/finance/components/FileHistoryPanel";
 import { AccountsManagerPanel } from "@/modules/finance/components/AccountsManagerPanel";
+import { BalanceChart } from "@/modules/finance/components/BalanceChart";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import type { SourceBank, BankTransaction } from "@/modules/finance/types";
@@ -221,6 +222,11 @@ export default function FinancePage() {
             <AccountsManagerPanel />
           </div>
         </div>
+      )}
+
+      {/* ── Balance chart ──────────────────────────────────────────────────── */}
+      {hook.accounts.length > 0 && (
+        <BalanceChart accounts={hook.accounts} />
       )}
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
