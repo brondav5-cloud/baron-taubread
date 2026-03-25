@@ -41,7 +41,7 @@ function findTransactionTable(
     // Find a row that has both "תאריך" and "חובה"/"זכות"
     let headerIdx = -1;
     for (let i = 0; i < Math.min(10, allRows.length); i++) {
-      const text = allRows[i].textContent ?? "";
+      const text = allRows[i]?.textContent ?? "";
       if (text.includes("תאריך") && (text.includes("חובה") || text.includes("זכות"))) {
         headerIdx = i;
         break;
@@ -51,12 +51,12 @@ function findTransactionTable(
     if (headerIdx === -1) continue;
 
     const headers = Array.from(
-      allRows[headerIdx].querySelectorAll("th, td")
+      allRows[headerIdx]?.querySelectorAll("th, td") ?? []
     ).map((c) => c.textContent?.trim() ?? "");
 
     const rows: string[][] = [];
     for (let i = headerIdx + 1; i < allRows.length; i++) {
-      const cells = Array.from(allRows[i].querySelectorAll("td")).map(
+      const cells = Array.from(allRows[i]?.querySelectorAll("td") ?? []).map(
         (c) => c.textContent?.trim() ?? ""
       );
       if (cells.length >= 3 && cells.some((c) => c.length > 0)) {
@@ -110,14 +110,14 @@ export async function parseMizrahiXLS(file: File): Promise<BankParseResult> {
   let account_number = "";
   const bodyText = doc.body?.textContent ?? "";
   const m = bodyText.match(/\b(\d{3}-\d{5,})\b/);
-  if (m) account_number = m[1];
+  if (m) account_number = m[1] ?? "";
 
   const transactions: ParsedBankTransaction[] = [];
   let dateFrom: string | undefined;
   let dateTo: string | undefined;
 
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
+    const row = rows[i] ?? [];
     const dateRaw = col.date >= 0 ? (row[col.date] ?? "") : "";
     if (!dateRaw || (!dateRaw.includes("/") && !dateRaw.includes("."))) continue;
 

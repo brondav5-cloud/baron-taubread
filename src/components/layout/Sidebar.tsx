@@ -26,6 +26,7 @@ import {
   Table2,
   Wallet,
   FileText,
+  Building2,
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -54,7 +55,8 @@ interface NavItem {
     | "upload"
     | "settings"
     | "expenses"
-    | "meetings";
+    | "meetings"
+    | "finance";
   badge?: string;
   badgeColor?: string;
 }
@@ -195,6 +197,12 @@ const navigation: NavSection[] = [
         module: "expenses",
         badge: "חדש",
         badgeColor: "bg-purple-100 text-purple-700",
+      },
+      {
+        label: "תנועות בנק",
+        href: "/dashboard/finance",
+        icon: Building2,
+        module: "finance",
       },
     ],
   },

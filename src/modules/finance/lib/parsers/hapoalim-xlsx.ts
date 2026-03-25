@@ -30,7 +30,7 @@ function parseHapoalimDate(val: unknown): string | null {
   if (typeof val === "string" && val.includes("/")) {
     const parts = val.split("/");
     if (parts.length === 3) {
-      const [dd, mm, yyyy] = parts;
+      const [dd, mm, yyyy] = parts as [string, string, string];
       return `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
     }
   }
@@ -56,8 +56,8 @@ export async function parseHapoalimXLSX(file: File): Promise<BankParseResult> {
     cellDates: true,
   });
 
-  const sheetName = workbook.SheetNames[0];
-  const sheet = workbook.Sheets[sheetName];
+  const sheetName = workbook.SheetNames[0] ?? "";
+  const sheet = workbook.Sheets[sheetName] ?? {};
 
   // sheet_to_json with header:1 → array of arrays, preserving raw values
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
@@ -68,7 +68,7 @@ export async function parseHapoalimXLSX(file: File): Promise<BankParseResult> {
   // Dynamically find header row
   let headerIndex = -1;
   for (let i = 0; i < Math.min(10, rows.length); i++) {
-    const cells = rows[i].map((c) => String(c));
+    const cells = (rows[i] ?? []).map((c) => String(c));
     const hasDate = cells.some((c) => c.includes("תאריך"));
     const hasAmount = cells.some((c) => c.includes("חובה") || c.includes("זכות"));
     if (hasDate && hasAmount) {
@@ -85,7 +85,7 @@ export async function parseHapoalimXLSX(file: File): Promise<BankParseResult> {
     };
   }
 
-  const headers = rows[headerIndex].map((c) => String(c).trim());
+  const headers = (rows[headerIndex] ?? []).map((c) => String(c).trim());
 
   const col = {
     date: headers.findIndex((h) => h.includes("תאריך")),
@@ -107,7 +107,7 @@ export async function parseHapoalimXLSX(file: File): Promise<BankParseResult> {
   // Extract account number from metadata rows
   let account_number = "";
   for (let i = 0; i < headerIndex; i++) {
-    const rowStr = rows[i].join(" ");
+    const rowStr = (rows[i] ?? []).join(" ");
     const m = rowStr.match(/\d{2}-\d{3}-\d{6,}/);
     if (m) {
       account_number = m[0];
@@ -120,7 +120,7 @@ export async function parseHapoalimXLSX(file: File): Promise<BankParseResult> {
   let dateTo: string | undefined;
 
   for (let i = headerIndex + 1; i < rows.length; i++) {
-    const row = rows[i];
+    const row = rows[i] ?? [];
     const dateVal = col.date >= 0 ? row[col.date] : null;
     if (!dateVal) continue;
 

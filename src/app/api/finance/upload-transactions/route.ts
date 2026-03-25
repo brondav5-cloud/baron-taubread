@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { checkRateLimit, getClientIdentifier } from "@/lib/api/rateLimit";
+import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
 import type { ParsedBankTransaction, SourceBank } from "@/modules/finance/types";
 
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
     }
 
-    const company_id = await resolveSelectedCompanyId(request, user.id);
+    const { companyId: company_id } = await resolveSelectedCompanyId(supabaseAuth, user.id);
     if (!company_id) {
       return NextResponse.json({ error: "לא נבחרה חברה" }, { status: 400 });
     }

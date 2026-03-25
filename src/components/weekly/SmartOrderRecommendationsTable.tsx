@@ -84,7 +84,7 @@ export function SmartOrderRecommendationsTable({
             productName: p.productName,
             productNameNorm: p.productNameNormalized,
             currentQty: current,
-            suggestedQty,
+            suggestedQty: suggested,
             increaseQty: diff,
             source,
           });

@@ -65,7 +65,7 @@ export async function parseLeumiCSV(file: File): Promise<BankParseResult> {
   // Dynamically find header row (contains both "תאריך" and "אסמכתא")
   let headerIndex = -1;
   for (let i = 0; i < Math.min(15, lines.length); i++) {
-    if (lines[i].includes("תאריך") && lines[i].includes("אסמכתא")) {
+    if ((lines[i] ?? "").includes("תאריך") && (lines[i] ?? "").includes("אסמכתא")) {
       headerIndex = i;
       break;
     }
@@ -79,7 +79,7 @@ export async function parseLeumiCSV(file: File): Promise<BankParseResult> {
     };
   }
 
-  const headers = parseCSVRow(lines[headerIndex]);
+  const headers = parseCSVRow(lines[headerIndex] ?? "");
 
   const col = {
     date: headers.findIndex((h) => h.includes("תאריך")),
@@ -95,7 +95,7 @@ export async function parseLeumiCSV(file: File): Promise<BankParseResult> {
   // Extract account number from metadata lines before the header
   let account_number = "";
   for (let i = 0; i < headerIndex; i++) {
-    const m = lines[i].match(/\d{3}-\d{6,}\/\d+|\d{2}-\d{3}-\d{6,}/);
+    const m = (lines[i] ?? "").match(/\d{3}-\d{6,}\/\d+|\d{2}-\d{3}-\d{6,}/);
     if (m) {
       account_number = m[0];
       break;
@@ -107,7 +107,7 @@ export async function parseLeumiCSV(file: File): Promise<BankParseResult> {
   let dateTo: string | undefined;
 
   for (let i = headerIndex + 1; i < lines.length; i++) {
-    const cols = parseCSVRow(lines[i]);
+    const cols = parseCSVRow(lines[i] ?? "");
     if (cols.length < 5) continue;
 
     const dateRaw = cols[col.date] ?? "";
