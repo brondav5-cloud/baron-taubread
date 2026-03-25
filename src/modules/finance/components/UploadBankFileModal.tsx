@@ -1,9 +1,23 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { X, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
+import { X, Upload, FileSpreadsheet, AlertCircle, CheckCircle, Loader2, AlertTriangle } from "lucide-react";
 import { parseLeumiCSV, parseHapoalimXLSX, parseMizrahiXLS } from "../lib/parsers";
 import type { BankParseResult, SourceBank } from "../types";
+
+async function computeFileHash(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+interface DuplicateInfo {
+  file_name: string;
+  uploaded_at: string;
+  row_count: number | null;
+}
 
 interface Props {
   onClose: () => void;
@@ -45,6 +59,9 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
   const [uploadResult, setUploadResult] = useState<{
     inserted: number; skipped: number; errors: string[];
   } | null>(null);
+  const [fileHash, setFileHash] = useState<string | null>(null);
+  const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -53,10 +70,25 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
     setFile(f);
     setParseError(null);
     setParseResult(null);
+    setDuplicateInfo(null);
+    setShowDuplicateWarning(false);
 
     const detected = detectBank(f);
     const selectedBank = detected ?? "hapoalim";
     setBank(selectedBank);
+
+    // Compute hash in parallel with parsing
+    const [hash] = await Promise.all([computeFileHash(f)]);
+    setFileHash(hash);
+
+    // Check for duplicate
+    try {
+      const res = await fetch(`/api/finance/check-file-hash?hash=${hash}`);
+      const data = await res.json();
+      if (data.duplicate) setDuplicateInfo(data);
+    } catch {
+      // non-critical — proceed silently
+    }
 
     setParsing(true);
     try {
@@ -112,9 +144,10 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
     }
   }, [file]);
 
-  // ── Upload ──────────────────────────────────────────────────────────────────
-  const handleUpload = useCallback(async () => {
+  // ── Upload (with optional duplicate bypass) ─────────────────────────────────
+  const doUpload = useCallback(async () => {
     if (!parseResult || !file || !bank) return;
+    setShowDuplicateWarning(false);
     setStep("uploading");
 
     try {
@@ -125,6 +158,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
           bank,
           account_number: parseResult.account_number || "לא ידוע",
           file_name: file.name,
+          file_hash: fileHash ?? undefined,
           date_from: parseResult.date_from,
           date_to: parseResult.date_to,
           transactions: parseResult.transactions,
@@ -149,11 +183,50 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
       setParseError(String(e));
       setStep("preview");
     }
-  }, [parseResult, file, bank]);
+  }, [parseResult, file, bank, fileHash]);
+
+  const handleUpload = useCallback(() => {
+    if (duplicateInfo) {
+      setShowDuplicateWarning(true);
+    } else {
+      doUpload();
+    }
+  }, [duplicateInfo, doUpload]);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+
+      {/* Duplicate confirmation dialog */}
+      {showDuplicateWarning && duplicateInfo && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 rounded-2xl">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm mx-4 text-center space-y-4">
+            <AlertTriangle className="w-12 h-12 text-amber-400 mx-auto" />
+            <h3 className="font-bold text-gray-900 text-lg">קובץ כפול</h3>
+            <p className="text-sm text-gray-600">
+              קובץ זהה הועלה בעבר ב-
+              {new Date(duplicateInfo.uploaded_at).toLocaleDateString("he-IL")}
+              {duplicateInfo.row_count ? ` (${duplicateInfo.row_count} תנועות)` : ""}.
+              <br />האם להמשיך ולהעלות שוב?
+            </p>
+            <p className="text-xs text-gray-400">כפילויות ידולגו אוטומטית</p>
+            <div className="flex gap-2 justify-center">
+              <button
+                onClick={() => setShowDuplicateWarning(false)}
+                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={doUpload}
+                className="px-4 py-2 bg-amber-500 text-white rounded-lg text-sm font-medium hover:bg-amber-600"
+              >
+                המשך בכל זאת
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b">
@@ -225,6 +298,19 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
                   ))}
                 </select>
               </div>
+
+              {/* Duplicate file warning */}
+              {duplicateInfo && !showDuplicateWarning && (
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-lg p-3 text-sm">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-500" />
+                  <span>
+                    קובץ זהה כבר הועלה ב-
+                    {new Date(duplicateInfo.uploaded_at).toLocaleDateString("he-IL")}
+                    {duplicateInfo.row_count ? ` (${duplicateInfo.row_count} תנועות)` : ""}
+                    . לחיצה על &quot;העלה&quot; תציג אפשרות להמשיך.
+                  </span>
+                </div>
+              )}
 
               {/* Parse error */}
               {parseError && (

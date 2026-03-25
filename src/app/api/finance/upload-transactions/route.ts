@@ -13,6 +13,7 @@ interface UploadRequest {
   account_number: string;
   display_name?: string;
   file_name: string;
+  file_hash?: string;
   date_from?: string;
   date_to?: string;
   transactions: ParsedBankTransaction[];
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "גוף הבקשה אינו JSON תקין" }, { status: 400 });
     }
 
-    const { bank, account_number, display_name, file_name, date_from, date_to, transactions } =
+    const { bank, account_number, display_name, file_name, file_hash, date_from, date_to, transactions } =
       body;
 
     if (!bank || !account_number || !file_name || !Array.isArray(transactions)) {
@@ -125,6 +126,7 @@ export async function POST(request: NextRequest) {
         company_id,
         bank_account_id,
         file_name,
+        file_hash: file_hash || null,
         file_format: `${bank}_${bank === "hapoalim" ? "xlsx" : bank === "leumi" ? "csv" : "xls"}`,
         date_from: date_from || null,
         date_to: date_to || null,
