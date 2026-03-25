@@ -1,12 +1,15 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3 } from "lucide-react";
+import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock } from "lucide-react";
 import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
 import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFileModal";
 import { TransactionDetailModal } from "@/modules/finance/components/TransactionDetailModal";
+import { FileHistoryPanel } from "@/modules/finance/components/FileHistoryPanel";
+import { loadXlsx } from "@/lib/loadXlsx";
+import { createClient } from "@/lib/supabase/client";
 import type { SourceBank, BankTransaction } from "@/modules/finance/types";
 
 const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
@@ -21,6 +24,8 @@ export default function FinancePage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
   const [searchInput, setSearchInput] = useState("");
+  const [showHistory, setShowHistory] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const totalPages = Math.ceil(hook.totalCount / hook.pageSize);
 
@@ -31,6 +36,52 @@ export default function FinancePage() {
   const handleUploadSuccess = useCallback(() => {
     hook.refresh();
   }, [hook]);
+
+  const handleExport = useCallback(async () => {
+    setExporting(true);
+    try {
+      const supabase = createClient();
+      const f = hook.filters;
+      let query = supabase
+        .from("bank_transactions")
+        .select("date,description,details,reference,debit,credit,balance,category_id,operation_code,source_bank")
+        .order("date", { ascending: false })
+        .limit(5000);
+
+      if (f.dateFrom) query = query.gte("date", f.dateFrom);
+      if (f.dateTo) query = query.lte("date", f.dateTo);
+      if (f.bankAccountId) query = query.eq("bank_account_id", f.bankAccountId);
+      if (f.sourceBank) query = query.eq("source_bank", f.sourceBank);
+      if (f.search.trim()) {
+        const s = `%${f.search.trim()}%`;
+        query = query.or(`description.ilike.${s},details.ilike.${s},reference.ilike.${s}`);
+      }
+
+      const { data } = await query;
+      if (!data?.length) return;
+
+      const catMap = Object.fromEntries(hook.categories.map((c) => [c.id, c.name]));
+      const rows = data.map((tx) => ({
+        "תאריך": tx.date,
+        "תיאור": tx.description,
+        "פרטים": tx.details,
+        "אסמכתא": tx.reference,
+        "חובה": tx.debit,
+        "זכות": tx.credit,
+        "יתרה": tx.balance ?? "",
+        "קטגוריה": tx.category_id ? (catMap[tx.category_id] ?? "") : "",
+        "בנק": tx.source_bank,
+      }));
+
+      const XLSX = await loadXlsx();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "תנועות");
+      XLSX.writeFile(wb, `תנועות_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    } finally {
+      setExporting(false);
+    }
+  }, [hook.filters, hook.categories]);
 
   return (
     <div className="space-y-5 pb-8">
@@ -44,7 +95,22 @@ export default function FinancePage() {
             </p>
           )}
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            className={`flex items-center gap-2 px-3 py-2 border rounded-xl text-sm font-medium transition-colors ${showHistory ? "bg-gray-100 border-gray-300 text-gray-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          >
+            <Clock className="w-4 h-4" />
+            היסטוריה
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={exporting || hook.totalCount === 0}
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-40"
+          >
+            <Download className="w-4 h-4" />
+            {exporting ? "מייצא..." : "ייצא Excel"}
+          </button>
           <Link
             href="/dashboard/finance/pnl"
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
@@ -142,6 +208,9 @@ export default function FinancePage() {
           <RefreshCw className={`w-4 h-4 ${hook.isLoading ? "animate-spin" : ""}`} />
         </button>
       </div>
+
+      {/* ── File history panel ─────────────────────────────────────────────── */}
+      {showHistory && <FileHistoryPanel accounts={hook.accounts} />}
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {hook.error && (
