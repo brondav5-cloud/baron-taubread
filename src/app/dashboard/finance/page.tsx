@@ -12,6 +12,7 @@ import { AccountsManagerPanel } from "@/modules/finance/components/AccountsManag
 import { BalanceChart } from "@/modules/finance/components/BalanceChart";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
+import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { SourceBank, BankTransaction } from "@/modules/finance/types";
 
 const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
@@ -23,6 +24,8 @@ const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
 
 export default function FinancePage() {
   const hook = useBankTransactions();
+  const { state } = useSupabaseAuth();
+  const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
   const [searchInput, setSearchInput] = useState("");
@@ -40,6 +43,7 @@ export default function FinancePage() {
   }, [hook]);
 
   const handleExport = useCallback(async () => {
+    if (!selectedCompanyId) return;
     setExporting(true);
     try {
       const supabase = createClient();
@@ -47,6 +51,7 @@ export default function FinancePage() {
       let query = supabase
         .from("bank_transactions")
         .select("date,description,details,reference,debit,credit,balance,category_id,operation_code,source_bank")
+        .eq("company_id", selectedCompanyId)
         .order("date", { ascending: false })
         .limit(5000);
 
@@ -83,7 +88,7 @@ export default function FinancePage() {
     } finally {
       setExporting(false);
     }
-  }, [hook.filters, hook.categories]);
+  }, [hook.filters, hook.categories, selectedCompanyId]);
 
   return (
     <div className="space-y-5 pb-8">

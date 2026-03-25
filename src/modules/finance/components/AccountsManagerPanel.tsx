@@ -21,6 +21,7 @@ export function AccountsManagerPanel() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,13 +52,19 @@ export function AccountsManagerPanel() {
   }, [editName, load]);
 
   const handleToggleActive = useCallback(async (acc: Account) => {
-    await fetch("/api/finance/accounts", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: acc.id, is_active: !acc.is_active }),
-    });
-    await load();
-  }, [load]);
+    if (togglingId) return;
+    setTogglingId(acc.id);
+    try {
+      await fetch("/api/finance/accounts", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: acc.id, is_active: !acc.is_active }),
+      });
+      await load();
+    } finally {
+      setTogglingId(null);
+    }
+  }, [load, togglingId]);
 
   if (loading) return (
     <div className="flex items-center gap-2 text-gray-400 text-sm py-2 px-5">
@@ -107,10 +114,13 @@ export function AccountsManagerPanel() {
             </button>
             <button
               onClick={() => handleToggleActive(acc)}
-              className={`p-1.5 transition-colors ${acc.is_active ? "text-gray-300 hover:text-orange-500" : "text-orange-400 hover:text-green-500"}`}
+              disabled={togglingId !== null}
+              className={`p-1.5 transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${acc.is_active ? "text-gray-300 hover:text-orange-500" : "text-orange-400 hover:text-green-500"}`}
               title={acc.is_active ? "הסתר חשבון" : "הצג חשבון"}
             >
-              {acc.is_active ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+              {togglingId === acc.id
+                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                : acc.is_active ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
           </div>
         </div>

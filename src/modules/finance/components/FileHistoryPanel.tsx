@@ -22,6 +22,11 @@ const FORMAT_LABELS: Record<string, string> = {
 };
 
 function fmt(iso: string) {
+  // Date-only strings (YYYY-MM-DD) must be parsed manually to avoid UTC midnight shift
+  if (iso.length === 10) {
+    const [y, m, d] = iso.split("-");
+    return `${d}/${m}/${y}`;
+  }
   const d = new Date(iso);
   return d.toLocaleDateString("he-IL", { day: "2-digit", month: "2-digit", year: "numeric" });
 }

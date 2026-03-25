@@ -24,9 +24,9 @@ function fmt(n: number) {
   return "₪" + Math.round(n).toLocaleString("he-IL");
 }
 
-function shortDate(iso: string) {
-  const [, m, d] = iso.split("-");
-  return `${d}/${m}`;
+function shortDate(iso: string, includeYear: boolean) {
+  const [y, m, d] = iso.split("-");
+  return includeYear ? `${d}/${m}/${y!.slice(2)}` : `${d}/${m}`;
 }
 
 function CustomTooltip({ active, payload }: { active?: boolean; payload?: { value: number; payload: DataPoint }[] }) {
@@ -59,6 +59,7 @@ export function BalanceChart({ accounts }: Props) {
 
   const load = useCallback(async () => {
     if (!selectedCompanyId || !accountId) return;
+    setData([]);
     setLoading(true);
     try {
       const supabase = createClient();
@@ -80,13 +81,15 @@ export function BalanceChart({ accounts }: Props) {
         if (row.balance != null) byDate.set(row.date, row.balance);
       }
 
-      const points: DataPoint[] = Array.from(byDate.entries())
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([date, balance]) => ({
-          date: shortDate(date),
-          balance,
-          fullDate: date,
-        }));
+      const sorted = Array.from(byDate.keys()).sort();
+      const years = new Set(sorted.map((d) => d.split("-")[0]));
+      const multiYear = years.size > 1;
+
+      const points: DataPoint[] = sorted.map((date) => ({
+        date: shortDate(date, multiYear),
+        balance: byDate.get(date)!,
+        fullDate: date,
+      }));
 
       setData(points);
     } finally {

@@ -259,7 +259,7 @@ export default function CategoriesPage() {
         <div className="space-y-3">
           {categories.map((cat) => {
             const catRules = rules.filter((r) => r.category_id === cat.id);
-            const typeInfo = TYPE_LABELS[cat.type];
+            const typeInfo = TYPE_LABELS[cat.type] ?? TYPE_LABELS["expense"];
             return (
               <div key={cat.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
                 <div className="flex items-center gap-3">

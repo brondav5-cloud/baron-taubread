@@ -33,7 +33,9 @@ export async function PUT(request: NextRequest) {
   const auth = await getAuth(request);
   if (!auth) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
-  const { id, display_name, is_active } = await request.json();
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
+  const { id, display_name, is_active } = body as { id?: string; display_name?: string; is_active?: boolean };
   if (!id) return NextResponse.json({ error: "id חסר" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();

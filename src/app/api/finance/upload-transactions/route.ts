@@ -204,6 +204,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // If nothing was inserted and there were errors, remove the orphan file record
+    if (inserted === 0 && rows.length > 0 && insertErrors.length > 0) {
+      await supabase.from("bank_uploaded_files").delete().eq("id", uploaded_file_id);
+      return NextResponse.json(
+        { error: "הכנסת שורות נכשלה לחלוטין", details: insertErrors },
+        { status: 500 }
+      );
+    }
+
     // Update actual inserted count on file record
     await supabase
       .from("bank_uploaded_files")

@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
   const auth = await getAuth(request);
   if (!auth) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
-  const body = await request.json();
-  const { category_id, match_field, match_type, match_value, priority } = body;
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
+  const { category_id, match_field, match_type, match_value, priority } = body as Record<string, string | number | undefined>;
 
   if (!category_id || !match_field || !match_value) {
     return NextResponse.json({ error: "שדות חובה חסרים" }, { status: 400 });
@@ -54,7 +55,9 @@ export async function PUT(request: NextRequest) {
   const auth = await getAuth(request);
   if (!auth) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
-  const { id, match_field, match_type, match_value, priority } = await request.json();
+  let putBody: Record<string, unknown>;
+  try { putBody = await request.json(); } catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
+  const { id, match_field, match_type, match_value, priority } = putBody as Record<string, string | number | undefined>;
   if (!id) return NextResponse.json({ error: "id חסר" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();

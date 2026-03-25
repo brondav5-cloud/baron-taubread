@@ -15,7 +15,9 @@ export async function PATCH(request: NextRequest) {
   const { companyId } = await resolveSelectedCompanyId(supabaseAuth, user.id);
   if (!companyId) return NextResponse.json({ error: "לא נבחרה חברה" }, { status: 400 });
 
-  const { tx_id, notes } = await request.json();
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
+  const { tx_id, notes } = body as { tx_id?: string; notes?: string };
   if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();

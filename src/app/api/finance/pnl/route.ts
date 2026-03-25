@@ -59,8 +59,9 @@ export async function GET(request: NextRequest) {
     const dateFrom = monthParam
       ? `${year}-${String(monthParam).padStart(2, "0")}-01`
       : `${year}-01-01`;
+    // Use actual last day of month (handles 28/29/30/31 correctly)
     const dateTo = monthParam
-      ? `${year}-${String(monthParam).padStart(2, "0")}-31`
+      ? new Date(year, parseInt(monthParam), 0).toISOString().slice(0, 10)
       : `${year}-12-31`;
 
     const supabase = getSupabaseAdmin();

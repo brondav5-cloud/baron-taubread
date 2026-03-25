@@ -78,6 +78,8 @@ export async function POST(request: NextRequest) {
 
     // ── Clear ─────────────────────────────────────────────────────────────────
     if (body.mode === "clear") {
+      if (!body.tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+
       await supabase
         .from("bank_transactions")
         .update({ category_id: null, category_override: null })

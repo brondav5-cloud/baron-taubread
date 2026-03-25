@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown,
 } from "lucide-react";
+import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
 import type { BankTransaction, DocType } from "../types";
 import {
@@ -209,9 +210,10 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
 
   // ── Save category ─────────────────────────────────────────────────────────
   const handleSaveCategory = useCallback(async (catId: string) => {
+    const prevCatId = selectedCatId;
     setSavingCat(true);
     try {
-      await fetch("/api/finance/classify", {
+      const res = await fetch("/api/finance/classify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -220,23 +222,37 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
           category_id: catId || undefined,
         }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "שגיאה בשמירת סיווג");
+        setSelectedCatId(prevCatId);
+        return;
+      }
       setSelectedCatId(catId);
-      // Offer to create a rule only when assigning (not clearing)
       if (catId) setShowRulePrompt(true);
       else setShowRulePrompt(false);
+    } catch {
+      toast.error("שגיאה בשמירת סיווג");
+      setSelectedCatId(prevCatId);
     } finally {
       setSavingCat(false);
     }
-  }, [tx.id]);
+  }, [tx.id, selectedCatId]);
 
   const handleSaveNotes = useCallback(async () => {
     setSavingNotes(true);
     try {
-      await fetch("/api/finance/transactions/notes", {
+      const res = await fetch("/api/finance/transactions/notes", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tx_id: tx.id, notes: notes || null }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "שגיאה בשמירת הערה");
+      }
+    } catch {
+      toast.error("שגיאה בשמירת הערה");
     } finally {
       setSavingNotes(false);
     }
@@ -250,7 +266,7 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
     if (!value) return;
     setSavingRule(true);
     try {
-      await fetch("/api/finance/categories/rules", {
+      const res = await fetch("/api/finance/categories/rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -260,7 +276,15 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
           match_value: value,
         }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "שגיאה ביצירת כלל");
+        return;
+      }
+      toast.success("כלל נוצר בהצלחה");
       setShowRulePrompt(false);
+    } catch {
+      toast.error("שגיאה ביצירת כלל");
     } finally {
       setSavingRule(false);
     }

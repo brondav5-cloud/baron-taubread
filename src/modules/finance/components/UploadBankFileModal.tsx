@@ -67,6 +67,12 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
   const [dragging, setDragging] = useState(false);
 
   // ── File selection ──────────────────────────────────────────────────────────
+  const parseForBank = useCallback(async (f: File, selectedBank: SourceBank): Promise<BankParseResult> => {
+    if (selectedBank === "leumi") return parseLeumiCSV(f);
+    if (selectedBank === "mizrahi") return parseMizrahiXLS(f);
+    return parseHapoalimXLSX(f);
+  }, []);
+
   const handleFile = useCallback(async (f: File) => {
     setFile(f);
     setParseError(null);
@@ -77,31 +83,30 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
     const detected = detectBank(f);
     const selectedBank = detected ?? "hapoalim";
     setBank(selectedBank);
-
-    // Compute hash in parallel with parsing
-    const [hash] = await Promise.all([computeFileHash(f)]);
-    setFileHash(hash);
-
-    // Check for duplicate
-    try {
-      const res = await fetch(`/api/finance/check-file-hash?hash=${hash}`);
-      const data = await res.json();
-      if (data.duplicate) setDuplicateInfo(data);
-    } catch {
-      // non-critical — proceed silently
-    }
-
     setParsing(true);
-    try {
-      let result: BankParseResult;
-      if (selectedBank === "leumi") result = await parseLeumiCSV(f);
-      else if (selectedBank === "mizrahi") result = await parseMizrahiXLS(f);
-      else result = await parseHapoalimXLSX(f);
 
+    try {
+      // Hash computation and file parsing run in true parallel
+      const [hash, result] = await Promise.all([
+        computeFileHash(f),
+        parseForBank(f, selectedBank),
+      ]);
+
+      setFileHash(hash);
       setParseResult(result);
       if (result.transactions.length === 0) {
         setParseError("לא נמצאו תנועות בקובץ. ודא שהקובץ תקין ושהבנק הנכון נבחר.");
       }
+
+      // Check for duplicate (after hash is ready)
+      try {
+        const res = await fetch(`/api/finance/check-file-hash?hash=${hash}`);
+        const data = await res.json();
+        if (data.duplicate) setDuplicateInfo(data);
+      } catch {
+        // non-critical — proceed silently
+      }
+
       setStep("preview");
     } catch (e) {
       setParseError(String(e));
@@ -109,7 +114,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
     } finally {
       setParsing(false);
     }
-  }, []);
+  }, [parseForBank]);
 
   const onFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -130,10 +135,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
     setParsing(true);
     setParseError(null);
     try {
-      let result: BankParseResult;
-      if (newBank === "leumi") result = await parseLeumiCSV(file);
-      else if (newBank === "mizrahi") result = await parseMizrahiXLS(file);
-      else result = await parseHapoalimXLSX(file);
+      const result = await parseForBank(file, newBank);
       setParseResult(result);
       if (result.transactions.length === 0) {
         setParseError("לא נמצאו תנועות. ודא שהבנק הנכון נבחר.");
@@ -143,7 +145,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
     } finally {
       setParsing(false);
     }
-  }, [file]);
+  }, [file, parseForBank]);
 
   // ── Upload (with optional duplicate bypass) ─────────────────────────────────
   const doUpload = useCallback(async () => {
