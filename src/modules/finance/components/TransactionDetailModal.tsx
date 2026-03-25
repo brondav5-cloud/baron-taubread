@@ -6,6 +6,12 @@ import {
 } from "lucide-react";
 import { loadXlsx } from "@/lib/loadXlsx";
 import type { BankTransaction, DocType } from "../types";
+import {
+  parseSalaryXLSX,
+  parseCreditCardXLSX,
+  parseLeumiCreditXLS,
+  parseTransfersPDF,
+} from "../lib/parsers";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -48,21 +54,108 @@ function formatDate(iso: string): string {
   return `${d}/${m}/${y}`;
 }
 
-async function readFileAsRows(file: File): Promise<Record<string, unknown>[] | null> {
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf")) return null; // PDF: no client-side parse yet
-
+async function parseDetailFile(
+  file: File,
+  docType: DocType
+): Promise<{ rows: unknown[]; reference?: string; total?: number; doc_date?: string }> {
   try {
-    const XLSX = await loadXlsx();
-    const buffer = await file.arrayBuffer();
-    const wb = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: true });
-    const sheetName = wb.SheetNames[0] ?? "";
-    const sheet = wb.Sheets[sheetName] ?? {};
-    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
-    return rows;
+    if (docType === "salary_xlsx") {
+      const r = await parseSalaryXLSX(file);
+      return { rows: r.items, reference: r.reference, total: r.total_amount, doc_date: r.doc_date };
+    }
+    if (docType === "credit_card_xlsx") {
+      const r = await parseCreditCardXLSX(file);
+      return { rows: r.items, total: r.total_charge, doc_date: r.charge_date };
+    }
+    if (docType === "leumi_credit_xls") {
+      const r = await parseLeumiCreditXLS(file);
+      return { rows: r.items, total: r.total_charge, doc_date: r.charge_date };
+    }
+    if (docType === "transfers_pdf") {
+      const r = await parseTransfersPDF(file);
+      return { rows: r.items, reference: r.reference, total: r.total_amount, doc_date: r.doc_date };
+    }
+    // Fallback: generic XLSX parse
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      const XLSX = await loadXlsx();
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(new Uint8Array(buffer), { type: "array", cellDates: true });
+      const sheetName = wb.SheetNames[0] ?? "";
+      const sheet = wb.Sheets[sheetName] ?? {};
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "" });
+      return { rows };
+    }
+    return { rows: [] };
   } catch {
-    return null;
+    return { rows: [] };
   }
+}
+
+// ─── Linked doc row with expandable items ────────────────────────────────────
+
+interface ItemRow { payee_name?: string; business_name?: string; amount?: number; charge_amount?: number; payee_id?: string; bank?: string; branch?: string; account?: string; category?: string; transaction_date?: string; }
+
+function LinkedDocRow({ link, onDelete }: { link: LinkedDoc; onDelete: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const rows = (link.document.raw_data as { rows?: ItemRow[] } | null)?.rows ?? [];
+
+  return (
+    <div className="bg-blue-50 rounded-lg overflow-hidden">
+      <div className="flex items-center gap-2 px-3 py-2">
+        <FileSpreadsheet className="w-4 h-4 text-blue-400 shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-blue-800 truncate">{link.document.file_name}</p>
+          <p className="text-xs text-blue-500">
+            {DOC_TYPE_LABELS[link.document.doc_type]}
+            {link.document.total_amount != null && ` · ${fmt(link.document.total_amount)}`}
+            {link.document.reference && ` · אסמכתא: ${link.document.reference}`}
+          </p>
+        </div>
+        {rows.length > 0 && (
+          <button onClick={() => setExpanded((v) => !v)}
+            className="text-blue-500 hover:text-blue-700 text-xs font-medium shrink-0">
+            {expanded ? "הסתר" : `${rows.length} שורות`}
+          </button>
+        )}
+        <button onClick={() => onDelete(link.id)} className="text-blue-300 hover:text-red-500 transition-colors shrink-0" title="הסר">
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+      {expanded && rows.length > 0 && (
+        <div className="border-t border-blue-100 overflow-x-auto">
+          <table className="w-full text-xs text-right" dir="rtl">
+            <thead className="bg-blue-100 text-blue-600">
+              <tr>
+                <th className="px-2 py-1">שם</th>
+                {rows[0]?.payee_id !== undefined && <th className="px-2 py-1">ת.ז</th>}
+                {rows[0]?.category !== undefined && <th className="px-2 py-1">קטגוריה</th>}
+                {rows[0]?.transaction_date !== undefined && <th className="px-2 py-1">תאריך</th>}
+                <th className="px-2 py-1 text-left">סכום</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-blue-50">
+              {rows.slice(0, 20).map((row, i) => (
+                <tr key={i} className="bg-white">
+                  <td className="px-2 py-1 font-medium text-gray-700 max-w-[120px] truncate">
+                    {row.payee_name ?? row.business_name ?? ""}
+                  </td>
+                  {row.payee_id !== undefined && <td className="px-2 py-1 text-gray-400 font-mono">{row.payee_id}</td>}
+                  {row.category !== undefined && <td className="px-2 py-1 text-gray-500">{row.category}</td>}
+                  {row.transaction_date !== undefined && <td className="px-2 py-1 text-gray-400">{row.transaction_date ? formatDate(row.transaction_date) : ""}</td>}
+                  <td className="px-2 py-1 text-left font-mono text-gray-700">
+                    {fmt(row.charge_amount ?? row.amount ?? 0)}
+                  </td>
+                </tr>
+              ))}
+              {rows.length > 20 && (
+                <tr><td colSpan={5} className="px-2 py-1 text-center text-gray-400">ועוד {rows.length - 20} שורות...</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -124,7 +217,7 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
     setUploadError(null);
 
     try {
-      const rows = await readFileAsRows(uploadFile);
+      const parsed = await parseDetailFile(uploadFile, docType);
 
       const res = await fetch("/api/finance/link-document", {
         method: "POST",
@@ -133,11 +226,11 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
           transaction_id: tx.id,
           doc_type: docType,
           file_name: uploadFile.name,
-          doc_date: tx.date,
-          total_amount: tx.debit > 0 ? tx.debit : tx.credit,
-          reference: tx.reference || undefined,
+          doc_date: parsed.doc_date || tx.date,
+          total_amount: parsed.total || (tx.debit > 0 ? tx.debit : tx.credit),
+          reference: parsed.reference || tx.reference || undefined,
           match_method: "manual",
-          raw_data: rows ? { rows } : null,
+          raw_data: parsed.rows.length > 0 ? { rows: parsed.rows } : null,
         }),
       });
 
@@ -246,33 +339,11 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
             ) : (
               <div className="space-y-2">
                 {linkedDocs.map((link) => (
-                  <div key={link.id} className="flex items-center gap-2 bg-blue-50 rounded-lg px-3 py-2">
-                    <FileSpreadsheet className="w-4 h-4 text-blue-400 shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-blue-800 truncate">
-                        {link.document.file_name}
-                      </p>
-                      <p className="text-xs text-blue-500">
-                        {DOC_TYPE_LABELS[link.document.doc_type]}
-                        {link.document.total_amount != null && ` · ${fmt(link.document.total_amount)}`}
-                        {link.document.reference && ` · אסמכתא: ${link.document.reference}`}
-                      </p>
-                      {link.document.raw_data && (
-                        <p className="text-xs text-blue-400 mt-0.5">
-                          {Array.isArray((link.document.raw_data as { rows?: unknown[] }).rows)
-                            ? `${(link.document.raw_data as { rows: unknown[] }).rows.length} שורות`
-                            : "נתונים שמורים"}
-                        </p>
-                      )}
-                    </div>
-                    <button
-                      onClick={() => handleDeleteLink(link.id)}
-                      className="text-blue-300 hover:text-red-500 transition-colors shrink-0"
-                      title="הסר קישור"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <LinkedDocRow
+                    key={link.id}
+                    link={link}
+                    onDelete={handleDeleteLink}
+                  />
                 ))}
               </div>
             )}
