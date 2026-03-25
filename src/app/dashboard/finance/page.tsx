@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw } from "lucide-react";
+import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw, Settings } from "lucide-react";
+import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
 import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFileModal";
@@ -43,13 +44,22 @@ export default function FinancePage() {
             </p>
           )}
         </div>
-        <button
-          onClick={() => setUploadOpen(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
-        >
-          <Upload className="w-4 h-4" />
-          העלאת קובץ
-        </button>
+        <div className="flex gap-2">
+          <Link
+            href="/dashboard/finance/categories"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <Settings className="w-4 h-4" />
+            קטגוריות
+          </Link>
+          <button
+            onClick={() => setUploadOpen(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+          >
+            <Upload className="w-4 h-4" />
+            העלאת קובץ
+          </button>
+        </div>
       </div>
 
       {/* ── Filters bar ────────────────────────────────────────────────────── */}
