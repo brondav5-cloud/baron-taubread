@@ -163,7 +163,11 @@ function CategoryRow({
                         <LabelList
                           dataKey="amount"
                           position="top"
-                          formatter={(v: number) => v > 0 ? `₪${Math.round(v / 1000)}k` : ""}
+                          formatter={(v: number) => {
+                            if (!v) return "";
+                            if (v >= 1000) return `₪${Math.round(v / 1000)}k`;
+                            return `₪${Math.round(v)}`;
+                          }}
                           style={{ fontSize: 8, fill: "#9ca3af" }}
                         />
                         {chartData.map((entry) => (
