@@ -6,7 +6,8 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
-import type { BankTransaction, DocType } from "../types";
+import type { BankTransaction, DocDetailRow, DocType } from "../types";
+import { TransactionSplitsPanel } from "./TransactionSplitsPanel";
 import {
   parseSalaryXLSX,
   parseCreditCardXLSX,
@@ -481,6 +482,20 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
             />
             {savingNotes && <p className="text-xs text-gray-400 mt-0.5">שומר...</p>}
+          </div>
+
+          {/* Transaction splits */}
+          <div className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/30">
+            <TransactionSplitsPanel
+              txId={tx.id}
+              txAmount={tx.debit > 0 ? tx.debit : tx.credit}
+              txIsDebit={tx.debit > 0}
+              categories={categories}
+              docRows={linkedDocs.flatMap((link) =>
+                ((link.document.raw_data as { rows?: DocDetailRow[] } | null)?.rows ?? [])
+              )}
+              onSaved={loadDocs}
+            />
           </div>
 
           {/* Linked documents */}

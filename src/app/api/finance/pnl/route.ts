@@ -19,11 +19,18 @@ interface CategoryRow {
 }
 
 interface TxRow {
+  id: string;
   date: string;
   debit: number;
   credit: number;
   category_id: string | null;
   category_override: string | null;
+}
+
+interface SplitRow {
+  transaction_id: string;
+  category_id: string | null;
+  amount: number;
 }
 
 export interface PnlCategoryLine {
@@ -57,7 +64,8 @@ function lastDayOfMonth(year: number, month: number): string {
 
 function buildLines(
   transactions: TxRow[],
-  catMap: Map<string, CategoryRow>
+  catMap: Map<string, CategoryRow>,
+  splits: SplitRow[] = []
 ): { lines: PnlCategoryLine[]; monthSet: Set<string>; incomeTotal: number; expenseTotal: number } {
   const linesMap = new Map<string, PnlCategoryLine>();
   const monthSet = new Set<string>();
@@ -78,7 +86,23 @@ function buildLines(
     return linesMap.get(key)!;
   };
 
+  // Build splits lookup: tx_id → splits[]
+  const splitsMap = new Map<string, SplitRow[]>();
+  for (const s of splits) {
+    const arr = splitsMap.get(s.transaction_id) ?? [];
+    arr.push(s);
+    splitsMap.set(s.transaction_id, arr);
+  }
+  const splitTxIds = new Set(splitsMap.keys());
+
+  // Build tx date map for split month-bucketing
+  const txDateMap = new Map<string, string>();
+  for (const tx of transactions) txDateMap.set(tx.id, tx.date);
+
+  // Process transactions — skip those handled via splits
   for (const tx of transactions) {
+    if (splitTxIds.has(tx.id)) continue;
+
     const ym = tx.date.slice(0, 7);
     monthSet.add(ym);
     const catId = tx.category_id ?? null;
@@ -86,16 +110,24 @@ function buildLines(
     const cat = catId ? catMap.get(catId) : null;
     const type = cat?.type ?? "uncategorized";
 
-    let amount = 0;
-    if (type === "income") {
-      amount = tx.credit - tx.debit;
-    } else {
-      amount = tx.debit - tx.credit;
-    }
-
+    const amount = type === "income" ? tx.credit - tx.debit : tx.debit - tx.credit;
     line.total += amount;
     line.monthly[ym] = (line.monthly[ym] ?? 0) + amount;
   }
+
+  // Process splits — each split contributes its own amount to its category
+  splitsMap.forEach((txSplits, txId) => {
+    const date = txDateMap.get(txId);
+    if (!date) return;
+    const ym = date.slice(0, 7);
+    monthSet.add(ym);
+
+    for (const s of txSplits) {
+      const line = getOrCreate(s.category_id ?? null);
+      line.total += s.amount;
+      line.monthly[ym] = (line.monthly[ym] ?? 0) + s.amount;
+    }
+  });
 
   const lines = Array.from(linesMap.values()).sort((a, b) => {
     const order = ["income", "expense", "transfer", "ignore", "uncategorized"];
@@ -155,7 +187,7 @@ export async function GET(request: NextRequest) {
         .eq("company_id", companyId),
       supabase
         .from("bank_transactions")
-        .select("date, debit, credit, category_id, category_override")
+        .select("id, date, debit, credit, category_id, category_override")
         .eq("company_id", companyId)
         .gte("date", dateFrom)
         .lte("date", dateTo)
@@ -185,9 +217,21 @@ export async function GET(request: NextRequest) {
       (categories ?? []).map((c: CategoryRow) => [c.id, c])
     );
 
-    // Build current year lines
+    // Fetch splits for the current-period transactions
+    const txIds = (transactions ?? []).map((t) => (t as TxRow).id);
+    let splits: SplitRow[] = [];
+    if (txIds.length > 0) {
+      const { data: splitsData } = await supabase
+        .from("bank_transaction_splits")
+        .select("transaction_id, category_id, amount")
+        .in("transaction_id", txIds)
+        .eq("company_id", companyId);
+      splits = (splitsData ?? []) as SplitRow[];
+    }
+
+    // Build current year lines (splits replace their parent transactions)
     const { lines, monthSet, incomeTotal, expenseTotal } =
-      buildLines((transactions ?? []) as TxRow[], catMap);
+      buildLines((transactions ?? []) as TxRow[], catMap, splits);
 
     // Compute YoY totals
     let prev_income_total = 0;

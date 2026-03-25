@@ -92,3 +92,29 @@ export interface TransactionDetailDocument {
   uploaded_at: string;
   notes?: string;
 }
+
+// ─── Transaction splits ───────────────────────────────────────────────────────
+
+/** A single line in a split transaction. Stored in bank_transaction_splits. */
+export interface TransactionSplit {
+  id?: string;
+  transaction_id?: string;
+  company_id?: string;
+  description: string;
+  supplier_name?: string;
+  category_id?: string | null;
+  amount: number;
+  notes?: string;
+  sort_order?: number;
+}
+
+/** A row from a linked detail document (e.g. credit card statement line) */
+export interface DocDetailRow {
+  business_name?: string;
+  payee_name?: string;
+  charge_amount?: number;
+  amount?: number;
+  transaction_date?: string;
+  category?: string;
+  [key: string]: unknown;
+}
