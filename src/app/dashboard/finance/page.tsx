@@ -8,6 +8,7 @@ import { BankTransactionsTable } from "@/modules/finance/components/BankTransact
 import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFileModal";
 import { TransactionDetailModal } from "@/modules/finance/components/TransactionDetailModal";
 import { FileHistoryPanel } from "@/modules/finance/components/FileHistoryPanel";
+import { AccountsManagerPanel } from "@/modules/finance/components/AccountsManagerPanel";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import type { SourceBank, BankTransaction } from "@/modules/finance/types";
@@ -209,8 +210,18 @@ export default function FinancePage() {
         </button>
       </div>
 
-      {/* ── File history panel ─────────────────────────────────────────────── */}
-      {showHistory && <FileHistoryPanel accounts={hook.accounts} />}
+      {/* ── File history + accounts panel ──────────────────────────────────── */}
+      {showHistory && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <FileHistoryPanel accounts={hook.accounts} />
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b bg-gray-50 flex items-center gap-2">
+              <span className="font-semibold text-gray-700 text-sm">חשבונות בנק</span>
+            </div>
+            <AccountsManagerPanel />
+          </div>
+        </div>
+      )}
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {hook.error && (

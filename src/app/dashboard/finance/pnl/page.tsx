@@ -88,6 +88,7 @@ function PnlSection({ lines, months, type }: { lines: PnlCategoryLine[]; months:
 export default function PnlPage() {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
+  const [month, setMonth] = useState(0); // 0 = כל השנה
   const [data, setData] = useState<PnlResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +97,10 @@ export default function PnlPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/finance/pnl?year=${year}`);
+      const url = month > 0
+        ? `/api/finance/pnl?year=${year}&month=${month}`
+        : `/api/finance/pnl?year=${year}`;
+      const res = await fetch(url);
       if (!res.ok) throw new Error("שגיאה בטעינת הדוח");
       const d: PnlResponse = await res.json();
       setData(d);
@@ -105,7 +109,7 @@ export default function PnlPage() {
     } finally {
       setLoading(false);
     }
-  }, [year]);
+  }, [year, month]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -121,18 +125,30 @@ export default function PnlPage() {
           <p className="text-sm text-gray-500 mt-0.5">סיכום הכנסות והוצאות לפי קטגוריה</p>
         </div>
 
-        {/* Year selector */}
-        <div className="flex items-center gap-1">
-          <button onClick={() => setYear((y) => y - 1)}
-            className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600">
-            ›
-          </button>
-          <span className="font-bold text-gray-800 w-14 text-center">{year}</span>
-          <button onClick={() => setYear((y) => y + 1)}
-            disabled={year >= currentYear}
-            className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600 disabled:opacity-30">
-            ‹
-          </button>
+        {/* Year + Month selector */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1">
+            <button onClick={() => setYear((y) => y - 1)}
+              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600">
+              ›
+            </button>
+            <span className="font-bold text-gray-800 w-14 text-center">{year}</span>
+            <button onClick={() => setYear((y) => y + 1)}
+              disabled={year >= currentYear}
+              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600 disabled:opacity-30">
+              ‹
+            </button>
+          </div>
+          <select
+            value={month}
+            onChange={(e) => setMonth(Number(e.target.value))}
+            className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            <option value={0}>כל השנה</option>
+            {MONTH_NAMES.map((name, i) => (
+              <option key={i + 1} value={i + 1}>{name}</option>
+            ))}
+          </select>
         </div>
       </div>
 

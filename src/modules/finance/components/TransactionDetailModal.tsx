@@ -170,6 +170,8 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code">("description");
   const [savingRule, setSavingRule] = useState(false);
+  const [notes, setNotes] = useState(tx.notes ?? "");
+  const [savingNotes, setSavingNotes] = useState(false);
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -226,6 +228,19 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
       setSavingCat(false);
     }
   }, [tx.id]);
+
+  const handleSaveNotes = useCallback(async () => {
+    setSavingNotes(true);
+    try {
+      await fetch("/api/finance/transactions/notes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tx_id: tx.id, notes: notes || null }),
+      });
+    } finally {
+      setSavingNotes(false);
+    }
+  }, [tx.id, notes]);
 
   const handleCreateRule = useCallback(async () => {
     if (!selectedCatId) return;
@@ -429,6 +444,20 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
               </div>
             </div>
           )}
+
+          {/* Notes */}
+          <div>
+            <label className="text-xs font-medium text-gray-500 block mb-1">הערות</label>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              onBlur={handleSaveNotes}
+              rows={2}
+              placeholder="הוסף הערה..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+            />
+            {savingNotes && <p className="text-xs text-gray-400 mt-0.5">שומר...</p>}
+          </div>
 
           {/* Linked documents */}
           <div>
