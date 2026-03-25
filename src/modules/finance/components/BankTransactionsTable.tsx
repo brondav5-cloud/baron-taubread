@@ -21,11 +21,13 @@ function formatDate(iso: string): string {
 interface Props {
   transactions: BankTransaction[];
   isLoading: boolean;
+  onRowClick?: (tx: BankTransaction) => void;
 }
 
 export const BankTransactionsTable = memo(function BankTransactionsTable({
   transactions,
   isLoading,
+  onRowClick,
 }: Props) {
   if (isLoading) {
     return (
@@ -74,8 +76,9 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               return (
                 <tr
                   key={tx.id}
-                  className={`hover:bg-gray-50 transition-colors ${
-                    isDebit ? "bg-red-50/30" : isCredit ? "bg-green-50/30" : "bg-white"
+                  onClick={() => onRowClick?.(tx)}
+                  className={`transition-colors ${onRowClick ? "cursor-pointer" : ""} ${
+                    isDebit ? "bg-red-50/30 hover:bg-red-50" : isCredit ? "bg-green-50/30 hover:bg-green-50" : "bg-white hover:bg-gray-50"
                   }`}
                 >
                   <td className="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">

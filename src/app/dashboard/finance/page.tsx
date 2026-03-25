@@ -5,7 +5,8 @@ import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw } from "lucide-rea
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
 import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFileModal";
-import type { SourceBank } from "@/modules/finance/types";
+import { TransactionDetailModal } from "@/modules/finance/components/TransactionDetailModal";
+import type { SourceBank, BankTransaction } from "@/modules/finance/types";
 
 const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
   { value: "", label: "כל הבנקים" },
@@ -17,6 +18,7 @@ const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
 export default function FinancePage() {
   const hook = useBankTransactions();
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
   const [searchInput, setSearchInput] = useState("");
 
   const totalPages = Math.ceil(hook.totalCount / hook.pageSize);
@@ -135,6 +137,7 @@ export default function FinancePage() {
       <BankTransactionsTable
         transactions={hook.transactions}
         isLoading={hook.isLoading}
+        onRowClick={setSelectedTx}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}
@@ -169,6 +172,14 @@ export default function FinancePage() {
         <UploadBankFileModal
           onClose={() => setUploadOpen(false)}
           onSuccess={handleUploadSuccess}
+        />
+      )}
+
+      {/* ── Transaction detail modal ────────────────────────────────────────── */}
+      {selectedTx && (
+        <TransactionDetailModal
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
         />
       )}
     </div>
