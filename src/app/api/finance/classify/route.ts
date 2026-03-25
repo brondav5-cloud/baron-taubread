@@ -15,7 +15,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
 
-type MatchField = "description" | "details" | "reference" | "operation_code";
+type MatchField = "description" | "details" | "reference" | "operation_code" | "supplier_name";
 type MatchType = "contains" | "starts_with" | "exact" | "regex";
 
 interface CategoryRule {
@@ -33,6 +33,7 @@ interface BankTx {
   details: string;
   reference: string;
   operation_code: string | null;
+  supplier_name: string | null;
 }
 
 function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
     while (true) {
       const { data: batch } = await supabase
         .from("bank_transactions")
-        .select("id, description, details, reference, operation_code")
+        .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
         .is("category_id", null)
         .is("category_override", null)

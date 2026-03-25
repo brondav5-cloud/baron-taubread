@@ -28,6 +28,7 @@ const MATCH_FIELD_LABELS: Record<string, string> = {
   details: "פרטים",
   reference: "אסמכתא",
   operation_code: "קוד פעולה",
+  supplier_name: "שם ספק",
 };
 
 const MATCH_TYPE_LABELS: Record<string, string> = {
@@ -58,7 +59,7 @@ function RuleValueInput({ value, onChange, placeholder, className, companyId, ma
 
   const fetchSuggestions = useCallback(async (text: string, field: string, cid: string) => {
     if (!cid) return;
-    const col = ["description", "details", "reference", "operation_code"].includes(field) ? field : "description";
+    const col = ["description", "details", "reference", "operation_code", "supplier_name"].includes(field) ? field : "description";
     const supabase = createClient();
     setLoading(true);
     setSearched(false);
