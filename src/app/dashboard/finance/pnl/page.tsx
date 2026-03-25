@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   ChevronRight, Loader2, TrendingUp, TrendingDown, Minus,
-  Download, BarChart3, X, ChevronDown, ChevronUp, Calendar,
+  Download, BarChart3, ChevronDown, Scale, X,
 } from "lucide-react";
 import Link from "next/link";
 import {
   PieChart, Pie, Cell, Tooltip as ReTooltip,
   ResponsiveContainer, Legend, BarChart, Bar, XAxis, YAxis,
-  CartesianGrid,
+  CartesianGrid, LabelList,
 } from "recharts";
 import { loadXlsx } from "@/lib/loadXlsx";
 import type { PnlResponse, PnlCategoryLine } from "@/app/api/finance/pnl/route";
-import type { CategoryTransactionsResponse, CategoryTransaction } from "@/app/api/finance/pnl/category/route";
+import type { CategoryTransaction } from "@/app/api/finance/pnl/category/route";
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(n: number): string {
   return "₪" + Math.abs(n).toLocaleString("he-IL", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -34,12 +34,12 @@ function monthLabel(ym: string): string {
   return MONTH_NAMES[(parseInt(m ?? "1") - 1)] ?? ym;
 }
 
-const TYPE_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  income:        { bg: "bg-green-50",  text: "text-green-700",  label: "הכנסות"   },
-  expense:       { bg: "bg-red-50",    text: "text-red-700",    label: "הוצאות"   },
-  transfer:      { bg: "bg-blue-50",   text: "text-blue-700",   label: "העברות"   },
-  ignore:        { bg: "bg-gray-50",   text: "text-gray-400",   label: "מתעלם"    },
-  uncategorized: { bg: "bg-yellow-50", text: "text-yellow-700", label: "לא מסווג" },
+const TYPE_STYLE: Record<string, { bg: string; text: string; label: string; bar: string }> = {
+  income:        { bg: "bg-green-50",  text: "text-green-700",  label: "הכנסות",   bar: "#22c55e" },
+  expense:       { bg: "bg-red-50",    text: "text-red-700",    label: "הוצאות",   bar: "#ef4444" },
+  transfer:      { bg: "bg-blue-50",   text: "text-blue-700",   label: "העברות",   bar: "#3b82f6" },
+  ignore:        { bg: "bg-gray-50",   text: "text-gray-400",   label: "מתעלם",    bar: "#9ca3af" },
+  uncategorized: { bg: "bg-yellow-50", text: "text-yellow-700", label: "לא מסווג", bar: "#eab308" },
 };
 
 const PIE_COLORS = [
@@ -47,7 +47,11 @@ const PIE_COLORS = [
   "#14b8a6","#3b82f6","#8b5cf6","#ec4899","#6b7280",
 ];
 
-// ─── Delta badge ─────────────────────────────────────────────────────────────
+const BANK_LABELS: Record<string, string> = {
+  leumi: "לאומי", hapoalim: "הפועלים", mizrahi: "מזרחי",
+};
+
+// ─── Delta badge ──────────────────────────────────────────────────────────────
 
 function DeltaBadge({ curr, prev }: { curr: number; prev: number }) {
   const delta = pct(curr, prev);
@@ -60,15 +64,202 @@ function DeltaBadge({ curr, prev }: { curr: number; prev: number }) {
   );
 }
 
+// ─── Expandable category row ──────────────────────────────────────────────────
+
+function CategoryRow({
+  line, months, style, year,
+}: {
+  line: PnlCategoryLine;
+  months: string[];
+  style: { bg: string; text: string; label: string; bar: string };
+  year: number;
+}) {
+  const [open, setOpen] = useState(false);
+  const [txData, setTxData] = useState<CategoryTransaction[] | null>(null);
+  const [txLoading, setTxLoading] = useState(false);
+  const [activeMonth, setActiveMonth] = useState<string | null>(null);
+
+  const showMonths = months.length > 1;
+  const totalCols = showMonths ? months.length + 2 : 2;
+
+  const chartData = Object.entries(line.monthly)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, amount]) => ({ month: monthLabel(ym), ym, amount: Math.abs(amount) }));
+
+  const handleToggle = async () => {
+    const opening = !open;
+    setOpen(opening);
+    if (opening && txData === null) {
+      setTxLoading(true);
+      try {
+        const param = line.category_id ? `categoryId=${line.category_id}` : "categoryId=";
+        const res = await fetch(`/api/finance/pnl/category?year=${year}&${param}`);
+        const d = await res.json() as { transactions: CategoryTransaction[] };
+        setTxData(d.transactions ?? []);
+      } catch {
+        setTxData([]);
+      } finally {
+        setTxLoading(false);
+      }
+    }
+  };
+
+  const txFiltered = activeMonth
+    ? (txData ?? []).filter((t) => t.date.slice(0, 7) === activeMonth)
+    : (txData ?? []);
+
+  return (
+    <>
+      {/* Main row */}
+      <tr
+        onClick={handleToggle}
+        className={`cursor-pointer transition-colors ${open ? "bg-white/90" : "bg-white/40 hover:bg-white/70"}`}
+      >
+        <td className="px-4 py-3 font-medium text-gray-700">
+          <div className="flex items-center gap-2">
+            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+            <span>{line.category_name}</span>
+          </div>
+        </td>
+        {showMonths && months.map((ym) => (
+          <td key={ym} className={`px-3 py-3 text-center font-mono text-xs whitespace-nowrap ${
+            (line.monthly[ym] ?? 0) !== 0 ? style.text : "text-gray-200"}`}>
+            {(line.monthly[ym] ?? 0) !== 0 ? fmt(Math.abs(line.monthly[ym] ?? 0)) : "—"}
+          </td>
+        ))}
+        <td className={`px-4 py-3 text-left font-mono font-semibold text-sm ${style.text}`}>
+          {fmt(line.total)}
+        </td>
+      </tr>
+
+      {/* Expanded panel */}
+      {open && (
+        <tr className="bg-white/60">
+          <td colSpan={totalCols} className="px-0 py-0">
+            <div className="border-t border-gray-100 p-4 space-y-4">
+
+              {/* Monthly bar chart */}
+              {chartData.length > 1 && (
+                <div>
+                  <p className="text-xs text-gray-400 font-medium mb-2">פילוח חודשי — לחץ על עמודה לסינון תנועות</p>
+                  <ResponsiveContainer width="100%" height={110}>
+                    <BarChart data={chartData} barCategoryGap="35%"
+                      onClick={(d) => {
+                        if (d?.activePayload) {
+                          const ym = (d.activePayload[0]?.payload as { ym: string }).ym;
+                          setActiveMonth((prev) => prev === ym ? null : ym);
+                        }
+                      }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                      <XAxis dataKey="month" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+                      <YAxis hide />
+                      <ReTooltip
+                        formatter={(val: number) => [fmt(val), line.category_name]}
+                        contentStyle={{ fontSize: 11, direction: "rtl", borderRadius: 8, border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}
+                        cursor={{ fill: "rgba(0,0,0,0.03)" }}
+                      />
+                      <Bar dataKey="amount" radius={[4, 4, 0, 0]} cursor="pointer">
+                        <LabelList
+                          dataKey="amount"
+                          position="top"
+                          formatter={(v: number) => v > 0 ? `₪${Math.round(v / 1000)}k` : ""}
+                          style={{ fontSize: 8, fill: "#9ca3af" }}
+                        />
+                        {chartData.map((entry) => (
+                          <Cell
+                            key={entry.ym}
+                            fill={activeMonth === null || activeMonth === entry.ym ? style.bar : `${style.bar}44`}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  {/* Month chips */}
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setActiveMonth(null); }}
+                      className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${!activeMonth ? "bg-gray-700 text-white border-gray-700" : "border-gray-200 text-gray-500 hover:border-gray-400"}`}
+                    >
+                      הכל
+                    </button>
+                    {chartData.map(({ month, ym }) => (
+                      <button
+                        key={ym}
+                        onClick={(e) => { e.stopPropagation(); setActiveMonth((p) => p === ym ? null : ym); }}
+                        className={`text-xs px-2.5 py-0.5 rounded-full border transition-colors ${activeMonth === ym ? "bg-gray-700 text-white border-gray-700" : "border-gray-200 text-gray-500 hover:border-gray-400"}`}
+                      >
+                        {month}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Transactions */}
+              <div onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-500 font-semibold">
+                    תנועות {activeMonth ? `— ${monthLabel(activeMonth)}` : ""}
+                    {!txLoading && txData !== null && (
+                      <span className="font-normal text-gray-300 mr-1">({txFiltered.length})</span>
+                    )}
+                  </p>
+                </div>
+
+                {txLoading ? (
+                  <div className="flex justify-center py-6 text-gray-400">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  </div>
+                ) : txFiltered.length === 0 ? (
+                  <p className="text-xs text-gray-300 text-center py-4">אין תנועות</p>
+                ) : (
+                  <div className="max-h-56 overflow-y-auto divide-y divide-gray-50 rounded-lg border border-gray-100 bg-white">
+                    {txFiltered.map((tx) => (
+                      <div key={tx.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors">
+                        <span className="text-xs text-gray-400 font-mono w-12 shrink-0">
+                          {tx.date.slice(5).split("-").reverse().join("/")}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-700 truncate leading-tight">
+                            {tx.supplier_name ?? tx.description}
+                          </p>
+                          {tx.notes && (
+                            <p className="text-xs text-blue-500 truncate">{tx.notes}</p>
+                          )}
+                          <div className="flex items-center gap-2">
+                            {tx.source_bank && (
+                              <span className="text-xs text-gray-300">{BANK_LABELS[tx.source_bank] ?? tx.source_bank}</span>
+                            )}
+                            {tx.reference && (
+                              <span className="text-xs text-gray-300">#{tx.reference}</span>
+                            )}
+                          </div>
+                        </div>
+                        <span className={`font-mono font-semibold text-sm shrink-0 ${style.text}`}>
+                          {fmt(tx.amount)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 // ─── PnL Section ─────────────────────────────────────────────────────────────
 
-function PnlSection({
-  lines, months, type, onRowClick,
-}: {
+function PnlSection({ lines, months, type, year }: {
   lines: PnlCategoryLine[];
   months: string[];
   type: string;
-  onRowClick: (line: PnlCategoryLine) => void;
+  year: number;
 }) {
   const style = TYPE_STYLE[type] ?? TYPE_STYLE["uncategorized"]!;
   const group = lines.filter((l) => l.category_type === type);
@@ -78,48 +269,35 @@ function PnlSection({
   const showMonths = months.length > 1;
 
   return (
-    <div className={`rounded-xl overflow-hidden border border-gray-100 shadow-sm ${style.bg}`}>
-      <div className={`flex items-center justify-between px-4 py-3 font-bold ${style.text}`}>
-        <span>{style.label}</span>
+    <div className={`rounded-2xl overflow-hidden border border-gray-100 shadow-sm ${style.bg}`}>
+      <div className={`flex items-center justify-between px-5 py-3.5 font-bold ${style.text}`}>
+        <span className="text-sm">{style.label}</span>
         <span className="text-lg">{fmt(sectionTotal)}</span>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm" dir="rtl">
           {showMonths && (
-            <thead className="border-b border-gray-100 bg-white/60">
+            <thead className="border-b border-gray-100 bg-white/50">
               <tr>
-                <th className="text-right px-4 py-2 font-medium text-gray-500">קטגוריה</th>
+                <th className="text-right px-4 py-2 font-medium text-gray-400 text-xs">קטגוריה</th>
                 {months.map((ym) => (
-                  <th key={ym} className="text-center px-3 py-2 font-medium text-gray-500 whitespace-nowrap">
+                  <th key={ym} className="text-center px-3 py-2 font-medium text-gray-400 text-xs whitespace-nowrap">
                     {monthLabel(ym)}
                   </th>
                 ))}
-                <th className="text-left px-4 py-2 font-medium text-gray-500">סה&quot;כ</th>
+                <th className="text-left px-4 py-2 font-medium text-gray-400 text-xs">סה&quot;כ</th>
               </tr>
             </thead>
           )}
-          <tbody className="divide-y divide-gray-100/50">
+          <tbody className="divide-y divide-gray-100/60">
             {group.map((line) => (
-              <tr
+              <CategoryRow
                 key={line.category_id ?? "__none__"}
-                onClick={() => onRowClick(line)}
-                className="bg-white/40 hover:bg-white/80 transition-colors cursor-pointer group"
-                title="לחץ לפירוט תנועות"
-              >
-                <td className="px-4 py-2.5 font-medium text-gray-700">
-                  <span className="group-hover:underline">{line.category_name}</span>
-                  <span className="mr-1.5 text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">←</span>
-                </td>
-                {showMonths && months.map((ym) => (
-                  <td key={ym} className={`px-3 py-2.5 text-center font-mono text-xs ${
-                    (line.monthly[ym] ?? 0) !== 0 ? style.text : "text-gray-300"}`}>
-                    {(line.monthly[ym] ?? 0) !== 0 ? fmt(line.monthly[ym] ?? 0) : "—"}
-                  </td>
-                ))}
-                <td className={`px-4 py-2.5 text-left font-mono font-semibold ${style.text}`}>
-                  {fmt(line.total)}
-                </td>
-              </tr>
+                line={line}
+                months={months}
+                style={style}
+                year={year}
+              />
             ))}
           </tbody>
         </table>
@@ -145,10 +323,10 @@ function Top5Expenses({ lines }: { lines: PnlCategoryLine[] }) {
         <BarChart3 className="w-4 h-4 text-red-400" />
         5 הוצאות גדולות
       </h3>
-      <div className="space-y-2">
+      <div className="space-y-2.5">
         {expenses.map((line, i) => (
           <div key={line.category_id ?? i}>
-            <div className="flex justify-between text-xs mb-0.5">
+            <div className="flex justify-between text-xs mb-1">
               <span className="text-gray-700 font-medium">{line.category_name}</span>
               <span className="text-red-600 font-mono font-semibold">{fmt(line.total)}</span>
             </div>
@@ -174,7 +352,6 @@ function ExpensePie({ lines }: { lines: PnlCategoryLine[] }) {
     .slice(0, 8);
 
   if (expenses.length === 0) return null;
-
   const pieData = expenses.map((l) => ({ name: l.category_name, value: l.total }));
 
   return (
@@ -185,68 +362,29 @@ function ExpensePie({ lines }: { lines: PnlCategoryLine[] }) {
       </h3>
       <ResponsiveContainer width="100%" height={200}>
         <PieChart>
-          <Pie
-            data={pieData}
-            cx="50%"
-            cy="50%"
-            innerRadius={50}
-            outerRadius={80}
-            paddingAngle={2}
-            dataKey="value"
-          >
-            {pieData.map((_, i) => (
-              <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-            ))}
+          <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
+            {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
           </Pie>
-          <ReTooltip
-            formatter={(val: number) => [fmt(val), ""]}
-            contentStyle={{ direction: "rtl", fontSize: 12 }}
-          />
-          <Legend
-            formatter={(val: string) => val}
-            wrapperStyle={{ fontSize: 10, direction: "rtl" }}
-          />
+          <ReTooltip formatter={(val: number) => [fmt(val), ""]} contentStyle={{ direction: "rtl", fontSize: 12 }} />
+          <Legend formatter={(val: string) => val} wrapperStyle={{ fontSize: 10, direction: "rtl" }} />
         </PieChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
-// ─── Category Drill-Down Modal ────────────────────────────────────────────────
+// ─── Month Comparison Panel ───────────────────────────────────────────────────
 
-const BANK_LABELS: Record<string, string> = {
-  leumi: "לאומי", hapoalim: "הפועלים", mizrahi: "מזרחי",
-};
-
-function CategoryDrillModal({
-  line, year, onClose,
+function MonthComparePanel({
+  lines, months, year, onClose,
 }: {
-  line: PnlCategoryLine;
+  lines: PnlCategoryLine[];
+  months: string[];
   year: number;
   onClose: () => void;
 }) {
-  const style = TYPE_STYLE[line.category_type] ?? TYPE_STYLE["uncategorized"]!;
-  const [data, setData] = useState<CategoryTransactionsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeMonth, setActiveMonth] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-  const overlayRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    const param = line.category_id
-      ? `categoryId=${line.category_id}`
-      : "categoryId=";
-    fetch(`/api/finance/pnl/category?year=${year}&${param}`)
-      .then((r) => r.json())
-      .then((d) => { setData(d as CategoryTransactionsResponse); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [line, year]);
-
-  // Close on overlay click
-  const handleOverlay = (e: React.MouseEvent) => {
-    if (e.target === overlayRef.current) onClose();
-  };
+  const [monthA, setMonthA] = useState(months[months.length - 2] ?? months[0] ?? "");
+  const [monthB, setMonthB] = useState(months[months.length - 1] ?? "");
 
   // Close on Escape
   useEffect(() => {
@@ -255,181 +393,194 @@ function CategoryDrillModal({
     return () => window.removeEventListener("keydown", fn);
   }, [onClose]);
 
-  // Build monthly chart data from the line (already available)
-  const chartData = Object.entries(line.monthly)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([ym, amount]) => ({
-      month: monthLabel(ym),
-      ym,
-      amount: Math.abs(amount),
-    }));
+  // Build comparison rows for meaningful types only
+  const relevantTypes = ["income", "expense"] as const;
+  const rows = lines.filter((l) =>
+    relevantTypes.includes(l.category_type as "income" | "expense") && (l.monthly[monthA] || l.monthly[monthB])
+  ).map((l) => {
+    const a = Math.abs(l.monthly[monthA] ?? 0);
+    const b = Math.abs(l.monthly[monthB] ?? 0);
+    const delta = b - a;
+    const deltaPct = a > 0 ? Math.round(((b - a) / a) * 100) : null;
+    return { ...l, a, b, delta, deltaPct };
+  }).sort((x, y) => Math.max(y.a, y.b) - Math.max(x.a, x.b));
 
-  // Filter transactions by active month
-  const txAll = data?.transactions ?? [];
-  const txFiltered = activeMonth
-    ? txAll.filter((t) => t.date.slice(0, 7) === activeMonth)
-    : txAll;
-  const txSorted = [...txFiltered].sort((a, b) =>
-    sortDir === "desc" ? b.amount - a.amount : a.amount - b.amount
-  );
+  // Chart data for top categories
+  const chartRows = rows
+    .filter((r) => r.category_type === "expense")
+    .slice(0, 8)
+    .map((r) => ({ name: r.category_name, [monthLabel(monthA)]: r.a, [monthLabel(monthB)]: r.b }));
 
-  const barColor = line.category_type === "expense" ? "#ef4444"
-    : line.category_type === "income" ? "#22c55e"
-    : line.category_type === "transfer" ? "#3b82f6"
-    : "#9ca3af";
+  const incomeA = lines.filter(l => l.category_type === "income").reduce((s, l) => s + Math.abs(l.monthly[monthA] ?? 0), 0);
+  const incomeB = lines.filter(l => l.category_type === "income").reduce((s, l) => s + Math.abs(l.monthly[monthB] ?? 0), 0);
+  const expenseA = lines.filter(l => l.category_type === "expense").reduce((s, l) => s + Math.abs(l.monthly[monthA] ?? 0), 0);
+  const expenseB = lines.filter(l => l.category_type === "expense").reduce((s, l) => s + Math.abs(l.monthly[monthB] ?? 0), 0);
+
+  const labelA = monthLabel(monthA);
+  const labelB = monthLabel(monthB);
 
   return (
-    <div
-      ref={overlayRef}
-      onClick={handleOverlay}
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4"
-      dir="rtl"
-    >
-      <div className="bg-white w-full sm:max-w-2xl max-h-[92vh] sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4" dir="rtl">
+      <div className="bg-white w-full sm:max-w-3xl max-h-[94vh] sm:rounded-2xl rounded-t-2xl shadow-2xl flex flex-col overflow-hidden">
+
         {/* Header */}
-        <div className={`flex items-center justify-between px-5 py-4 ${style.bg} border-b border-gray-100`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
           <div className="flex items-center gap-3">
-            <div className={`w-3 h-3 rounded-full ${
-              line.category_type === "expense" ? "bg-red-400" :
-              line.category_type === "income" ? "bg-green-400" :
-              line.category_type === "transfer" ? "bg-blue-400" : "bg-gray-300"
-            }`} />
-            <div>
-              <h2 className={`font-bold text-base ${style.text}`}>{line.category_name}</h2>
-              <p className="text-xs text-gray-400">{style.label} · {year}</p>
-            </div>
+            <Scale className="w-5 h-5 text-blue-500" />
+            <h2 className="font-bold text-gray-900">השוואת חודשים — {year}</h2>
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`font-bold text-lg ${style.text}`}>{fmt(line.total)}</span>
-            <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-black/5 text-gray-400">
-              <X className="w-5 h-5" />
-            </button>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* Month pickers */}
+        <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-3 flex-wrap bg-gray-50/50">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-400" />
+            <select
+              value={monthA}
+              onChange={(e) => setMonthA(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              {months.map((ym) => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+            </select>
+          </div>
+          <span className="text-gray-300 font-bold">vs</span>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-orange-400" />
+            <select
+              value={monthB}
+              onChange={(e) => setMonthB(e.target.value)}
+              className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+            >
+              {months.map((ym) => <option key={ym} value={ym}>{monthLabel(ym)}</option>)}
+            </select>
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1">
-          {/* Monthly Bar Chart */}
-          {chartData.length > 1 && (
-            <div className="px-5 pt-5 pb-2">
-              <p className="text-xs font-semibold text-gray-500 mb-3 flex items-center gap-1.5">
-                <BarChart3 className="w-3.5 h-3.5" />
-                פילוח חודשי — לחץ על עמודה לסינון
-              </p>
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={chartData} barCategoryGap="30%" onClick={(d) => {
-                  if (d?.activePayload) {
-                    const ym = (d.activePayload[0]?.payload as { ym: string }).ym;
-                    setActiveMonth((prev) => prev === ym ? null : ym);
-                  }
-                }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 9, fill: "#d1d5db" }} axisLine={false} tickLine={false}
+        <div className="overflow-y-auto flex-1 p-5 space-y-5">
+
+          {/* KPI summary */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-green-50 rounded-xl p-4">
+              <p className="text-xs text-green-600 font-medium mb-1">הכנסות</p>
+              <div className="flex items-end gap-3">
+                <div>
+                  <p className="text-xs text-gray-400">{labelA}</p>
+                  <p className="font-bold text-green-700">{fmt(incomeA)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">{labelB}</p>
+                  <p className="font-bold text-green-700">{fmt(incomeB)}</p>
+                </div>
+                {incomeA > 0 && (
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full mr-auto ${incomeB >= incomeA ? "bg-green-200 text-green-800" : "bg-red-100 text-red-700"}`}>
+                    {incomeB >= incomeA ? "▲" : "▼"} {Math.abs(Math.round(((incomeB - incomeA) / incomeA) * 100))}%
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="bg-red-50 rounded-xl p-4">
+              <p className="text-xs text-red-600 font-medium mb-1">הוצאות</p>
+              <div className="flex items-end gap-3">
+                <div>
+                  <p className="text-xs text-gray-400">{labelA}</p>
+                  <p className="font-bold text-red-700">{fmt(expenseA)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-400">{labelB}</p>
+                  <p className="font-bold text-red-700">{fmt(expenseB)}</p>
+                </div>
+                {expenseA > 0 && (
+                  <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full mr-auto ${expenseB <= expenseA ? "bg-green-200 text-green-800" : "bg-red-100 text-red-700"}`}>
+                    {expenseB <= expenseA ? "▼" : "▲"} {Math.abs(Math.round(((expenseB - expenseA) / expenseA) * 100))}%
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Grouped bar chart for expenses */}
+          {chartRows.length > 0 && (
+            <div>
+              <p className="text-xs text-gray-500 font-semibold mb-2">השוואת הוצאות לפי קטגוריה</p>
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={chartRows} layout="vertical" margin={{ right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f3f4f6" />
+                  <XAxis type="number" tick={{ fontSize: 9, fill: "#9ca3af" }} axisLine={false} tickLine={false}
                     tickFormatter={(v: number) => `₪${(v / 1000).toFixed(0)}k`} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 9, fill: "#6b7280" }} axisLine={false} tickLine={false} width={80} />
                   <ReTooltip
-                    formatter={(val: number) => [fmt(val), line.category_name]}
-                    contentStyle={{ fontSize: 12, direction: "rtl", borderRadius: 8 }}
-                    cursor={{ fill: "rgba(0,0,0,0.04)" }}
+                    formatter={(val: number) => [fmt(val), ""]}
+                    contentStyle={{ fontSize: 11, direction: "rtl", borderRadius: 8, border: "none", boxShadow: "0 4px 16px rgba(0,0,0,0.1)" }}
                   />
-                  <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                    {chartData.map((entry) => (
-                      <Cell
-                        key={entry.ym}
-                        fill={activeMonth === entry.ym ? barColor : `${barColor}99`}
-                        cursor="pointer"
-                      />
-                    ))}
-                  </Bar>
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  <Bar dataKey={labelA} fill="#60a5fa" radius={[0, 3, 3, 0]} barSize={8} />
+                  <Bar dataKey={labelB} fill="#f97316" radius={[0, 3, 3, 0]} barSize={8} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* Month filter chips */}
-          {chartData.length > 0 && (
-            <div className="px-5 py-2 flex flex-wrap gap-1.5">
-              <button
-                onClick={() => setActiveMonth(null)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  !activeMonth ? "bg-gray-800 text-white border-gray-800" : "border-gray-200 text-gray-500 hover:border-gray-400"
-                }`}
-              >
-                הכל
-              </button>
-              {chartData.map(({ month, ym }) => (
-                <button
-                  key={ym}
-                  onClick={() => setActiveMonth((prev) => prev === ym ? null : ym)}
-                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                    activeMonth === ym ? `${barColor === "#ef4444" ? "bg-red-500 border-red-500" : barColor === "#22c55e" ? "bg-green-500 border-green-500" : "bg-blue-500 border-blue-500"} text-white` : "border-gray-200 text-gray-500 hover:border-gray-400"
-                  }`}
-                >
-                  {month}
-                </button>
-              ))}
+          {/* Comparison table */}
+          <div>
+            <p className="text-xs text-gray-500 font-semibold mb-2">פירוט לפי קטגוריה</p>
+            <div className="rounded-xl border border-gray-100 overflow-hidden">
+              <table className="w-full text-sm" dir="rtl">
+                <thead className="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th className="text-right px-4 py-2.5 font-medium text-gray-500 text-xs">קטגוריה</th>
+                    <th className="text-center px-3 py-2.5 font-medium text-xs">
+                      <span className="flex items-center justify-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-blue-400 inline-block" />
+                        {labelA}
+                      </span>
+                    </th>
+                    <th className="text-center px-3 py-2.5 font-medium text-xs">
+                      <span className="flex items-center justify-center gap-1">
+                        <span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />
+                        {labelB}
+                      </span>
+                    </th>
+                    <th className="text-center px-3 py-2.5 font-medium text-gray-500 text-xs">שינוי</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {rows.map((r) => {
+                    const typeStyle = TYPE_STYLE[r.category_type] ?? TYPE_STYLE["uncategorized"]!;
+                    const isExpense = r.category_type === "expense";
+                    const good = isExpense ? r.delta < 0 : r.delta > 0;
+                    return (
+                      <tr key={r.category_id ?? "__none__"} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${typeStyle.bg} ${typeStyle.text}`}>
+                              {typeStyle.label}
+                            </span>
+                            <span className="text-gray-700 font-medium text-xs">{r.category_name}</span>
+                          </div>
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-mono text-xs text-blue-600">
+                          {r.a > 0 ? fmt(r.a) : <span className="text-gray-200">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-center font-mono text-xs text-orange-500">
+                          {r.b > 0 ? fmt(r.b) : <span className="text-gray-200">—</span>}
+                        </td>
+                        <td className="px-3 py-2.5 text-center">
+                          {r.delta !== 0 && (
+                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${good ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
+                              {r.delta > 0 ? "▲" : "▼"}
+                              {r.deltaPct !== null ? ` ${Math.abs(r.deltaPct)}%` : ` ${fmt(Math.abs(r.delta))}`}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
-          )}
-
-          <div className="px-5 pb-5 pt-2">
-            {/* Transactions header */}
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
-                <Calendar className="w-3.5 h-3.5" />
-                תנועות {activeMonth ? `— ${monthLabel(activeMonth)}` : ""}
-                {!loading && <span className="text-gray-300 font-normal">({txFiltered.length})</span>}
-              </p>
-              {txFiltered.length > 1 && (
-                <button
-                  onClick={() => setSortDir((d) => d === "desc" ? "asc" : "desc")}
-                  className="flex items-center gap-0.5 text-xs text-gray-400 hover:text-gray-600"
-                >
-                  סכום {sortDir === "desc" ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />}
-                </button>
-              )}
-            </div>
-
-            {loading ? (
-              <div className="flex items-center justify-center gap-2 py-10 text-gray-400">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">טוען תנועות...</span>
-              </div>
-            ) : txSorted.length === 0 ? (
-              <div className="text-center py-8 text-gray-300 text-sm">אין תנועות</div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {txSorted.map((tx: CategoryTransaction) => (
-                  <div key={tx.id} className="py-2.5 flex items-start gap-3">
-                    <div className="shrink-0 text-xs text-gray-400 w-16 pt-0.5 font-mono">
-                      {tx.date.slice(5).split("-").reverse().join("/")}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-700 font-medium truncate leading-tight">
-                        {tx.supplier_name ?? tx.description}
-                      </p>
-                      {tx.details && tx.details !== tx.description && (
-                        <p className="text-xs text-gray-400 truncate mt-0.5">{tx.details}</p>
-                      )}
-                      {tx.notes && (
-                        <p className="text-xs text-blue-500 mt-0.5 truncate">{tx.notes}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {tx.source_bank && (
-                          <span className="text-xs text-gray-300">
-                            {BANK_LABELS[tx.source_bank] ?? tx.source_bank}
-                          </span>
-                        )}
-                        {tx.reference && (
-                          <span className="text-xs text-gray-300">#{tx.reference}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className={`shrink-0 font-mono font-semibold text-sm ${style.text}`}>
-                      {fmt(tx.amount)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -448,7 +599,7 @@ export default function PnlPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPie, setShowPie] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [drillLine, setDrillLine] = useState<PnlCategoryLine | null>(null);
+  const [showCompare, setShowCompare] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -476,17 +627,15 @@ export default function PnlPage() {
       const XLSX = await loadXlsx();
       const monthCols = data.months.map(monthLabel);
       const header = ["קטגוריה", "סוג", ...monthCols, 'סה"כ'];
-
       const rows = data.lines.map((l) => [
         l.category_name,
         TYPE_STYLE[l.category_type]?.label ?? l.category_type,
         ...data.months.map((ym) => l.monthly[ym] ?? 0),
         l.total,
       ]);
-
       rows.push([]);
-      rows.push(["סה\"כ הכנסות", "", ...data.months.map(() => ""), data.income_total]);
-      rows.push(["סה\"כ הוצאות", "", ...data.months.map(() => ""), data.expense_total]);
+      rows.push(['סה"כ הכנסות', "", ...data.months.map(() => ""), data.income_total]);
+      rows.push(['סה"כ הוצאות', "", ...data.months.map(() => ""), data.expense_total]);
       rows.push(["רווח נקי",    "", ...data.months.map(() => ""), data.net]);
 
       const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
@@ -508,15 +657,25 @@ export default function PnlPage() {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900">דוח רווח והפסד</h1>
-          <p className="text-sm text-gray-500 mt-0.5">סיכום הכנסות והוצאות לפי קטגוריה</p>
+          <p className="text-sm text-gray-500 mt-0.5">לחץ על קטגוריה לפירוט תנועות וגרף חודשי</p>
         </div>
 
-        {/* Controls */}
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Compare months */}
+          <button
+            onClick={() => setShowCompare(true)}
+            disabled={!data || data.months.length < 2}
+            title="השוואת חודשים"
+            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 disabled:opacity-30 transition-colors"
+          >
+            <Scale className="w-4 h-4" />
+            השוואה
+          </button>
+
           {/* Pie toggle */}
           <button
             onClick={() => setShowPie((v) => !v)}
-            title={showPie ? "הצג טבלה" : "הצג פילוח"}
+            title={showPie ? "הסתר פילוח" : "הצג פילוח"}
             className={`p-2 rounded-lg border transition-colors ${showPie ? "bg-red-50 border-red-200 text-red-600" : "border-gray-200 text-gray-400 hover:bg-gray-50"}`}
           >
             <BarChart3 className="w-4 h-4" />
@@ -535,15 +694,11 @@ export default function PnlPage() {
           {/* Year selector */}
           <div className="flex items-center gap-1">
             <button onClick={() => setYear((y) => y - 1)}
-              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600">
-              ›
-            </button>
+              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600">›</button>
             <span className="font-bold text-gray-800 w-14 text-center">{year}</span>
             <button onClick={() => setYear((y) => y + 1)}
               disabled={year >= currentYear}
-              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600 disabled:opacity-30">
-              ‹
-            </button>
+              className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center hover:bg-gray-50 text-gray-600 disabled:opacity-30">‹</button>
           </div>
 
           {/* Month selector */}
@@ -553,9 +708,7 @@ export default function PnlPage() {
             className="border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
           >
             <option value={0}>כל השנה</option>
-            {MONTH_NAMES.map((name, i) => (
-              <option key={i + 1} value={i + 1}>{name}</option>
-            ))}
+            {MONTH_NAMES.map((name, i) => <option key={i + 1} value={i + 1}>{name}</option>)}
           </select>
         </div>
       </div>
@@ -571,27 +724,25 @@ export default function PnlPage() {
         <div className="bg-red-50 text-red-600 rounded-xl px-4 py-3 text-sm">{error}</div>
       )}
 
-      {/* Category drill-down modal */}
-      {drillLine && (
-        <CategoryDrillModal
-          line={drillLine}
+      {/* Month comparison modal */}
+      {showCompare && data && data.months.length >= 2 && (
+        <MonthComparePanel
+          lines={data.lines}
+          months={data.months}
           year={year}
-          onClose={() => setDrillLine(null)}
+          onClose={() => setShowCompare(false)}
         />
       )}
 
       {data && !loading && (
         <>
-          {/* ── KPI Cards ── */}
+          {/* KPI Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {/* Income */}
             <div className="bg-green-50 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-1">
                 <TrendingUp className="w-5 h-5 text-green-500" />
                 <span className="text-sm font-medium text-green-600">סה&quot;כ הכנסות</span>
-                {data.prev_income_total > 0 && (
-                  <DeltaBadge curr={data.income_total} prev={data.prev_income_total} />
-                )}
+                {data.prev_income_total > 0 && <DeltaBadge curr={data.income_total} prev={data.prev_income_total} />}
               </div>
               <p className="text-3xl font-bold text-green-700">{fmt(data.income_total)}</p>
               {data.prev_income_total > 0 && (
@@ -599,14 +750,11 @@ export default function PnlPage() {
               )}
             </div>
 
-            {/* Expense */}
             <div className="bg-red-50 rounded-2xl p-5">
               <div className="flex items-center gap-2 mb-1">
                 <TrendingDown className="w-5 h-5 text-red-500" />
                 <span className="text-sm font-medium text-red-600">סה&quot;כ הוצאות</span>
-                {data.prev_expense_total > 0 && (
-                  <DeltaBadge curr={data.expense_total} prev={data.prev_expense_total} />
-                )}
+                {data.prev_expense_total > 0 && <DeltaBadge curr={data.expense_total} prev={data.prev_expense_total} />}
               </div>
               <p className="text-3xl font-bold text-red-700">{fmt(data.expense_total)}</p>
               {data.prev_expense_total > 0 && (
@@ -614,13 +762,10 @@ export default function PnlPage() {
               )}
             </div>
 
-            {/* Net */}
             <div className={`rounded-2xl p-5 ${data.net >= 0 ? "bg-blue-50" : "bg-orange-50"}`}>
               <div className="flex items-center gap-2 mb-1">
                 <Minus className={`w-5 h-5 ${data.net >= 0 ? "text-blue-500" : "text-orange-500"}`} />
-                <span className={`text-sm font-medium ${data.net >= 0 ? "text-blue-600" : "text-orange-600"}`}>
-                  רווח נקי
-                </span>
+                <span className={`text-sm font-medium ${data.net >= 0 ? "text-blue-600" : "text-orange-600"}`}>רווח נקי</span>
                 {(data.prev_income_total > 0 || data.prev_expense_total > 0) && (
                   <DeltaBadge curr={data.net} prev={data.prev_net} />
                 )}
@@ -636,7 +781,7 @@ export default function PnlPage() {
             </div>
           </div>
 
-          {/* ── Classification % ── */}
+          {/* Classification % */}
           {data.classified_pct < 100 && (
             <div className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 px-4 py-3 shadow-sm">
               <div className="flex-1">
@@ -653,10 +798,7 @@ export default function PnlPage() {
                   />
                 </div>
               </div>
-              <Link
-                href="/dashboard/finance/categories"
-                className="text-xs text-blue-600 hover:underline font-medium shrink-0"
-              >
+              <Link href="/dashboard/finance/categories" className="text-xs text-blue-600 hover:underline font-medium shrink-0">
                 שפר סיווג →
               </Link>
             </div>
@@ -674,7 +816,6 @@ export default function PnlPage() {
             </div>
           ) : (
             <>
-              {/* ── Top5 + Pie row ── */}
               {showPie ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <Top5Expenses lines={data.lines} />
@@ -684,7 +825,6 @@ export default function PnlPage() {
                 <Top5Expenses lines={data.lines} />
               )}
 
-              {/* ── P&L Sections ── */}
               <div className="space-y-4">
                 {(["income", "expense", "transfer", "uncategorized", "ignore"] as const).map((type) => (
                   <PnlSection
@@ -692,7 +832,7 @@ export default function PnlPage() {
                     lines={data.lines}
                     months={data.months}
                     type={type}
-                    onRowClick={setDrillLine}
+                    year={year}
                   />
                 ))}
               </div>

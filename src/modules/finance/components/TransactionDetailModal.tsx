@@ -291,11 +291,32 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
     }
   }, [selectedCatId, ruleField, tx]);
 
-  // Auto-detect doc type from file name
-  const onFileChosen = useCallback((file: File) => {
+  // Auto-detect doc type: first by file content (HTML-in-XLS), then by name
+  const onFileChosen = useCallback(async (file: File) => {
     setUploadFile(file);
     setUploadError(null);
     const name = file.name.toLowerCase();
+
+    // Detect HTML-in-XLS (Leumi/Diners/Israeli bank export) by reading
+    // the first ~300 bytes — these files start with an HTML tag.
+    if (name.endsWith(".xls") || name.endsWith(".xlsx")) {
+      try {
+        const preview = await file.slice(0, 300).text();
+        if (
+          preview.includes("<HTML") ||
+          preview.includes("<html") ||
+          preview.includes("xmlns:x=") ||
+          preview.includes("exporttool")
+        ) {
+          setDocType("leumi_credit_xls");
+          return;
+        }
+      } catch {
+        // fall through to name-based detection
+      }
+    }
+
+    // Name-based fallback
     if (name.includes("salari") || name.includes("shcr") || name.includes("salary") || name.includes("collection")) {
       setDocType("salary_xlsx");
     } else if (name.includes("transaction") || name.includes("credit") || name.includes("discount")) {
