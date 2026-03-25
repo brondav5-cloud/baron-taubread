@@ -164,6 +164,9 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
   const [linkedDocs, setLinkedDocs] = useState<LinkedDoc[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
+  const [categories, setCategories] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [selectedCatId, setSelectedCatId] = useState<string>(tx.category_id ?? "");
+  const [savingCat, setSavingCat] = useState(false);
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -173,24 +176,50 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // ── Load linked docs ──────────────────────────────────────────────────────
+  // ── Load linked docs + categories ────────────────────────────────────────
   const loadDocs = useCallback(async () => {
     setLoadingDocs(true);
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const { data } = await supabase
-        .from("transaction_document_links")
-        .select(`id, match_method, document:transaction_detail_documents(id, file_name, doc_type, doc_date, total_amount, reference, raw_data, uploaded_at)`)
-        .eq("transaction_id", tx.id)
-        .order("created_at", { ascending: false });
-      setLinkedDocs((data as unknown as LinkedDoc[]) ?? []);
+      const [{ data: links }, { data: cats }] = await Promise.all([
+        supabase
+          .from("transaction_document_links")
+          .select(`id, match_method, document:transaction_detail_documents(id, file_name, doc_type, doc_date, total_amount, reference, raw_data, uploaded_at)`)
+          .eq("transaction_id", tx.id),
+        supabase
+          .from("bank_categories")
+          .select("id, name, type")
+          .order("sort_order")
+          .order("name"),
+      ]);
+      setLinkedDocs((links as unknown as LinkedDoc[]) ?? []);
+      setCategories(cats ?? []);
     } finally {
       setLoadingDocs(false);
     }
   }, [tx.id]);
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
+
+  // ── Save category ─────────────────────────────────────────────────────────
+  const handleSaveCategory = useCallback(async (catId: string) => {
+    setSavingCat(true);
+    try {
+      await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: catId ? "manual" : "clear",
+          tx_id: tx.id,
+          category_id: catId || undefined,
+        }),
+      });
+      setSelectedCatId(catId);
+    } finally {
+      setSavingCat(false);
+    }
+  }, [tx.id]);
 
   // Auto-detect doc type from file name
   const onFileChosen = useCallback((file: File) => {
@@ -314,6 +343,25 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
               </div>
             )}
           </div>
+
+          {/* Category selector */}
+          {categories.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-medium text-gray-500 shrink-0">קטגוריה:</label>
+              <select
+                value={selectedCatId}
+                onChange={(e) => handleSaveCategory(e.target.value)}
+                disabled={savingCat}
+                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+              >
+                <option value="">— ללא סיווג —</option>
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+              {savingCat && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
+            </div>
+          )}
 
           {/* Linked documents */}
           <div>

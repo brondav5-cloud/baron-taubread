@@ -100,45 +100,60 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, classified: 0, message: "אין כללי סיווג" });
     }
 
-    // Fetch unclassified transactions (no manual override)
-    const { data: transactions } = await supabase
-      .from("bank_transactions")
-      .select("id, description, details, reference, operation_code")
-      .eq("company_id", companyId)
-      .is("category_id", null)
-      .order("date", { ascending: false })
-      .limit(2000);
+    // Fetch ALL unclassified transactions (paginate in batches of 1000)
+    let allTransactions: BankTx[] = [];
+    let offset = 0;
+    const FETCH_BATCH = 1000;
+    while (true) {
+      const { data: batch } = await supabase
+        .from("bank_transactions")
+        .select("id, description, details, reference, operation_code")
+        .eq("company_id", companyId)
+        .is("category_id", null)
+        .is("category_override", null)
+        .order("date", { ascending: false })
+        .range(offset, offset + FETCH_BATCH - 1);
 
-    if (!transactions || transactions.length === 0) {
+      if (!batch || batch.length === 0) break;
+      allTransactions = allTransactions.concat(batch as BankTx[]);
+      if (batch.length < FETCH_BATCH) break;
+      offset += FETCH_BATCH;
+    }
+
+    if (allTransactions.length === 0) {
       return NextResponse.json({ ok: true, classified: 0, message: "אין תנועות ללא סיווג" });
     }
 
-    // Apply rules
-    const updates: { id: string; category_id: string }[] = [];
-    for (const tx of transactions as BankTx[]) {
+    // Apply rules — first matching rule wins (sorted by priority desc)
+    const byCategory = new Map<string, string[]>(); // category_id → [tx_id, ...]
+    for (const tx of allTransactions) {
       for (const rule of rules as CategoryRule[]) {
         if (matchesRule(tx, rule)) {
-          updates.push({ id: tx.id, category_id: rule.category_id });
-          break; // first matching rule wins
+          const arr = byCategory.get(rule.category_id) ?? [];
+          arr.push(tx.id);
+          byCategory.set(rule.category_id, arr);
+          break;
         }
       }
     }
 
-    // Batch update in chunks of 100
+    // Batch UPDATE grouped by category (in() operator — 1 query per category)
     let classified = 0;
-    for (let i = 0; i < updates.length; i += 100) {
-      const chunk = updates.slice(i, i + 100);
-      for (const u of chunk) {
-        await supabase
+    for (const catId of Array.from(byCategory.keys())) {
+      const ids = byCategory.get(catId) ?? [];
+      // Supabase in() supports up to 1000 items per call
+      for (let i = 0; i < ids.length; i += 1000) {
+        const chunk = ids.slice(i, i + 1000);
+        const { error: upErr } = await supabase
           .from("bank_transactions")
-          .update({ category_id: u.category_id })
-          .eq("id", u.id)
+          .update({ category_id: catId })
+          .in("id", chunk)
           .eq("company_id", companyId);
-        classified++;
+        if (!upErr) classified += chunk.length;
       }
     }
 
-    return NextResponse.json({ ok: true, classified, total: transactions.length });
+    return NextResponse.json({ ok: true, classified, total: allTransactions.length });
   } catch (err) {
     logError("finance/classify: unhandled", err);
     return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });

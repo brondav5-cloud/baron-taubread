@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
-import type { BankTransaction, BankAccount, SourceBank } from "../types";
+import type { BankTransaction, BankAccount, BankCategory, SourceBank } from "../types";
 
 export interface BankTransactionFilters {
   dateFrom: string;
@@ -23,6 +23,7 @@ function emptyFilters(): BankTransactionFilters {
 export interface UseBankTransactionsReturn {
   transactions: BankTransaction[];
   accounts: BankAccount[];
+  categories: BankCategory[];
   totalCount: number;
   page: number;
   pageSize: number;
@@ -41,13 +42,15 @@ export function useBankTransactions(): UseBankTransactionsReturn {
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
 
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
+  const [categories, setCategories] = useState<BankCategory[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFiltersState] = useState<BankTransactionFilters>(emptyFilters);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const refreshToken = useRef(0);
+  // Use a state counter (not ref) so that refresh() triggers useEffect even when page is already 0
+  const [refreshCounter, setRefreshCounter] = useState(0);
 
   const setFilters = useCallback(
     (f: BankTransactionFilters | ((prev: BankTransactionFilters) => BankTransactionFilters)) => {
@@ -58,24 +61,22 @@ export function useBankTransactions(): UseBankTransactionsReturn {
   );
 
   const refresh = useCallback(() => {
-    refreshToken.current++;
+    setRefreshCounter((c) => c + 1);
     setPage(0);
   }, []);
 
-  // Load bank accounts once
+  // Load bank accounts + categories (re-load when refreshCounter changes)
   useEffect(() => {
     if (!selectedCompanyId) return;
     const supabase = createClient();
-    supabase
-      .from("bank_accounts")
-      .select("*")
-      .eq("company_id", selectedCompanyId)
-      .eq("is_active", true)
-      .order("display_name")
-      .then(({ data }) => {
-        if (data) setAccounts(data as BankAccount[]);
-      });
-  }, [selectedCompanyId]);
+    Promise.all([
+      supabase.from("bank_accounts").select("*").eq("company_id", selectedCompanyId).eq("is_active", true).order("display_name"),
+      supabase.from("bank_categories").select("*").eq("company_id", selectedCompanyId).order("sort_order").order("name"),
+    ]).then(([{ data: accts }, { data: cats }]) => {
+      if (accts) setAccounts(accts as BankAccount[]);
+      if (cats) setCategories(cats as BankCategory[]);
+    });
+  }, [selectedCompanyId, refreshCounter]);
 
   // Load transactions (paginated + filtered)
   useEffect(() => {
@@ -118,12 +119,12 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     });
 
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedCompanyId, page, filters, refreshToken.current]);
+  }, [user, selectedCompanyId, page, filters, refreshCounter]);
 
   return {
     transactions,
     accounts,
+    categories,
     totalCount,
     page,
     pageSize: PAGE_SIZE,

@@ -153,6 +153,7 @@ export default function FinancePage() {
       {/* ── Table ──────────────────────────────────────────────────────────── */}
       <BankTransactionsTable
         transactions={hook.transactions}
+        categories={hook.categories}
         isLoading={hook.isLoading}
         onRowClick={setSelectedTx}
       />

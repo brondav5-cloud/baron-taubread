@@ -1,12 +1,19 @@
 "use client";
 
 import { memo } from "react";
-import type { BankTransaction, SourceBank } from "../types";
+import type { BankTransaction, BankCategory, SourceBank } from "../types";
 
 const BANK_LABELS: Record<SourceBank, { label: string; color: string }> = {
   leumi: { label: "לאומי", color: "bg-blue-100 text-blue-700" },
   hapoalim: { label: "הפועלים", color: "bg-orange-100 text-orange-700" },
   mizrahi: { label: "מזרחי", color: "bg-yellow-100 text-yellow-700" },
+};
+
+const CAT_TYPE_COLOR: Record<string, string> = {
+  income:   "bg-green-100 text-green-700",
+  expense:  "bg-red-100 text-red-700",
+  transfer: "bg-blue-100 text-blue-700",
+  ignore:   "bg-gray-100 text-gray-400",
 };
 
 function fmt(n: number): string {
@@ -20,15 +27,18 @@ function formatDate(iso: string): string {
 
 interface Props {
   transactions: BankTransaction[];
+  categories?: BankCategory[];
   isLoading: boolean;
   onRowClick?: (tx: BankTransaction) => void;
 }
 
 export const BankTransactionsTable = memo(function BankTransactionsTable({
   transactions,
+  categories = [],
   isLoading,
   onRowClick,
 }: Props) {
+  const catMap = new Map(categories.map((c) => [c.id, c]));
   if (isLoading) {
     return (
       <div className="rounded-xl border border-gray-100 bg-white overflow-hidden">
@@ -64,7 +74,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               <th className="px-4 py-3 text-left whitespace-nowrap">חובה ₪</th>
               <th className="px-4 py-3 text-left whitespace-nowrap">זכות ₪</th>
               <th className="px-4 py-3 text-left whitespace-nowrap hidden lg:table-cell">יתרה ₪</th>
-              <th className="px-4 py-3 hidden md:table-cell">בנק</th>
+              <th className="px-4 py-3 hidden lg:table-cell">קטגוריה</th>
+          <th className="px-4 py-3 hidden md:table-cell">בנק</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -72,6 +83,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               const isDebit = tx.debit > 0;
               const isCredit = tx.credit > 0;
               const bankInfo = BANK_LABELS[tx.source_bank];
+              const cat = tx.category_id ? catMap.get(tx.category_id) : undefined;
 
               return (
                 <tr
@@ -107,6 +119,13 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     {tx.balance != null && (
                       <span className={`font-mono text-xs ${tx.balance < 0 ? "text-red-500" : "text-gray-500"}`}>
                         {fmt(tx.balance)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 hidden lg:table-cell">
+                    {cat && (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"}`}>
+                        {cat.name}
                       </span>
                     )}
                   </td>

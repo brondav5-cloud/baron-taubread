@@ -348,7 +348,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
               >
                 ביטול
               </button>
-              {step === "preview" && parseResult && parseResult.transactions.length > 0 && !parseError && (
+              {step === "preview" && parseResult && parseResult.transactions.length > 0 && (
                 <button
                   onClick={handleUpload}
                   className="px-5 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors flex items-center gap-2"
