@@ -56,10 +56,11 @@ export interface BulkRecommendationRow {
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 export interface UseBulkOrderRecommendationsResult {
-  rows:       BulkRecommendationRow[];
-  policy:     PolicyBracket[];
-  isLoading:  boolean;
-  error:      string | null;
+  rows:             BulkRecommendationRow[];
+  policy:           PolicyBracket[];
+  isLoading:        boolean;
+  error:            string | null;
+  hasMonthlyData:   boolean;  // true = we got data from store_product_monthly_dist
 }
 
 export function useBulkOrderRecommendations(
@@ -256,5 +257,6 @@ export function useBulkOrderRecommendations(
     return result;
   }, [dailyRows, monthlyRows, policy, storeNames, productNames]);
 
-  return { rows, policy, isLoading, error };
+  const hasMonthlyData = monthlyRows.length > 0;
+  return { rows, policy, isLoading, error, hasMonthlyData };
 }
