@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw, Settings } from "lucide-react";
+import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3 } from "lucide-react";
 import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
@@ -45,6 +45,13 @@ export default function FinancePage() {
           )}
         </div>
         <div className="flex gap-2">
+          <Link
+            href="/dashboard/finance/pnl"
+            className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
+          >
+            <BarChart3 className="w-4 h-4" />
+            רווח והפסד
+          </Link>
           <Link
             href="/dashboard/finance/categories"
             className="flex items-center gap-2 px-3 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-50 transition-colors"
