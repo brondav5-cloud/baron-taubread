@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, Search, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock } from "lucide-react";
+import { Upload, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock } from "lucide-react";
 import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
@@ -31,15 +31,20 @@ export default function FinancePage() {
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
   const [uploadOpen, setUploadOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
-  const [searchInput, setSearchInput] = useState("");
   const [showHistory, setShowHistory] = useState(false);
   const [exporting, setExporting] = useState(false);
 
   const totalPages = Math.ceil(hook.totalCount / hook.pageSize);
 
-  const handleSearchCommit = useCallback(() => {
-    hook.setFilters((f) => ({ ...f, search: searchInput }));
-  }, [hook, searchInput]);
+  const { setFilters } = hook;
+
+  const handleSearchChange = useCallback((search: string) => {
+    setFilters((f) => ({ ...f, search }));
+  }, [setFilters]);
+
+  const handleCategoryChange = useCallback((categoryId: string) => {
+    setFilters((f) => ({ ...f, categoryId }));
+  }, [setFilters]);
 
   const handleUploadSuccess = useCallback(() => {
     hook.refresh();
@@ -147,20 +152,6 @@ export default function FinancePage() {
 
       {/* ── Filters bar ────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap gap-2 items-center">
-        {/* Search */}
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
-          <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-          <input
-            type="text"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearchCommit()}
-            onBlur={handleSearchCommit}
-            placeholder="חיפוש תיאור / אסמכתא..."
-            className="w-full border border-gray-200 rounded-lg pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
-        </div>
-
         {/* Account selector */}
         {hook.accounts.length > 1 && (
           <select
@@ -208,23 +199,6 @@ export default function FinancePage() {
           }
           className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
         />
-
-        {/* Category filter */}
-        {hook.categories.length > 0 && (
-          <select
-            value={hook.filters.categoryId}
-            onChange={(e) =>
-              hook.setFilters((f) => ({ ...f, categoryId: e.target.value }))
-            }
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-          >
-            <option value="">כל הקטגוריות</option>
-            <option value="none">ללא קטגוריה</option>
-            {hook.categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        )}
 
         {/* Refresh */}
         <button
@@ -281,6 +255,10 @@ export default function FinancePage() {
         sortDir={hook.sortDir}
         onSort={hook.setSort}
         onRowClick={setSelectedTx}
+        searchFilter={hook.filters.search}
+        categoryFilter={hook.filters.categoryId}
+        onSearchChange={handleSearchChange}
+        onCategoryChange={handleCategoryChange}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}

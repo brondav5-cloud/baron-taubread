@@ -51,34 +51,51 @@ interface RuleValueInputProps {
 function RuleValueInput({ value, onChange, placeholder, className, companyId, matchField }: RuleValueInputProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [searched, setSearched] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const fetchSuggestions = useCallback(async (text: string, field: string, cid: string) => {
-    if (text.length < 2 || !cid) { setSuggestions([]); setOpen(false); return; }
+    if (!cid) return;
     const col = ["description", "details", "reference", "operation_code"].includes(field) ? field : "description";
     const supabase = createClient();
-    const { data } = await supabase
+    setLoading(true);
+    setSearched(false);
+    const filter = text.length > 0 ? { ilike: `%${text}%` } : null;
+    let q = supabase
       .from("bank_transactions")
       .select(col)
       .eq("company_id", cid)
-      .ilike(col, `%${text}%`)
-      .limit(30);
+      .limit(50);
+    if (filter) q = q.ilike(col, filter.ilike);
+    const { data } = await q;
+    setLoading(false);
+    setSearched(true);
     if (data) {
       const unique = Array.from(new Set(
         (data as unknown as Record<string, string>[]).map((r) => r[col]).filter(Boolean)
-      )).slice(0, 8) as string[];
+      )).slice(0, 10) as string[];
       setSuggestions(unique);
-      setOpen(unique.length > 0);
+      setOpen(true);
     }
   }, []);
 
   const handleChange = (v: string) => {
     onChange(v);
+    setSearched(false);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       if (companyId) fetchSuggestions(v, matchField, companyId);
-    }, 280);
+    }, 300);
+  };
+
+  const handleFocus = () => {
+    if (companyId && suggestions.length === 0 && !searched) {
+      fetchSuggestions(value, matchField, companyId);
+    } else if (suggestions.length > 0) {
+      setOpen(true);
+    }
   };
 
   useEffect(() => {
@@ -94,25 +111,42 @@ function RuleValueInput({ value, onChange, placeholder, className, companyId, ma
 
   return (
     <div ref={containerRef} className="relative flex-1">
-      <input
-        value={value}
-        onChange={(e) => handleChange(e.target.value)}
-        onFocus={() => value.length >= 2 && suggestions.length > 0 && setOpen(true)}
-        placeholder={placeholder}
-        className={className}
-        autoComplete="off"
-      />
-      {open && suggestions.length > 0 && (
-        <ul className="absolute z-50 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg text-sm overflow-hidden">
-          {suggestions.map((s, i) => (
-            <li
-              key={i}
-              onMouseDown={(e) => { e.preventDefault(); onChange(s); setOpen(false); setSuggestions([]); }}
-              className="px-3 py-2 cursor-pointer hover:bg-blue-50 text-gray-700 truncate border-b border-gray-50 last:border-0"
-            >
-              {s}
+      <div className="relative">
+        <input
+          value={value}
+          onChange={(e) => handleChange(e.target.value)}
+          onFocus={handleFocus}
+          placeholder={placeholder}
+          className={className}
+          autoComplete="off"
+        />
+        {loading && (
+          <Loader2 className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-blue-400 animate-spin pointer-events-none" />
+        )}
+      </div>
+      {open && (
+        <ul className="absolute z-[100] top-full mt-1 w-full min-w-[220px] bg-white border border-gray-200 rounded-lg shadow-xl text-sm overflow-hidden">
+          {suggestions.length > 0 ? (
+            <>
+              <li className="px-3 py-1.5 text-xs text-gray-400 bg-gray-50 border-b border-gray-100 select-none">
+                בחר ערך מהתנועות שלך:
+              </li>
+              {suggestions.map((s, i) => (
+                <li
+                  key={i}
+                  onMouseDown={(e) => { e.preventDefault(); onChange(s); setOpen(false); setSuggestions([]); }}
+                  className="px-3 py-2 cursor-pointer hover:bg-blue-50 text-gray-700 truncate border-b border-gray-50 last:border-0"
+                  title={s}
+                >
+                  {s}
+                </li>
+              ))}
+            </>
+          ) : searched && !loading ? (
+            <li className="px-3 py-3 text-xs text-gray-400 text-center">
+              {value.length > 0 ? `לא נמצאו תנועות עם "${value}"` : "לא נמצאו תנועות"}
             </li>
-          ))}
+          ) : null}
         </ul>
       )}
     </div>
