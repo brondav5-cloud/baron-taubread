@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Plus, Trash2, Zap, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Trash2, Zap, ChevronRight, Loader2, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import type { BankCategory, CategoryType } from "@/modules/finance/types";
 
@@ -49,6 +49,19 @@ export default function CategoriesPage() {
   const [newRuleField, setNewRuleField] = useState("description");
   const [saving, setSaving] = useState(false);
 
+  // Inline rule editing state
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [editField, setEditField] = useState("description");
+  const [editType, setEditType] = useState("contains");
+  const [editValue, setEditValue] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  // Add rule to existing category
+  const [addingRuleCatId, setAddingRuleCatId] = useState<string | null>(null);
+  const [addRuleField, setAddRuleField] = useState("description");
+  const [addRuleValue, setAddRuleValue] = useState("");
+  const [savingAddRule, setSavingAddRule] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -89,6 +102,51 @@ export default function CategoriesPage() {
     await fetch(`/api/finance/categories?id=${id}`, { method: "DELETE" });
     await load();
   }, [load]);
+
+  const startEditRule = useCallback((rule: CategoryRule) => {
+    setEditingRuleId(rule.id);
+    setEditField(rule.match_field);
+    setEditType(rule.match_type);
+    setEditValue(rule.match_value);
+  }, []);
+
+  const handleSaveRule = useCallback(async () => {
+    if (!editingRuleId) return;
+    setSavingEdit(true);
+    try {
+      await fetch("/api/finance/categories/rules", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingRuleId, match_field: editField, match_type: editType, match_value: editValue }),
+      });
+      setEditingRuleId(null);
+      await load();
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editingRuleId, editField, editType, editValue, load]);
+
+  const handleDeleteRule = useCallback(async (ruleId: string) => {
+    await fetch(`/api/finance/categories/rules?id=${ruleId}`, { method: "DELETE" });
+    await load();
+  }, [load]);
+
+  const handleAddRule = useCallback(async (catId: string) => {
+    if (!addRuleValue.trim()) return;
+    setSavingAddRule(true);
+    try {
+      await fetch("/api/finance/categories/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ category_id: catId, match_field: addRuleField, match_type: "contains", match_value: addRuleValue.trim() }),
+      });
+      setAddingRuleCatId(null);
+      setAddRuleValue("");
+      await load();
+    } finally {
+      setSavingAddRule(false);
+    }
+  }, [addRuleField, addRuleValue, load]);
 
   const handleAutoClassify = useCallback(async () => {
     setClassifying(true);
@@ -222,16 +280,64 @@ export default function CategoriesPage() {
 
                 {catRules.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
-                    {catRules.map((rule) => (
-                      <span key={rule.id} className="text-xs bg-gray-100 text-gray-600 rounded-md px-2 py-0.5">
-                        {MATCH_FIELD_LABELS[rule.match_field] ?? rule.match_field}
-                        {" "}
-                        {MATCH_TYPE_LABELS[rule.match_type] ?? rule.match_type}
-                        {" "}
-                        <span className="font-mono font-medium">&ldquo;{rule.match_value}&rdquo;</span>
-                      </span>
-                    ))}
+                    {catRules.map((rule) =>
+                      editingRuleId === rule.id ? (
+                        <div key={rule.id} className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1">
+                          <select value={editField} onChange={(e) => setEditField(e.target.value)}
+                            className="text-xs border-0 bg-transparent focus:outline-none">
+                            {Object.entries(MATCH_FIELD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          </select>
+                          <select value={editType} onChange={(e) => setEditType(e.target.value)}
+                            className="text-xs border-0 bg-transparent focus:outline-none">
+                            {Object.entries(MATCH_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          </select>
+                          <input value={editValue} onChange={(e) => setEditValue(e.target.value)}
+                            className="text-xs border border-blue-200 rounded px-1 w-24 focus:outline-none" />
+                          <button onClick={handleSaveRule} disabled={savingEdit} className="text-green-600 hover:text-green-700">
+                            {savingEdit ? <Loader2 className="w-3 h-3 animate-spin" /> : <Check className="w-3 h-3" />}
+                          </button>
+                          <button onClick={() => setEditingRuleId(null)} className="text-gray-400 hover:text-gray-600">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span key={rule.id} className="group flex items-center gap-1 text-xs bg-gray-100 text-gray-600 rounded-md px-2 py-0.5">
+                          {MATCH_FIELD_LABELS[rule.match_field] ?? rule.match_field}
+                          {" "}{MATCH_TYPE_LABELS[rule.match_type] ?? rule.match_type}{" "}
+                          <span className="font-mono font-medium">&ldquo;{rule.match_value}&rdquo;</span>
+                          <button onClick={() => startEditRule(rule)} className="opacity-0 group-hover:opacity-100 text-blue-400 hover:text-blue-600 transition-opacity">
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button onClick={() => handleDeleteRule(rule.id)} className="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-500 transition-opacity">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      )
+                    )}
                   </div>
+                )}
+
+                {/* Add rule to existing category */}
+                {addingRuleCatId === cat.id ? (
+                  <div className="mt-2 flex items-center gap-2">
+                    <select value={addRuleField} onChange={(e) => setAddRuleField(e.target.value)}
+                      className="border border-gray-200 rounded px-2 py-1 text-xs bg-white focus:outline-none w-24">
+                      {Object.entries(MATCH_FIELD_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                    </select>
+                    <input value={addRuleValue} onChange={(e) => setAddRuleValue(e.target.value)}
+                      placeholder='ערך...' className="border border-gray-200 rounded px-2 py-1 text-xs flex-1 focus:outline-none" />
+                    <button onClick={() => handleAddRule(cat.id)} disabled={savingAddRule || !addRuleValue.trim()}
+                      className="text-xs bg-blue-600 text-white px-2 py-1 rounded hover:bg-blue-700 disabled:opacity-50">
+                      {savingAddRule ? <Loader2 className="w-3 h-3 animate-spin" /> : "הוסף"}
+                    </button>
+                    <button onClick={() => { setAddingRuleCatId(null); setAddRuleValue(""); }}
+                      className="text-gray-400 hover:text-gray-600"><X className="w-3 h-3" /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => { setAddingRuleCatId(cat.id); setAddRuleField("description"); setAddRuleValue(""); }}
+                    className="mt-1.5 text-xs text-blue-400 hover:text-blue-600 flex items-center gap-0.5">
+                    <Plus className="w-3 h-3" /> הוסף כלל
+                  </button>
                 )}
               </div>
             );

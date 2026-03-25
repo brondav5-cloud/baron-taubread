@@ -167,6 +167,9 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
   const [categories, setCategories] = useState<{ id: string; name: string; type: string }[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<string>(tx.category_id ?? "");
   const [savingCat, setSavingCat] = useState(false);
+  const [showRulePrompt, setShowRulePrompt] = useState(false);
+  const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code">("description");
+  const [savingRule, setSavingRule] = useState(false);
 
   // Upload state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -216,10 +219,37 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
         }),
       });
       setSelectedCatId(catId);
+      // Offer to create a rule only when assigning (not clearing)
+      if (catId) setShowRulePrompt(true);
+      else setShowRulePrompt(false);
     } finally {
       setSavingCat(false);
     }
   }, [tx.id]);
+
+  const handleCreateRule = useCallback(async () => {
+    if (!selectedCatId) return;
+    const value = ruleField === "description" ? tx.description
+      : ruleField === "details" ? tx.details
+      : tx.operation_code ?? "";
+    if (!value) return;
+    setSavingRule(true);
+    try {
+      await fetch("/api/finance/categories/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category_id: selectedCatId,
+          match_field: ruleField,
+          match_type: "contains",
+          match_value: value,
+        }),
+      });
+      setShowRulePrompt(false);
+    } finally {
+      setSavingRule(false);
+    }
+  }, [selectedCatId, ruleField, tx]);
 
   // Auto-detect doc type from file name
   const onFileChosen = useCallback((file: File) => {
@@ -360,6 +390,43 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
                 ))}
               </select>
               {savingCat && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
+            </div>
+          )}
+
+          {/* Rule creation prompt */}
+          {showRulePrompt && selectedCatId && (
+            <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-medium text-purple-700">צור כלל אוטומטי מסיווג זה?</p>
+              <div className="flex items-center gap-2">
+                <select
+                  value={ruleField}
+                  onChange={(e) => setRuleField(e.target.value as typeof ruleField)}
+                  className="border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none"
+                >
+                  <option value="description">תיאור</option>
+                  <option value="details">פרטים</option>
+                  {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
+                </select>
+                <span className="text-xs text-purple-600 truncate max-w-[140px] font-mono">
+                  &quot;{ruleField === "description" ? tx.description : ruleField === "details" ? tx.details : tx.operation_code}&quot;
+                </span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowRulePrompt(false)}
+                  className="text-xs text-gray-400 hover:text-gray-600"
+                >
+                  דלג
+                </button>
+                <button
+                  onClick={handleCreateRule}
+                  disabled={savingRule}
+                  className="flex items-center gap-1 text-xs bg-purple-600 text-white px-3 py-1 rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                >
+                  {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  צור כלל
+                </button>
+              </div>
             </div>
           )}
 

@@ -62,6 +62,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [classifyResult, setClassifyResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -179,6 +180,21 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
         errors: data.errors ?? [],
       });
       setStep("done");
+
+      // Auto-classify after successful upload
+      try {
+        const cr = await fetch("/api/finance/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "auto" }),
+        });
+        const cd = await cr.json();
+        if (cd.classified > 0) {
+          setClassifyResult(`סווגו אוטומטית ${cd.classified} תנועות`);
+        }
+      } catch {
+        // non-critical
+      }
     } catch (e) {
       setParseError(String(e));
       setStep("preview");
@@ -412,6 +428,11 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
               </div>
               {uploadResult.errors.length > 0 && (
                 <p className="text-xs text-orange-500">{uploadResult.errors.length} שגיאות</p>
+              )}
+              {classifyResult && (
+                <p className="text-sm text-purple-600 font-medium bg-purple-50 rounded-lg px-3 py-2">
+                  ⚡ {classifyResult}
+                </p>
               )}
             </div>
           )}
