@@ -10,6 +10,9 @@ import { TransactionDetailModal } from "@/modules/finance/components/Transaction
 import { FileHistoryPanel } from "@/modules/finance/components/FileHistoryPanel";
 import { AccountsManagerPanel } from "@/modules/finance/components/AccountsManagerPanel";
 import { BalanceChart } from "@/modules/finance/components/BalanceChart";
+import { MonthlyTrendsChart } from "@/modules/finance/components/MonthlyTrendsChart";
+import { CashRunwayCard } from "@/modules/finance/components/CashRunwayCard";
+import { UnclassifiedAlert } from "@/modules/finance/components/UnclassifiedAlert";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
@@ -229,10 +232,21 @@ export default function FinancePage() {
         </div>
       )}
 
-      {/* ── Balance chart ──────────────────────────────────────────────────── */}
+      {/* ── Unclassified alert ─────────────────────────────────────────────── */}
+      <UnclassifiedAlert />
+
+      {/* ── KPI row: balance chart + cash runway ───────────────────────────── */}
       {hook.accounts.length > 0 && (
-        <BalanceChart accounts={hook.accounts} />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2">
+            <BalanceChart accounts={hook.accounts} />
+          </div>
+          <CashRunwayCard />
+        </div>
       )}
+
+      {/* ── Monthly trends chart ───────────────────────────────────────────── */}
+      <MonthlyTrendsChart />
 
       {/* ── Error ──────────────────────────────────────────────────────────── */}
       {hook.error && (
