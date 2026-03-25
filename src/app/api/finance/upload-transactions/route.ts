@@ -81,27 +81,42 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // ── Upsert bank_account ───────────────────────────────────────────────────
-    const { data: accountRow, error: accountError } = await supabase
-      .from("bank_accounts")
-      .upsert(
-        {
-          company_id,
-          bank,
-          account_number,
-          display_name: display_name || `${bank} ${account_number}`,
-        },
-        { onConflict: "company_id,bank,account_number", ignoreDuplicates: false }
-      )
-      .select("id")
-      .single();
+    // ── Find or create bank_account ───────────────────────────────────────────
+    // Use select-then-insert instead of upsert to avoid PostgREST constraint issues
+    let bank_account_id: string;
+    {
+      const { data: existing } = await supabase
+        .from("bank_accounts")
+        .select("id")
+        .eq("company_id", company_id)
+        .eq("bank", bank)
+        .eq("account_number", account_number)
+        .maybeSingle();
 
-    if (accountError || !accountRow) {
-      logError("finance/upload-transactions: upsert bank_account", accountError);
-      return NextResponse.json({ error: "שגיאה בשמירת חשבון הבנק" }, { status: 500 });
+      if (existing?.id) {
+        bank_account_id = existing.id;
+      } else {
+        const { data: created, error: createErr } = await supabase
+          .from("bank_accounts")
+          .insert({
+            company_id,
+            bank,
+            account_number,
+            display_name: display_name || `${bank} ${account_number}`,
+          })
+          .select("id")
+          .single();
+
+        if (createErr || !created) {
+          logError("finance/upload-transactions: insert bank_account", createErr);
+          return NextResponse.json(
+            { error: `שגיאה ביצירת חשבון בנק: ${createErr?.message ?? "unknown"}` },
+            { status: 500 }
+          );
+        }
+        bank_account_id = created.id;
+      }
     }
-
-    const bank_account_id: string = accountRow.id;
 
     // ── Create uploaded file record ───────────────────────────────────────────
     const { data: fileRow, error: fileError } = await supabase
