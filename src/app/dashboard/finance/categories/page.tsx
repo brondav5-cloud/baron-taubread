@@ -62,20 +62,23 @@ function RuleValueInput({ value, onChange, placeholder, className, companyId, ma
     const supabase = createClient();
     setLoading(true);
     setSearched(false);
-    const filter = text.length > 0 ? { ilike: `%${text}%` } : null;
+
+    // Fetch a large batch so dedup yields enough unique values
     let q = supabase
       .from("bank_transactions")
       .select(col)
       .eq("company_id", cid)
-      .limit(50);
-    if (filter) q = q.ilike(col, filter.ilike);
+      .order(col, { ascending: true })
+      .limit(2000);
+    if (text.length > 0) q = q.ilike(col, `%${text}%`);
     const { data } = await q;
+
     setLoading(false);
     setSearched(true);
     if (data) {
       const unique = Array.from(new Set(
         (data as unknown as Record<string, string>[]).map((r) => r[col]).filter(Boolean)
-      )).slice(0, 10) as string[];
+      )).slice(0, 30) as string[];
       setSuggestions(unique);
       setOpen(true);
     }

@@ -57,7 +57,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [uploadResult, setUploadResult] = useState<{
-    inserted: number; skipped: number; errors: string[];
+    inserted: number; skipped: number; matched: number; errors: string[];
   } | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
@@ -179,6 +179,7 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
       setUploadResult({
         inserted: data.inserted,
         skipped: data.skipped,
+        matched: data.matched ?? 0,
         errors: data.errors ?? [],
       });
       setStep("done");
@@ -430,6 +431,11 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
               </div>
               {uploadResult.errors.length > 0 && (
                 <p className="text-xs text-orange-500">{uploadResult.errors.length} שגיאות</p>
+              )}
+              {uploadResult.matched > 0 && (
+                <p className="text-sm text-teal-700 font-medium bg-teal-50 rounded-lg px-3 py-2">
+                  הוזהו {uploadResult.matched} שיקים עם שמות ספקים
+                </p>
               )}
               {classifyResult && (
                 <p className="text-sm text-purple-600 font-medium bg-purple-50 rounded-lg px-3 py-2">

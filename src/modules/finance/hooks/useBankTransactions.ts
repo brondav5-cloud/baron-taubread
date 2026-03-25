@@ -125,7 +125,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     if (filters.sourceBank) query = query.eq("source_bank", filters.sourceBank);
     if (filters.search.trim()) {
       const s = `%${filters.search.trim()}%`;
-      query = query.or(`description.ilike.${s},details.ilike.${s},reference.ilike.${s}`);
+      query = query.or(`description.ilike.${s},details.ilike.${s},reference.ilike.${s},supplier_name.ilike.${s}`);
     }
     if (filters.categoryId === "none") {
       query = query.is("category_id", null);

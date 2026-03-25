@@ -255,9 +255,18 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                       {formatDate(tx.date)}
                     </td>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.description}</p>
-                      {tx.details && (
-                        <p className="text-xs text-gray-400 truncate max-w-[200px]">{tx.details}</p>
+                      {tx.supplier_name ? (
+                        <>
+                          <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.supplier_name}</p>
+                          <p className="text-xs text-teal-500 truncate max-w-[200px]">{tx.description}</p>
+                        </>
+                      ) : (
+                        <>
+                          <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.description}</p>
+                          {tx.details && (
+                            <p className="text-xs text-gray-400 truncate max-w-[200px]">{tx.details}</p>
+                          )}
+                        </>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs font-mono">

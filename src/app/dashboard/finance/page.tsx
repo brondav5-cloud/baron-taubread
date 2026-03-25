@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { Upload, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock } from "lucide-react";
+import { Upload, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
@@ -9,6 +9,7 @@ import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFile
 import { TransactionDetailModal } from "@/modules/finance/components/TransactionDetailModal";
 import { FileHistoryPanel } from "@/modules/finance/components/FileHistoryPanel";
 import { AccountsManagerPanel } from "@/modules/finance/components/AccountsManagerPanel";
+import { ChecksRegistryModal } from "@/modules/finance/components/ChecksRegistryModal";
 import { BalanceChart } from "@/modules/finance/components/BalanceChart";
 import { MonthlyTrendsChart } from "@/modules/finance/components/MonthlyTrendsChart";
 import { CashRunwayCard } from "@/modules/finance/components/CashRunwayCard";
@@ -30,6 +31,7 @@ export default function FinancePage() {
   const { state } = useSupabaseAuth();
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [checksOpen, setChecksOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -140,6 +142,13 @@ export default function FinancePage() {
             <Settings className="w-4 h-4" />
             קטגוריות
           </Link>
+          <button
+            onClick={() => setChecksOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-teal-200 text-teal-700 bg-teal-50 rounded-xl text-sm font-medium hover:bg-teal-100 transition-colors"
+          >
+            <Receipt className="w-4 h-4" />
+            שיקים
+          </button>
           <button
             onClick={() => setUploadOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
@@ -292,6 +301,14 @@ export default function FinancePage() {
       {uploadOpen && (
         <UploadBankFileModal
           onClose={() => setUploadOpen(false)}
+          onSuccess={handleUploadSuccess}
+        />
+      )}
+
+      {/* ── Checks registry modal ───────────────────────────────────────────── */}
+      {checksOpen && (
+        <ChecksRegistryModal
+          onClose={() => setChecksOpen(false)}
           onSuccess={handleUploadSuccess}
         />
       )}

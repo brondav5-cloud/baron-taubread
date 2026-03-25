@@ -219,12 +219,28 @@ export async function POST(request: NextRequest) {
       .update({ row_count: inserted })
       .eq("id", uploaded_file_id);
 
+    // ── Auto-match checks registry ────────────────────────────────────────────
+    // If any checks are registered for this company, try to resolve check
+    // transactions (reference = check_number, debit = amount) → supplier_name.
+    let matched = 0;
+    if (inserted > 0) {
+      const { data: matchData, error: matchErr } = await supabase
+        .rpc("match_checks_registry", { p_company_id: company_id });
+
+      if (!matchErr && typeof matchData === "number") {
+        matched = matchData;
+      } else if (matchErr) {
+        logError("finance/upload-transactions: match_checks_registry", matchErr);
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       file_id: uploaded_file_id,
       bank_account_id,
       inserted,
       skipped,
+      matched,
       errors: insertErrors,
     });
   } catch (err) {
