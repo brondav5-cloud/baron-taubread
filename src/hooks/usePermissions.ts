@@ -21,7 +21,11 @@ export const MODULE_TO_PATH: Record<string, string[]> = {
   settings: ["/dashboard/settings"],
   expenses: ["/dashboard/expenses"],
   meetings: ["/dashboard/meetings"],
+  finance: ["/dashboard/finance"],
 };
+
+// Modules that are restricted by default — non-admins must be explicitly granted access
+const RESTRICTED_BY_DEFAULT = new Set<string>(["finance"]);
 
 export function usePermissions() {
   const { currentUser } = useUsers();
@@ -35,7 +39,7 @@ export function usePermissions() {
       if (isAdmin) return true;
       if (perms && typeof perms[module] === "boolean")
         return perms[module] === true;
-      return true;
+      return !RESTRICTED_BY_DEFAULT.has(module);
     };
   }, [currentUser.permissions, currentUser.role]);
 

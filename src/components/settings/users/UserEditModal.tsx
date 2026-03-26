@@ -19,9 +19,14 @@ const ROLE_OPTIONS = [
   { value: "viewer", label: "צופה – צפייה בלבד" },
 ];
 
-const PERMISSION_MODULES: { key: UserPermissionModule; label: string }[] = [
+const PERMISSION_MODULES: {
+  key: UserPermissionModule;
+  label: string;
+  defaultDenied?: boolean;
+}[] = [
   { key: "profitability", label: "רווחיות" },
   { key: "expenses", label: "רווח והפסד" },
+  { key: "finance", label: "תנועות בנק", defaultDenied: true },
   { key: "settings", label: "הגדרות" },
   { key: "upload", label: "העלאת נתונים (Excel)" },
 ];
@@ -79,8 +84,12 @@ export function UserEditModal({ user, onClose }: UserEditModalProps) {
     () => {
       const p = user?.permissions ?? {};
       const out: Record<string, boolean> = {};
-      PERMISSION_MODULES.forEach(({ key }) => {
-        out[key] = p[key] !== false;
+      PERMISSION_MODULES.forEach(({ key, defaultDenied }) => {
+        if (typeof p[key] === "boolean") {
+          out[key] = p[key] as boolean;
+        } else {
+          out[key] = !defaultDenied;
+        }
       });
       return out;
     },

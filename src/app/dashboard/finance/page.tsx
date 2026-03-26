@@ -18,6 +18,7 @@ import { BankSupplierPanel } from "@/modules/finance/components/BankSupplierPane
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
 import type { SourceBank, BankTransaction } from "@/modules/finance/types";
 
 const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
@@ -40,8 +41,21 @@ function getMonthRange(year: number, month: number): { from: string; to: string 
 }
 
 export default function FinancePage() {
+  const { canAccess } = usePermissions();
   const hook = useBankTransactions();
   const { state } = useSupabaseAuth();
+
+  if (!canAccess("finance")) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="text-5xl">🔒</div>
+        <h2 className="text-xl font-bold text-gray-800">אין לך גישה לדף זה</h2>
+        <p className="text-gray-500 text-sm">
+          פנה למנהל המערכת כדי לקבל גישה לתנועות בנק.
+        </p>
+      </div>
+    );
+  }
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
   const [uploadOpen, setUploadOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
