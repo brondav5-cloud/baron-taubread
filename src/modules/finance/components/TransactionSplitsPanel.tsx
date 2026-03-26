@@ -14,6 +14,8 @@ interface EditRow {
   category_id: string;
   amount: string;
   notes: string;
+  /** ISO date from source document (read-only display, not saved to DB) */
+  transaction_date?: string;
   /** true = category was set by an auto-rule (visual hint only) */
   auto_classified?: boolean;
 }
@@ -31,6 +33,13 @@ interface Props {
 
 function fmt(n: number) {
   return "₪" + Math.abs(n).toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatShortDate(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y.slice(2)}`;
 }
 
 let _keyCounter = 0;
@@ -60,6 +69,7 @@ function rowsFromDocRows(docRows: DocDetailRow[]): EditRow[] {
       category_id: "",
       amount: String(row.charge_amount ?? row.amount ?? 0),
       notes: "",
+      transaction_date: String(row.transaction_date ?? ""),
     }))
     .filter((r) => r.description || Number(r.amount) !== 0);
 }
@@ -458,13 +468,20 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
                 !row.category_id && (row.description || Number(row.amount)) ? "bg-amber-50/50" : ""
               }`}
             >
-              <input
-                type="text"
-                value={row.description}
-                onChange={(e) => updateRow(row._key, "description", e.target.value)}
-                placeholder="תיאור"
-                className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300"
-              />
+              <div className="min-w-0">
+                <input
+                  type="text"
+                  value={row.description}
+                  onChange={(e) => updateRow(row._key, "description", e.target.value)}
+                  placeholder="תיאור"
+                  className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                />
+                {row.transaction_date && (
+                  <span className="text-[10px] text-gray-400 px-1 select-none">
+                    {formatShortDate(row.transaction_date)}
+                  </span>
+                )}
+              </div>
               <select
                 value={row.category_id}
                 onChange={(e) => updateRow(row._key, "category_id", e.target.value)}

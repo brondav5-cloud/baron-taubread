@@ -115,8 +115,9 @@ export async function parseLeumiCreditXLS(file: File): Promise<LeumiCreditParseR
   const headers = tableRows[headerIdx]!;
 
   // Column index resolution from headers
-  const colDate    = headers.findIndex((h) => h.includes("תאריך"));
-  const colName    = headers.findIndex((h) => h.includes("שם") || h.includes("עסק"));
+  const colDate    = headers.findIndex((h) => h.includes("תאריך") && !h.includes("שם"));
+  // "תאריך עסקה" contains "עסק" — exclude date/amount columns to avoid false match
+  const colName    = headers.findIndex((h) => h.includes("שם") || (h.includes("עסק") && !h.includes("תאריך") && !h.includes("סכום")));
   const colType    = headers.findIndex((h) => h.includes("סוג"));
   const colDetails = headers.findIndex((h) => h.includes("פרטים"));
   // "סכום חיוב" must come before "סכום" (plain) to avoid false match

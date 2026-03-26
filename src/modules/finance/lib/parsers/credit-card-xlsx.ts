@@ -91,7 +91,8 @@ function parseSheet(
 
   const col = {
     txDate: headers.findIndex((h) => h.includes("תאריך עסקה")),
-    business: headers.findIndex((h) => h.includes("שם בית העסק") || h.includes("עסק")),
+    // "תאריך עסקה" / "סכום עסקה" also contain "עסק" — exclude them to avoid false match
+    business: headers.findIndex((h) => h.includes("שם") || (h.includes("עסק") && !h.includes("תאריך") && !h.includes("סכום"))),
     category: headers.findIndex((h) => h.includes("קטגוריה")),
     last4: headers.findIndex((h) => h.includes("4 ספרות") || h.includes("כרטיס")),
     txType: headers.findIndex((h) => h.includes("סוג עסקה")),
