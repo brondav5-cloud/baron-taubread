@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect, useRef } from "react";
-import { ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Filter, GitBranch } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Filter } from "lucide-react";
 import type { BankTransaction, BankCategory, SourceBank } from "../types";
 import type { SortBy, SortDir } from "../hooks/useBankTransactions";
 
@@ -272,15 +272,14 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                           )}
                         </>
                       )}
-                      {splitCount > 0 && (
-                        <span
-                          className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5"
-                          title={`תנועה זו מפוצלת ל-${splitCount} שורות — לחץ לפרטים`}
-                        >
-                          <GitBranch className="w-2.5 h-2.5" />
-                          {splitCount} פיצולים
-                        </span>
-                      )}
+                     {splitCount > 0 && (
+                       <span
+                         className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5"
+                         title={`תנועה זו מפוצלת ל-${splitCount} שורות — לחץ לפרטים`}
+                       >
+                         ⬡ {splitCount} פיצולים
+                       </span>
+                     )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs font-mono">
                       {tx.reference}

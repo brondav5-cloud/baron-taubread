@@ -170,7 +170,9 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
   const [selectedCatId, setSelectedCatId] = useState<string>(tx.category_id ?? "");
   const [savingCat, setSavingCat] = useState(false);
   const [showRulePrompt, setShowRulePrompt] = useState(false);
-  const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code">("description");
+  const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code" | "supplier_name">(
+    tx.supplier_name ? "supplier_name" : "description"
+  );
   const [savingRule, setSavingRule] = useState(false);
   const [notes, setNotes] = useState(tx.notes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -263,6 +265,7 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
     if (!selectedCatId) return;
     const value = ruleField === "description" ? tx.description
       : ruleField === "details" ? tx.details
+      : ruleField === "supplier_name" ? (tx.supplier_name ?? "")
       : tx.operation_code ?? "";
     if (!value) return;
     setSavingRule(true);
@@ -470,12 +473,18 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
                   onChange={(e) => setRuleField(e.target.value as typeof ruleField)}
                   className="border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none"
                 >
+                  {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
                   <option value="description">תיאור</option>
-                  <option value="details">פרטים</option>
+                  {tx.details && <option value="details">פרטים</option>}
                   {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
                 </select>
                 <span className="text-xs text-purple-600 truncate max-w-[140px] font-mono">
-                  &quot;{ruleField === "description" ? tx.description : ruleField === "details" ? tx.details : tx.operation_code}&quot;
+                  &quot;{
+                    ruleField === "supplier_name" ? tx.supplier_name :
+                    ruleField === "description" ? tx.description :
+                    ruleField === "details" ? tx.details :
+                    tx.operation_code
+                  }&quot;
                 </span>
               </div>
               <div className="flex gap-2">
