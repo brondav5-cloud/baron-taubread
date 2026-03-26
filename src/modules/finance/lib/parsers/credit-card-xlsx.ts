@@ -152,10 +152,12 @@ export async function parseCreditCardXLSX(file: File): Promise<CreditCardParseRe
     rowOffset += 1000;
   }
 
-  // The "charge_date" for matching = most common charge date in the main sheet
+  // The "charge_date" for matching = most common charge date in the main (charged) sheet.
+  // Prefer items from a sheet whose name includes "חיוב"; fall back to all items.
   const chargedItems = allItems.filter((i) => i.sheet_name.includes("חיוב") && i.charge_date);
-  const charge_date = chargedItems.length > 0 ? (chargedItems[0]?.charge_date ?? "") : "";
-  const total_charge = chargedItems.reduce((s, i) => s + i.charge_amount, 0);
+  const baseItems = chargedItems.length > 0 ? chargedItems : allItems.filter((i) => i.charge_date);
+  const charge_date = baseItems.length > 0 ? (baseItems[0]?.charge_date ?? "") : "";
+  const total_charge = baseItems.reduce((s, i) => s + i.charge_amount, 0);
 
   return { charge_date, total_charge, items: allItems, errors: allErrors };
 }

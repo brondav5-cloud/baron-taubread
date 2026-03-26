@@ -325,6 +325,12 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
       setDocType("transfers_pdf");
     } else if (name.includes("leumi") && (name.endsWith(".xls") || name.includes("card"))) {
       setDocType("leumi_credit_xls");
+    } else if (
+      // 4-digit credit card number in filename: e.g. "3613.xlsx", "2805 ינואר.xls", "ינואר 1791.xlsx"
+      // \b ensures we don't match mid-number (e.g. "202501" won't match)
+      /\b\d{4}\b/.test(name) && (name.endsWith(".xlsx") || name.endsWith(".xls"))
+    ) {
+      setDocType("credit_card_xlsx");
     } else if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
       setDocType("salary_xlsx");
     }
