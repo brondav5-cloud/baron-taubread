@@ -322,6 +322,7 @@ export default function FinancePage() {
         sortDir={hook.sortDir}
         onSort={hook.setSort}
         onRowClick={setSelectedTx}
+        splitCounts={hook.splitCounts}
         searchFilter={hook.filters.search}
         categoryFilter={hook.filters.categoryId}
         onSearchChange={handleSearchChange}

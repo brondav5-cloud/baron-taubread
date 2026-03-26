@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect, useRef } from "react";
-import { ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Filter } from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Filter, GitBranch } from "lucide-react";
 import type { BankTransaction, BankCategory, SourceBank } from "../types";
 import type { SortBy, SortDir } from "../hooks/useBankTransactions";
 
@@ -35,6 +35,8 @@ interface Props {
   sortDir?: SortDir;
   onSort?: (col: SortBy) => void;
   onRowClick?: (tx: BankTransaction) => void;
+  /** Maps transaction_id → split count (from useBankTransactions) */
+  splitCounts?: Map<string, number>;
   // Inline filter props
   searchFilter?: string;
   categoryFilter?: string;
@@ -57,6 +59,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   sortDir,
   onSort,
   onRowClick,
+  splitCounts,
   searchFilter = "",
   categoryFilter = "",
   onSearchChange,
@@ -242,6 +245,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 const isCredit = tx.credit > 0;
                 const bankInfo = BANK_LABELS[tx.source_bank];
                 const cat = tx.category_id ? catMap.get(tx.category_id) : undefined;
+                const splitCount = splitCounts?.get(tx.id) ?? 0;
 
                 return (
                   <tr
@@ -267,6 +271,15 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                             <p className="text-xs text-gray-400 truncate max-w-[200px]">{tx.details}</p>
                           )}
                         </>
+                      )}
+                      {splitCount > 0 && (
+                        <span
+                          className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5"
+                          title={`תנועה זו מפוצלת ל-${splitCount} שורות — לחץ לפרטים`}
+                        >
+                          <GitBranch className="w-2.5 h-2.5" />
+                          {splitCount} פיצולים
+                        </span>
                       )}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs font-mono">

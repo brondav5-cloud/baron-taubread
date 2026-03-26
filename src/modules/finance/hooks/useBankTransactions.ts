@@ -36,6 +36,8 @@ export interface UseBankTransactionsReturn {
   sortDir: SortDir;
   isLoading: boolean;
   error: string | null;
+  /** Maps transaction_id → number of saved splits */
+  splitCounts: Map<string, number>;
   setPage: (p: number) => void;
   setFilters: (f: BankTransactionFilters | ((prev: BankTransactionFilters) => BankTransactionFilters)) => void;
   setSort: (col: SortBy) => void;
@@ -51,6 +53,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
   const [accounts, setAccounts] = useState<BankAccount[]>([]);
   const [categories, setCategories] = useState<BankCategory[]>([]);
   const [transactions, setTransactions] = useState<BankTransaction[]>([]);
+  const [splitCounts, setSplitCounts] = useState<Map<string, number>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
   const [filters, setFiltersState] = useState<BankTransactionFilters>(emptyFilters);
@@ -133,13 +136,33 @@ export function useBankTransactions(): UseBankTransactionsReturn {
       query = query.eq("category_id", filters.categoryId);
     }
 
-    query.then(({ data, count, error: qErr }) => {
+    query.then(async ({ data, count, error: qErr }) => {
       if (cancelled) return;
       if (qErr) {
         setError(qErr.message);
+        setIsLoading(false);
+        return;
+      }
+      const txs = (data ?? []) as BankTransaction[];
+      setTransactions(txs);
+      setTotalCount(count ?? 0);
+
+      // Fetch split counts for this page's transactions
+      if (txs.length > 0) {
+        const ids = txs.map((t) => t.id);
+        const { data: splitsData } = await supabase
+          .from("bank_transaction_splits")
+          .select("transaction_id")
+          .in("transaction_id", ids)
+          .eq("company_id", selectedCompanyId);
+
+        const counts = new Map<string, number>();
+        for (const s of (splitsData ?? []) as { transaction_id: string }[]) {
+          counts.set(s.transaction_id, (counts.get(s.transaction_id) ?? 0) + 1);
+        }
+        if (!cancelled) setSplitCounts(counts);
       } else {
-        setTransactions((data ?? []) as BankTransaction[]);
-        setTotalCount(count ?? 0);
+        setSplitCounts(new Map());
       }
       setIsLoading(false);
     });
@@ -159,6 +182,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     sortDir,
     isLoading,
     error,
+    splitCounts,
     setPage,
     setFilters,
     setSort,
