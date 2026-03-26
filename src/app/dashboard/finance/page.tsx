@@ -45,17 +45,7 @@ export default function FinancePage() {
   const hook = useBankTransactions();
   const { state } = useSupabaseAuth();
 
-  if (!canAccess("finance")) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
-        <div className="text-5xl">🔒</div>
-        <h2 className="text-xl font-bold text-gray-800">אין לך גישה לדף זה</h2>
-        <p className="text-gray-500 text-sm">
-          פנה למנהל המערכת כדי לקבל גישה לתנועות בנק.
-        </p>
-      </div>
-    );
-  }
+  // All hooks must appear before any conditional return (Rules of Hooks)
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
   const [uploadOpen, setUploadOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
@@ -129,6 +119,18 @@ export default function FinancePage() {
       setExporting(false);
     }
   }, [hook.filters, hook.categories, selectedCompanyId]);
+
+  if (!canAccess("finance")) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center gap-4">
+        <div className="text-5xl">🔒</div>
+        <h2 className="text-xl font-bold text-gray-800">אין לך גישה לדף זה</h2>
+        <p className="text-gray-500 text-sm">
+          פנה למנהל המערכת כדי לקבל גישה לתנועות בנק.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5 pb-8">
