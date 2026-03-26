@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { Search, ChevronDown, ChevronLeft, ChevronUp, ChevronsUpDown, RefreshCw, Loader2, X } from "lucide-react";
+import { Search, ChevronDown, ChevronLeft, ChevronUp, ChevronsUpDown, RefreshCw, Loader2, X, BarChart3 } from "lucide-react";
 import { clsx } from "clsx";
 import { useSuppliers, type SupplierWithDetails } from "@/hooks/useSuppliers";
 import type { DbAccount } from "@/types/accounting";
@@ -25,9 +25,10 @@ const SECTION_BADGE_COLORS: Record<ParentSection, string> = {
 
 interface SuppliersTabProps {
   accounts?: DbAccount[];
+  onSupplierClick?: (counterAccount: string, displayName: string) => void;
 }
 
-export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
+export function SuppliersTab({ accounts = [], onSupplierClick }: SuppliersTabProps) {
   const { suppliers, isLoading, error, refetch } = useSuppliers();
   const [search, setSearch] = useState("");
   const [filterSection, setFilterSection] = useState<ParentSection | "all" | "unclassified">("all");
@@ -474,6 +475,16 @@ export function SuppliersTab({ accounts = [] }: SuppliersTabProps) {
                         </td>
                         <td className="py-2 px-2">
                           <div className="flex gap-1">
+                            {onSupplierClick && (
+                              <button
+                                onClick={() => onSupplierClick(s.counter_account, s.display_name)}
+                                className="px-2 py-0.5 text-[10px] border border-indigo-200 text-indigo-600 bg-indigo-50 rounded transition-colors hover:bg-indigo-100 flex items-center gap-1"
+                                title="פתח כרטיס ספק"
+                              >
+                                <BarChart3 className="w-2.5 h-2.5" />
+                                כרטיס
+                              </button>
+                            )}
                             <button
                               onClick={() => startClassify(s)}
                               className={clsx(

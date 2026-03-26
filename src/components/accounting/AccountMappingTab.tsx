@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 import { Search, Tag, FileText, DollarSign, Users, List } from "lucide-react";
@@ -34,6 +34,7 @@ interface Props {
   onSaveCounterName: (code: string, displayName: string) => Promise<boolean>;
   onRefetch: () => Promise<void>;
   onRefetchStructure: () => Promise<void>;
+  onSupplierClick?: (counterAccount: string, displayName: string) => void;
 }
 
 type InnerTab = "suppliers" | "customers" | "tags" | "counter" | "revenue" | "structure";
@@ -43,7 +44,7 @@ export default function AccountMappingTab({
   revenueGroups, revenueAccountCodes, groupLabels, pnlCustomSections,
   transactions: txProp,
   onSaveTag, onDeleteTag, onAssignTag, onRemoveTag, onSaveCounterName,
-  onRefetch, onRefetchStructure,
+  onRefetch, onRefetchStructure, onSupplierClick,
 }: Props) {
   const [activeTab, setActiveTab] = useState<InnerTab>("suppliers");
 
@@ -77,7 +78,9 @@ export default function AccountMappingTab({
       </div>
 
       <div className="pt-1">
-        {activeTab === "suppliers" && <SuppliersTab accounts={accounts} />}
+        {activeTab === "suppliers" && (
+          <SuppliersTab accounts={accounts} onSupplierClick={onSupplierClick} />
+        )}
         {activeTab === "customers" && (
           <CustomersTab
             revenueAccountCodes={revenueAccountCodes}

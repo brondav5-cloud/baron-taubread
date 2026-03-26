@@ -16,6 +16,7 @@ interface Props {
   onClose: () => void;
   onSaveOverride: (txId: string, type: DbTransactionOverride["override_type"], newValue?: string, note?: string) => Promise<boolean>;
   onDeleteOverride: (id: string) => Promise<boolean>;
+  onSupplierClick?: (counterAccount: string, displayName: string) => void;
 }
 
 function fmtDate(iso: string): string {
@@ -38,7 +39,7 @@ type EditState = {
 
 export default function TransactionModal({
   accountId, filterMonth, transactions, transactionOverrides, accounts,
-  counterNames, year, onClose, onSaveOverride, onDeleteOverride,
+  counterNames, year, onClose, onSaveOverride, onDeleteOverride, onSupplierClick,
 }: Props) {
   const [editState, setEditState] = useState<EditState>(null);
   const [saving, setSaving] = useState(false);
@@ -171,8 +172,18 @@ export default function TransactionModal({
                             </p>
                           )}
                         </td>
-                        <td className="py-2 px-3 text-gray-500 tabular-nums truncate max-w-[100px]">
-                          {counterDisplay}
+                        <td className="py-2 px-3 tabular-nums truncate max-w-[100px]">
+                          {tx.counter_account && onSupplierClick ? (
+                            <button
+                              onClick={() => onSupplierClick(tx.counter_account!, counterDisplay)}
+                              className="text-indigo-600 hover:text-indigo-800 hover:underline text-right truncate max-w-[100px] block"
+                              title={`פתח כרטיס ספק: ${counterDisplay}`}
+                            >
+                              {counterDisplay}
+                            </button>
+                          ) : (
+                            <span className="text-gray-500">{counterDisplay}</span>
+                          )}
                         </td>
                         <td className="py-2 px-3 text-left tabular-nums font-medium text-gray-900">
                           {amountOv?.new_value

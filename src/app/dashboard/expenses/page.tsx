@@ -11,6 +11,7 @@ import { useAccountingData } from "@/hooks/useAccountingData";
 import CategoryPanel from "@/components/accounting/CategoryPanel";
 import TransactionModal from "@/components/accounting/TransactionModal";
 import AccountDetailPanel from "@/components/accounting/AccountDetailPanel";
+import SupplierDetailPanel from "@/components/accounting/SupplierDetailPanel";
 
 const TabSkeleton = () => (
   <div className="space-y-4">
@@ -96,6 +97,7 @@ export default function ExpensesPage() {
   const [openAccountId, setOpenAccountId] = useState<string | null>(null);
   const [openAccountMonth, setOpenAccountMonth] = useState<number | undefined>(undefined);
   const [detailAccountId, setDetailAccountId] = useState<string | null>(null);
+  const [openSupplier, setOpenSupplier] = useState<{ counterAccount: string; displayName: string } | null>(null);
 
   const { toasts, addToast, removeToast } = useToast();
 
@@ -265,6 +267,9 @@ export default function ExpensesPage() {
                   transactions={data.transactions}
                   onRefetch={data.refetch}
                   onRefetchStructure={data.refetchStructure}
+                  onSupplierClick={(counterAccount, displayName) =>
+                    setOpenSupplier({ counterAccount, displayName })
+                  }
                   onSaveTag={(tag) =>
                     withToast(
                       () => data.saveTag(tag),
@@ -353,6 +358,9 @@ export default function ExpensesPage() {
         onDeleteOverride={(id) =>
           withToast(() => data.deleteTransactionOverride(id), "שינוי הוסר")
         }
+        onSupplierClick={(counterAccount, displayName) =>
+          setOpenSupplier({ counterAccount, displayName })
+        }
       />
 
       {/* Account detail panel */}
@@ -368,6 +376,22 @@ export default function ExpensesPage() {
             years={availableYears.length > 0 ? availableYears : [year]}
             initialYear={year}
             onClose={() => setDetailAccountId(null)}
+          />
+        );
+      })()}
+
+      {/* Supplier detail panel */}
+      {openSupplier && (() => {
+        const availableYears = Array.from(new Set(data.transactions.map(t => new Date(t.transaction_date).getFullYear()))).sort((a, b) => b - a);
+        return (
+          <SupplierDetailPanel
+            counterAccount={openSupplier.counterAccount}
+            displayName={openSupplier.displayName}
+            transactions={data.transactions}
+            counterNames={data.counterNames}
+            years={availableYears.length > 0 ? availableYears : [year]}
+            initialYear={year}
+            onClose={() => setOpenSupplier(null)}
           />
         );
       })()}
