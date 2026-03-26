@@ -17,6 +17,7 @@ import {
 import {
   UnifiedTasksList,
   type FilterType,
+  type StatusFilter,
 } from "@/components/tasks/UnifiedTasksList";
 import {
   CreateWorkflowModal,
@@ -32,6 +33,7 @@ export default function TasksPage() {
   const [selectedStoreNameFromSession, setSelectedStoreNameFromSession] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<FilterType>("my_new");
   const [assigneeFilter, setAssigneeFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [showAssigneeDropdown, setShowAssigneeDropdown] = useState(false);
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -182,6 +184,31 @@ export default function TasksPage() {
         onFilterChange={setActiveFilter}
       />
 
+      {/* Status & Assignee Filters */}
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Status Filter Chips */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1">
+          {(
+            [
+              { value: "all", label: "הכל" },
+              { value: "active", label: "פעילות" },
+              { value: "completed", label: "הושלמו" },
+            ] as { value: StatusFilter; label: string }[]
+          ).map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => setStatusFilter(opt.value)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                statusFilter === opt.value
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
       {/* Assignee Filter */}
       <div className="relative" ref={assigneeDropdownRef}>
         <button
@@ -227,6 +254,7 @@ export default function TasksPage() {
           </div>
         )}
       </div>
+      </div>
 
       {/* Unified Tasks List */}
       <div className="bg-white rounded-2xl border border-gray-200 p-4">
@@ -235,6 +263,7 @@ export default function TasksPage() {
           onTaskClick={setSelectedTask}
           onWorkflowClick={setSelectedWorkflowId}
           assigneeFilter={assigneeFilter}
+          statusFilter={statusFilter}
         />
       </div>
 

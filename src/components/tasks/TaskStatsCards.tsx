@@ -101,8 +101,10 @@ export function TaskStatsCards({
     ).length;
     const overdueTasks = tasks.filter((t) => {
       if (t.status === "approved") return false;
-      const isMyTask = t.assignees.some((a) => a.userId === currentUser.id);
-      if (!isMyTask || !isTaskVisibleToCurrentUser(t)) return false;
+      // Only count as overdue for the current user if they haven't completed their part
+      const myAssignee = t.assignees.find((a) => a.userId === currentUser.id);
+      if (!myAssignee || myAssignee.status === "done") return false;
+      if (!isTaskVisibleToCurrentUser(t)) return false;
       const effectiveDeadline =
         t.expectedCompletionAt &&
         new Date(t.expectedCompletionAt) > new Date(t.dueDate)

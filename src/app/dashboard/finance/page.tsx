@@ -14,6 +14,7 @@ import { BalanceChart } from "@/modules/finance/components/BalanceChart";
 import { MonthlyTrendsChart } from "@/modules/finance/components/MonthlyTrendsChart";
 import { CashRunwayCard } from "@/modules/finance/components/CashRunwayCard";
 import { UnclassifiedAlert } from "@/modules/finance/components/UnclassifiedAlert";
+import { BankSupplierPanel } from "@/modules/finance/components/BankSupplierPanel";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
@@ -45,6 +46,7 @@ export default function FinancePage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
+  const [openSupplier, setOpenSupplier] = useState<{ key: string; name: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
@@ -377,6 +379,18 @@ export default function FinancePage() {
         <TransactionDetailModal
           transaction={selectedTx}
           onClose={() => setSelectedTx(null)}
+          onSupplierClick={(key, name) => {
+            setSelectedTx(null);
+            setOpenSupplier({ key, name });
+          }}
+        />
+      )}
+
+      {openSupplier && (
+        <BankSupplierPanel
+          supplierKey={openSupplier.key}
+          displayName={openSupplier.name}
+          onClose={() => setOpenSupplier(null)}
         />
       )}
     </div>

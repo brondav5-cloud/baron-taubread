@@ -31,6 +31,8 @@ export type FilterType =
   | "created_by_me"
   | "overdue";
 
+export type StatusFilter = "all" | "active" | "completed";
+
 interface UnifiedItem {
   id: string;
   type: "task" | "workflow";
@@ -60,6 +62,7 @@ interface UnifiedTasksListProps {
   onTaskClick: (task: Task) => void;
   onWorkflowClick: (workflowId: string) => void;
   assigneeFilter?: string[];
+  statusFilter?: StatusFilter;
 }
 
 // ============================================
@@ -71,6 +74,7 @@ export function UnifiedTasksList({
   onTaskClick,
   onWorkflowClick,
   assigneeFilter = [],
+  statusFilter = "all",
 }: UnifiedTasksListProps) {
   const { currentUser } = useUsers();
   const { tasks } = useTasks();
@@ -233,7 +237,10 @@ export function UnifiedTasksList({
         filtered = filtered.filter((item) => {
           if (!item.isOverdue) return false;
           if (item.type === "task" && item.task) {
-            return item.task.assignees.some((a) => a.userId === currentUser.id);
+            // Only show if the current user hasn't completed their part yet
+            return item.task.assignees.some(
+              (a) => a.userId === currentUser.id && a.status !== "done",
+            );
           }
           if (item.type === "workflow" && item.workflow) {
             return (
@@ -271,6 +278,17 @@ export function UnifiedTasksList({
         break;
     }
 
+    // סינון לפי סטטוס (פעיל / הושלם)
+    if (statusFilter === "active") {
+      filtered = filtered.filter(
+        (item) => item.status !== "approved" && item.status !== "completed",
+      );
+    } else if (statusFilter === "completed") {
+      filtered = filtered.filter(
+        (item) => item.status === "approved" || item.status === "completed",
+      );
+    }
+
     // סינון לפי מוקצים נבחרים
     if (assigneeFilter.length > 0) {
       filtered = filtered.filter((item) => {
@@ -291,7 +309,7 @@ export function UnifiedTasksList({
       (a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
     );
-  }, [assigneeFilter, currentUser.id, filter, isAdmin, isTaskVisibleToCurrentUser, unifiedItems]);
+  }, [assigneeFilter, currentUser.id, filter, isAdmin, isTaskVisibleToCurrentUser, statusFilter, unifiedItems]);
 
   if (filteredItems.length === 0) {
     return (

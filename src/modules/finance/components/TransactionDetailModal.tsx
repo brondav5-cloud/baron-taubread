@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown,
+  X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown, BarChart3,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
@@ -35,6 +35,7 @@ interface LinkedDoc {
 interface Props {
   transaction: BankTransaction;
   onClose: () => void;
+  onSupplierClick?: (supplierKey: string, displayName: string) => void;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -162,7 +163,7 @@ function LinkedDocRow({ link, onDelete }: { link: LinkedDoc; onDelete: (id: stri
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
+export function TransactionDetailModal({ transaction: tx, onClose, onSupplierClick }: Props) {
   const [linkedDocs, setLinkedDocs] = useState<LinkedDoc[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -407,6 +408,21 @@ export function TransactionDetailModal({ transaction: tx, onClose }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+
+          {/* Supplier card button */}
+          {onSupplierClick && tx.debit > 0 && (
+            <button
+              onClick={() => {
+                const key = tx.supplier_name ?? tx.description;
+                const name = tx.supplier_name ?? tx.description;
+                onSupplierClick(key, name);
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium transition-colors shadow-sm"
+            >
+              <BarChart3 className="w-4 h-4" />
+              כרטיס ספק — כל ההיסטוריה והניתוח
+            </button>
+          )}
 
           {/* Transaction details */}
           <div className="grid grid-cols-2 gap-3 text-sm">
