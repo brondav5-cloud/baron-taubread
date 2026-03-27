@@ -32,6 +32,7 @@ function fmtDate(iso: string) {
 export function MergeTransactionsModal({ transactions, onClose, onMerged }: Props) {
   const [newName, setNewName] = useState("");
   const [saving, setSaving] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const totalDebit = transactions.reduce((s, t) => s + t.debit, 0);
   const totalCredit = transactions.reduce((s, t) => s + t.credit, 0);
@@ -144,19 +145,46 @@ export function MergeTransactionsModal({ transactions, onClose, onMerged }: Prop
         </div>
 
         {/* Footer */}
-        <div className="px-5 pb-4 flex gap-2 justify-end">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
-            ביטול
-          </button>
-          <button
-            onClick={handleMerge}
-            disabled={saving || !newName.trim()}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
-          >
-            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MergeIcon className="w-3.5 h-3.5" />}
-            מזג תנועות
-          </button>
-        </div>
+        {confirming ? (
+          <div className="px-5 pb-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-3 text-center">
+              <p className="text-sm font-semibold text-amber-800">האם אתה בטוח?</p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                {transactions.length} תנועות יאוחדו ל&quot;{newName}&quot; — פעולה זו ניתנת לביטול
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setConfirming(false)}
+                className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                חזור לעריכה
+              </button>
+              <button
+                onClick={handleMerge}
+                disabled={saving}
+                className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+              >
+                {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                כן, מזג
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="px-5 pb-4 flex gap-2 justify-end">
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+              ביטול
+            </button>
+            <button
+              onClick={() => { if (newName.trim()) setConfirming(true); }}
+              disabled={!newName.trim()}
+              className="flex items-center gap-2 px-4 py-2 text-sm bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50"
+            >
+              <MergeIcon className="w-3.5 h-3.5" />
+              מזג תנועות
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

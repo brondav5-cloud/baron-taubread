@@ -53,6 +53,7 @@ interface Props {
   onRowClick?: (tx: BankTransaction) => void;
   onEditClick?: (tx: BankTransaction) => void;
   onMergeSelected?: (txs: BankTransaction[]) => void;
+  onUnmergeClick?: (tx: BankTransaction) => void;
   splitCounts?: Map<string, number>;
   searchFilter?: string;
   categoryFilter?: string;
@@ -77,6 +78,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   onRowClick,
   onEditClick,
   onMergeSelected,
+  onUnmergeClick,
   splitCounts,
   searchFilter = "",
   categoryFilter = "",
@@ -164,29 +166,32 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   const selCount = selected.size;
 
   return (
-    <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
-      {/* ── Merge action bar ── */}
+    <>
+      {/* ── Sticky merge bar — fixed bottom, always visible when items selected ── */}
       {selCount >= 2 && (
-        <div className="flex items-center justify-between px-4 py-2 bg-indigo-50 border-b border-indigo-100" dir="rtl">
-          <span className="text-xs text-indigo-700 font-medium">{selCount} תנועות נבחרו</span>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setSelected(new Set())}
-              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-white border border-gray-200 transition-colors"
-            >
-              בטל בחירה
-            </button>
-            <button
-              onClick={handleMerge}
-              className="flex items-center gap-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors font-medium"
-            >
-              <MergeIcon className="w-3.5 h-3.5" />
-              מזג {selCount} תנועות
-            </button>
-          </div>
+        <div
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 bg-indigo-700 text-white rounded-2xl shadow-2xl border border-indigo-500 animate-in slide-in-from-bottom-4 duration-200"
+          dir="rtl"
+        >
+          <span className="text-sm font-semibold">{selCount} תנועות נבחרו</span>
+          <div className="w-px h-4 bg-indigo-400" />
+          <button
+            onClick={() => setSelected(new Set())}
+            className="text-xs text-indigo-200 hover:text-white px-2 py-1 rounded-lg hover:bg-indigo-600 transition-colors"
+          >
+            בטל בחירה
+          </button>
+          <button
+            onClick={handleMerge}
+            className="flex items-center gap-1.5 text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-xl transition-colors shadow-sm"
+          >
+            <MergeIcon className="w-3.5 h-3.5" />
+            מזג {selCount} תנועות
+          </button>
         </div>
       )}
 
+    <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-right" dir="rtl">
           <thead>
@@ -376,16 +381,27 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                             </span>
                           )}
                         </div>
-                        {/* Edit pencil — visible on row hover */}
-                        {onEditClick && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onEditClick(tx); }}
-                            title="ערוך תנועה"
-                            className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-all shrink-0"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                        )}
+                        {/* Action buttons — visible on row hover */}
+                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                          {onEditClick && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onEditClick(tx); }}
+                              title="ערוך תנועה"
+                              className="p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-colors"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {isMerged && onUnmergeClick && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onUnmergeClick(tx); }}
+                              title="בטל מיזוג"
+                              className="p-1 rounded-lg hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </td>
 
@@ -431,5 +447,6 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
         </table>
       </div>
     </div>
+    </>
   );
 });

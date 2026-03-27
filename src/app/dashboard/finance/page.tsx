@@ -67,6 +67,18 @@ export default function FinancePage() {
     hook.refresh();
   }, [hook]);
 
+  const handleUnmerge = useCallback(async (tx: BankTransaction) => {
+    if (!window.confirm(`לבטל מיזוג של "${tx.supplier_name ?? tx.description}"?`)) return;
+    try {
+      const res = await fetch("/api/finance/transactions/merge", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ master_id: tx.id }),
+      });
+      if (res.ok) hook.refresh();
+    } catch { /* silent */ }
+  }, [hook]);
+
   // Fetch available years from bank_transactions
   useEffect(() => {
     if (!selectedCompanyId) return;
@@ -278,6 +290,7 @@ export default function FinancePage() {
         onRowClick={setSelectedTx}
         onEditClick={setEditTx}
         onMergeSelected={setMergeTxs}
+        onUnmergeClick={handleUnmerge}
         splitCounts={hook.splitCounts}
         searchFilter={hook.filters.search}
         categoryFilter={hook.filters.categoryId}
