@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Upload, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
@@ -55,6 +55,8 @@ export default function FinancePage() {
   const [exporting, setExporting] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const currentYear = new Date().getFullYear();
+  const [selectedFilterYear, setSelectedFilterYear] = useState(currentYear);
+  const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
 
   const totalPages = Math.ceil(hook.totalCount / hook.pageSize);
 
@@ -71,6 +73,22 @@ export default function FinancePage() {
   const handleUploadSuccess = useCallback(() => {
     hook.refresh();
   }, [hook]);
+
+  // Fetch available years from bank_transactions
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+    const supabase = createClient();
+    Promise.all([
+      supabase.from("bank_transactions").select("date").eq("company_id", selectedCompanyId).order("date", { ascending: true }).limit(1),
+      supabase.from("bank_transactions").select("date").eq("company_id", selectedCompanyId).order("date", { ascending: false }).limit(1),
+    ]).then(([{ data: minData }, { data: maxData }]) => {
+      const minYear = minData?.[0] ? new Date((minData[0] as { date: string }).date).getFullYear() : currentYear;
+      const maxYear = maxData?.[0] ? new Date((maxData[0] as { date: string }).date).getFullYear() : currentYear;
+      const years: number[] = [];
+      for (let y = maxYear; y >= minYear; y--) years.push(y);
+      setAvailableYears(years.length > 0 ? years : [currentYear]);
+    });
+  }, [selectedCompanyId, currentYear]);
 
   const handleExport = useCallback(async () => {
     if (!selectedCompanyId) return;
@@ -193,9 +211,37 @@ export default function FinancePage() {
 
       {/* ── Filters bar ────────────────────────────────────────────────────── */}
       <div className="flex flex-col gap-2">
-        {/* Quick month selector */}
+        {/* Year selector */}
         <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-xs text-gray-400 font-medium ml-1">חודש מהיר:</span>
+          <span className="text-xs text-gray-400 font-medium ml-1">שנה:</span>
+          {availableYears.map((yr) => {
+            const isActive = selectedFilterYear === yr;
+            return (
+              <button
+                key={yr}
+                onClick={() => {
+                  setSelectedFilterYear(yr);
+                  // If a month is already selected, re-apply filter for the new year
+                  if (selectedMonth !== null) {
+                    const { from, to } = getMonthRange(yr, selectedMonth);
+                    hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
+                  }
+                }}
+                className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                  isActive
+                    ? "bg-blue-700 text-white border-blue-700"
+                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-700"
+                }`}
+              >
+                {yr}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Month selector — filters within the selected year */}
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-xs text-gray-400 font-medium ml-1">חודש:</span>
           {MONTH_NAMES.map((name, idx) => {
             const isActive = selectedMonth === idx;
             return (
@@ -206,7 +252,7 @@ export default function FinancePage() {
                     setSelectedMonth(null);
                     hook.setFilters((f) => ({ ...f, dateFrom: "", dateTo: "" }));
                   } else {
-                    const { from, to } = getMonthRange(currentYear, idx);
+                    const { from, to } = getMonthRange(selectedFilterYear, idx);
                     setSelectedMonth(idx);
                     hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
                   }
