@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Upload, ChevronRight, ChevronLeft, RefreshCw, Settings, BarChart3, Download, Clock, Receipt } from "lucide-react";
+import { Upload, ChevronRight, ChevronLeft, Settings, BarChart3, Download, Clock, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
@@ -15,23 +15,14 @@ import { MonthlyTrendsChart } from "@/modules/finance/components/MonthlyTrendsCh
 import { CashRunwayCard } from "@/modules/finance/components/CashRunwayCard";
 import { UnclassifiedAlert } from "@/modules/finance/components/UnclassifiedAlert";
 import { BankSupplierPanel } from "@/modules/finance/components/BankSupplierPanel";
+import { BankTransactionsFilterBar } from "@/modules/finance/components/BankTransactionsFilterBar";
+import { TransactionEditModal } from "@/modules/finance/components/TransactionEditModal";
+import { MergeTransactionsModal } from "@/modules/finance/components/MergeTransactionsModal";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { SourceBank, BankTransaction } from "@/modules/finance/types";
-
-const BANK_OPTIONS: { value: SourceBank | ""; label: string }[] = [
-  { value: "", label: "כל הבנקים" },
-  { value: "leumi", label: "לאומי" },
-  { value: "hapoalim", label: "הפועלים" },
-  { value: "mizrahi", label: "מזרחי" },
-];
-
-const MONTH_NAMES = [
-  "ינואר", "פברואר", "מרץ", "אפריל", "מאי", "יוני",
-  "יולי", "אוגוסט", "ספטמבר", "אוקטובר", "נובמבר", "דצמבר",
-];
+import type { BankTransaction } from "@/modules/finance/types";
 
 function getMonthRange(year: number, month: number): { from: string; to: string } {
   const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
@@ -50,6 +41,8 @@ export default function FinancePage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
+  const [editTx, setEditTx] = useState<BankTransaction | null>(null);
+  const [mergeTxs, setMergeTxs] = useState<BankTransaction[] | null>(null);
   const [openSupplier, setOpenSupplier] = useState<{ key: string; name: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -210,136 +203,33 @@ export default function FinancePage() {
       </div>
 
       {/* ── Filters bar ────────────────────────────────────────────────────── */}
-      <div className="flex flex-col gap-2">
-        {/* Year selector */}
-        <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-xs text-gray-400 font-medium ml-1">שנה:</span>
-          {availableYears.map((yr) => {
-            const isActive = selectedFilterYear === yr;
-            return (
-              <button
-                key={yr}
-                onClick={() => {
-                  setSelectedFilterYear(yr);
-                  // If a month is already selected, re-apply filter for the new year
-                  if (selectedMonth !== null) {
-                    const { from, to } = getMonthRange(yr, selectedMonth);
-                    hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
-                  }
-                }}
-                className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
-                  isActive
-                    ? "bg-blue-700 text-white border-blue-700"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-700"
-                }`}
-              >
-                {yr}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Month selector — filters within the selected year */}
-        <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-xs text-gray-400 font-medium ml-1">חודש:</span>
-          {MONTH_NAMES.map((name, idx) => {
-            const isActive = selectedMonth === idx;
-            return (
-              <button
-                key={idx}
-                onClick={() => {
-                  if (isActive) {
-                    setSelectedMonth(null);
-                    hook.setFilters((f) => ({ ...f, dateFrom: "", dateTo: "" }));
-                  } else {
-                    const { from, to } = getMonthRange(selectedFilterYear, idx);
-                    setSelectedMonth(idx);
-                    hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
-                  }
-                }}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
-                  isActive
-                    ? "bg-blue-500 text-white border-blue-500"
-                    : "bg-white text-gray-600 border-gray-200 hover:border-blue-300 hover:text-blue-600"
-                }`}
-              >
-                {name}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Main filter row */}
-        <div className="flex flex-wrap gap-2 items-center">
-          {/* Account selector */}
-          {hook.accounts.length > 1 && (
-            <select
-              value={hook.filters.bankAccountId}
-              onChange={(e) =>
-                hook.setFilters((f) => ({ ...f, bankAccountId: e.target.value }))
-              }
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-            >
-              <option value="">כל החשבונות</option>
-              {hook.accounts.map((a) => (
-                <option key={a.id} value={a.id}>{a.display_name}</option>
-              ))}
-            </select>
-          )}
-
-          {/* Bank filter */}
-          <select
-            value={hook.filters.sourceBank}
-            onChange={(e) =>
-              hook.setFilters((f) => ({ ...f, sourceBank: e.target.value as SourceBank | "" }))
-            }
-            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-          >
-            {BANK_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-
-          {/* Date from */}
-          <div className="flex flex-col gap-0.5">
-            <label className="text-xs text-gray-400 font-medium">מתאריך</label>
-            <input
-              type="date"
-              value={hook.filters.dateFrom}
-              onChange={(e) => {
-                setSelectedMonth(null);
-                hook.setFilters((f) => ({ ...f, dateFrom: e.target.value }));
-              }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-            />
-          </div>
-
-          <span className="text-gray-400 text-sm mt-4">—</span>
-
-          {/* Date to */}
-          <div className="flex flex-col gap-0.5">
-            <label className="text-xs text-gray-400 font-medium">עד תאריך</label>
-            <input
-              type="date"
-              value={hook.filters.dateTo}
-              onChange={(e) => {
-                setSelectedMonth(null);
-                hook.setFilters((f) => ({ ...f, dateTo: e.target.value }));
-              }}
-              className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-            />
-          </div>
-
-          {/* Refresh */}
-          <button
-            onClick={hook.refresh}
-            className="p-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500 transition-colors mt-4"
-            title="רענן"
-          >
-            <RefreshCw className={`w-4 h-4 ${hook.isLoading ? "animate-spin" : ""}`} />
-          </button>
-        </div>
-      </div>
+      <BankTransactionsFilterBar
+        filters={hook.filters}
+        accounts={hook.accounts}
+        availableYears={availableYears}
+        selectedFilterYear={selectedFilterYear}
+        selectedMonth={selectedMonth}
+        isLoading={hook.isLoading}
+        onFiltersChange={hook.setFilters}
+        onYearChange={(yr) => {
+          setSelectedFilterYear(yr);
+          if (selectedMonth !== null) {
+            const { from, to } = getMonthRange(yr, selectedMonth);
+            hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
+          }
+        }}
+        onMonthChange={(month) => {
+          if (month === null) {
+            setSelectedMonth(null);
+            hook.setFilters((f) => ({ ...f, dateFrom: "", dateTo: "" }));
+          } else {
+            const { from, to } = getMonthRange(selectedFilterYear, month);
+            setSelectedMonth(month);
+            hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
+          }
+        }}
+        onRefresh={hook.refresh}
+      />
 
       {/* ── File history + accounts panel ──────────────────────────────────── */}
       {showHistory && (
@@ -386,6 +276,8 @@ export default function FinancePage() {
         sortDir={hook.sortDir}
         onSort={hook.setSort}
         onRowClick={setSelectedTx}
+        onEditClick={setEditTx}
+        onMergeSelected={setMergeTxs}
         splitCounts={hook.splitCounts}
         searchFilter={hook.filters.search}
         categoryFilter={hook.filters.categoryId}
@@ -453,6 +345,24 @@ export default function FinancePage() {
           supplierKey={openSupplier.key}
           displayName={openSupplier.name}
           onClose={() => setOpenSupplier(null)}
+        />
+      )}
+
+      {/* ── Edit transaction modal ──────────────────────────────────────────── */}
+      {editTx && (
+        <TransactionEditModal
+          transaction={editTx}
+          onClose={() => setEditTx(null)}
+          onSaved={() => hook.refresh()}
+        />
+      )}
+
+      {/* ── Merge transactions modal ────────────────────────────────────────── */}
+      {mergeTxs && mergeTxs.length >= 2 && (
+        <MergeTransactionsModal
+          transactions={mergeTxs}
+          onClose={() => setMergeTxs(null)}
+          onMerged={() => { setMergeTxs(null); hook.refresh(); }}
         />
       )}
     </div>

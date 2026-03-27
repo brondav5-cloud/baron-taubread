@@ -118,6 +118,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
       .from("bank_transactions")
       .select("*", { count: "exact" })
       .eq("company_id", selectedCompanyId)
+      .is("merged_into_id", null)          // hide transactions merged into another
       .order(sortBy, { ascending: sortDir === "asc", nullsFirst: false })
       .order("created_at", { ascending: false })
       .range(from, to);

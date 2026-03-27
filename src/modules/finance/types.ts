@@ -66,7 +66,8 @@ export interface BankTransaction {
   notes?: string;
   category_id?: string;
   category_override?: string;
-  supplier_name?: string;  // set by checks_registry matching
+  supplier_name?: string;  // set by checks_registry matching or user edit
+  merged_into_id?: string | null;
   source_bank: SourceBank;
   raw_row: Record<string, unknown>;
   created_at: string;

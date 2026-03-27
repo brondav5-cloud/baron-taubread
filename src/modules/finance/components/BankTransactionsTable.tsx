@@ -1,7 +1,19 @@
 "use client";
 
-import { memo, useState, useEffect, useRef } from "react";
-import { ChevronUp, ChevronDown, ChevronsUpDown, Search, X, Filter } from "lucide-react";
+import { memo, useState, useEffect, useRef, useCallback } from "react";
+import {
+  ChevronUp, ChevronDown, ChevronsUpDown,
+  Search, X, Filter, Pencil,
+} from "lucide-react";
+
+function MergeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 6H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/><path d="M16 6h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-3"/>
+      <line x1="12" y1="2" x2="12" y2="22"/>
+    </svg>
+  );
+}
 import type { BankTransaction, BankCategory, SourceBank } from "../types";
 import type { SortBy, SortDir } from "../hooks/useBankTransactions";
 
@@ -18,13 +30,17 @@ const CAT_TYPE_COLOR: Record<string, string> = {
   ignore:   "bg-gray-100 text-gray-400",
 };
 
-function fmt(n: number): string {
+function fmt(n: number) {
   return n.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string) {
   const [y, m, d] = iso.split("-");
   return `${d}/${m}/${y}`;
+}
+
+function isMergedMaster(tx: BankTransaction) {
+  return tx.notes?.startsWith("[מיוזג מ-") ?? false;
 }
 
 interface Props {
@@ -35,9 +51,9 @@ interface Props {
   sortDir?: SortDir;
   onSort?: (col: SortBy) => void;
   onRowClick?: (tx: BankTransaction) => void;
-  /** Maps transaction_id → split count (from useBankTransactions) */
+  onEditClick?: (tx: BankTransaction) => void;
+  onMergeSelected?: (txs: BankTransaction[]) => void;
   splitCounts?: Map<string, number>;
-  // Inline filter props
   searchFilter?: string;
   categoryFilter?: string;
   onSearchChange?: (v: string) => void;
@@ -59,6 +75,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   sortDir,
   onSort,
   onRowClick,
+  onEditClick,
+  onMergeSelected,
   splitCounts,
   searchFilter = "",
   categoryFilter = "",
@@ -69,32 +87,55 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
 
   const [showFilters, setShowFilters] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchFilter);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const hasActiveFilters = searchFilter !== "" || categoryFilter !== "";
   const isFiltersOpen = showFilters || hasActiveFilters;
 
-  // Debounce search → parent
   useEffect(() => {
     const t = setTimeout(() => { onSearchChange?.(localSearch); }, 400);
     return () => clearTimeout(t);
   }, [localSearch, onSearchChange]);
 
-  // Sync when parent clears the filter externally
   useEffect(() => {
     if (searchFilter === "" && localSearch !== "") setLocalSearch("");
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchFilter]);
 
-  // Auto-focus search input when filter row opens
   useEffect(() => {
     if (isFiltersOpen) setTimeout(() => searchInputRef.current?.focus(), 50);
   }, [isFiltersOpen]);
+
+  // Clear selection when transaction list changes (new page / filter)
+  useEffect(() => { setSelected(new Set()); }, [transactions]);
 
   const clearAllFilters = () => {
     setLocalSearch("");
     onSearchChange?.("");
     onCategoryChange?.("");
+  };
+
+  const toggleSelect = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelected((prev) =>
+      prev.size === transactions.length
+        ? new Set()
+        : new Set(transactions.map((t) => t.id))
+    );
+  }, [transactions]);
+
+  const handleMerge = () => {
+    const selectedTxs = transactions.filter((t) => selected.has(t.id));
+    if (selectedTxs.length >= 2) onMergeSelected?.(selectedTxs);
   };
 
   if (isLoading) {
@@ -120,13 +161,46 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
     );
   }
 
+  const selCount = selected.size;
+
   return (
     <div className="rounded-xl border border-gray-100 bg-white overflow-hidden shadow-sm">
+      {/* ── Merge action bar ── */}
+      {selCount >= 2 && (
+        <div className="flex items-center justify-between px-4 py-2 bg-indigo-50 border-b border-indigo-100" dir="rtl">
+          <span className="text-xs text-indigo-700 font-medium">{selCount} תנועות נבחרו</span>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setSelected(new Set())}
+              className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded-lg hover:bg-white border border-gray-200 transition-colors"
+            >
+              בטל בחירה
+            </button>
+            <button
+              onClick={handleMerge}
+              className="flex items-center gap-1.5 text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors font-medium"
+            >
+              <MergeIcon className="w-3.5 h-3.5" />
+              מזג {selCount} תנועות
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-sm text-right" dir="rtl">
           <thead>
-            {/* ── Sort headers row ── */}
             <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-semibold uppercase tracking-wide">
+              {/* Checkbox column */}
+              <th className="px-3 py-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={selCount > 0 && selCount === transactions.length}
+                  ref={(el) => { if (el) el.indeterminate = selCount > 0 && selCount < transactions.length; }}
+                  onChange={toggleAll}
+                  className="w-3.5 h-3.5 rounded accent-indigo-600 cursor-pointer"
+                />
+              </th>
               <th
                 className="px-4 py-3 whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
                 onClick={() => onSort?.("date")}
@@ -175,6 +249,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
             {/* ── Inline filter row ── */}
             {isFiltersOpen && (
               <tr className="bg-blue-50/40 border-b border-blue-100 text-xs">
+                <th className="px-3 py-1.5" />
                 <th className="px-2 py-1.5" />
                 <th className="px-2 py-1.5">
                   <div className="relative" dir="rtl">
@@ -234,7 +309,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
           <tbody className="divide-y divide-gray-50">
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-4 py-12 text-center text-gray-400">
+                <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
                   <p className="font-medium">לא נמצאו תנועות לפי הסינון</p>
                   <button onClick={clearAllFilters} className="text-sm text-blue-500 hover:underline mt-1">נקה סינון</button>
                 </td>
@@ -246,41 +321,74 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 const bankInfo = BANK_LABELS[tx.source_bank];
                 const cat = tx.category_id ? catMap.get(tx.category_id) : undefined;
                 const splitCount = splitCounts?.get(tx.id) ?? 0;
+                const isSelected = selected.has(tx.id);
+                const isMerged = isMergedMaster(tx);
 
                 return (
                   <tr
                     key={tx.id}
                     onClick={() => onRowClick?.(tx)}
-                    className={`transition-colors ${onRowClick ? "cursor-pointer" : ""} ${
-                      isDebit ? "bg-red-50/30 hover:bg-red-50" : isCredit ? "bg-green-50/30 hover:bg-green-50" : "bg-white hover:bg-gray-50"
+                    className={`group transition-colors ${onRowClick ? "cursor-pointer" : ""} ${
+                      isSelected ? "bg-indigo-50/60" :
+                      isDebit ? "bg-red-50/30 hover:bg-red-50" :
+                      isCredit ? "bg-green-50/30 hover:bg-green-50" :
+                      "bg-white hover:bg-gray-50"
                     }`}
                   >
+                    {/* Checkbox */}
+                    <td className="px-3 py-3" onClick={(e) => toggleSelect(tx.id, e)}>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => {}}
+                        className="w-3.5 h-3.5 rounded accent-indigo-600 cursor-pointer"
+                      />
+                    </td>
+
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">
                       {formatDate(tx.date)}
                     </td>
+
                     <td className="px-4 py-3">
-                      {tx.supplier_name ? (
-                        <>
-                          <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.supplier_name}</p>
-                          <p className="text-xs text-teal-500 truncate max-w-[200px]">{tx.description}</p>
-                        </>
-                      ) : (
-                        <>
-                          <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.description}</p>
-                          {tx.details && (
-                            <p className="text-xs text-gray-400 truncate max-w-[200px]">{tx.details}</p>
+                      <div className="flex items-start justify-between gap-1">
+                        <div className="min-w-0">
+                          {tx.supplier_name ? (
+                            <>
+                              <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.supplier_name}</p>
+                              <p className="text-xs text-teal-500 truncate max-w-[200px]">{tx.description}</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.description}</p>
+                              {tx.details && (
+                                <p className="text-xs text-gray-400 truncate max-w-[200px]">{tx.details}</p>
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                     {splitCount > 0 && (
-                       <span
-                         className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5"
-                         title={`תנועה זו מפוצלת ל-${splitCount} שורות — לחץ לפרטים`}
-                       >
-                         ⬡ {splitCount} פיצולים
-                       </span>
-                     )}
+                          {splitCount > 0 && (
+                            <span className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5">
+                              ⬡ {splitCount} פיצולים
+                            </span>
+                          )}
+                          {isMerged && (
+                            <span className="inline-flex items-center gap-0.5 mt-0.5 mr-1 text-[10px] font-medium text-violet-600 bg-violet-50 border border-violet-100 rounded-full px-1.5 py-0.5">
+                              <MergeIcon className="w-2.5 h-2.5" /> ממוזג
+                            </span>
+                          )}
+                        </div>
+                        {/* Edit pencil — visible on row hover */}
+                        {onEditClick && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onEditClick(tx); }}
+                            title="ערוך תנועה"
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition-all shrink-0"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
+
                     <td className="px-4 py-3 hidden md:table-cell text-gray-400 text-xs font-mono">
                       {tx.reference}
                     </td>
