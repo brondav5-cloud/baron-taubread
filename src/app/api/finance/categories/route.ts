@@ -87,8 +87,20 @@ export async function PUT(request: NextRequest) {
   const auth = await getAuth(request);
   if (!auth) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
-  const { id, ...fields } = await request.json();
+  const body = await request.json();
+  const { id, name, type, color, icon, sort_order } = body as Record<string, unknown>;
   if (!id) return NextResponse.json({ error: "id חסר" }, { status: 400 });
+
+  const fields: Record<string, unknown> = {};
+  if (typeof name === "string") fields.name = name;
+  if (typeof type === "string" && ["income", "expense", "transfer", "ignore"].includes(type)) fields.type = type;
+  if (color !== undefined) fields.color = color;
+  if (icon !== undefined) fields.icon = icon;
+  if (typeof sort_order === "number") fields.sort_order = sort_order;
+
+  if (Object.keys(fields).length === 0) {
+    return NextResponse.json({ error: "אין שדות לעדכון" }, { status: 400 });
+  }
 
   const supabase = getSupabaseAdmin();
   await supabase

@@ -230,6 +230,15 @@ export default function CategoriesPage() {
     await load();
   }, [load]);
 
+  const handleCategoryTypeChange = useCallback(async (id: string, type: CategoryType) => {
+    await fetch("/api/finance/categories", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, type }),
+    });
+    await load();
+  }, [load]);
+
   const startEditRule = useCallback((rule: CategoryRule) => {
     setEditingRuleId(rule.id);
     setEditField(rule.match_field);
@@ -327,6 +336,9 @@ export default function CategoriesPage() {
       {/* Add category form */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
         <h2 className="font-semibold text-gray-800 mb-4">הוסף קטגוריה חדשה</h2>
+        <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3 leading-relaxed">
+          <strong>העברות בין חשבונות משלך:</strong> צור קטגוריה מסוג <strong>העברה</strong> (תג כחול בתנועות) — כך הסכומים לא ייכנסו לסה&quot;כ הכנסות/הוצאות בדוח רווח והפסד. אם התג אדום, הסוג הוא &quot;הוצאה&quot; ויש לשנות למטה או כאן בעורך הסוג.
+        </p>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input
             value={newName}
@@ -391,10 +403,17 @@ export default function CategoriesPage() {
             const typeInfo = TYPE_LABELS[cat.type] ?? TYPE_LABELS["expense"];
             return (
               <div key={cat.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-                <div className="flex items-center gap-3">
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${typeInfo.color}`}>
-                    {typeInfo.label}
-                  </span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <select
+                    value={cat.type}
+                    onChange={(e) => { void handleCategoryTypeChange(cat.id, e.target.value as CategoryType); }}
+                    title="סוג קטגוריה — משפיע על דוח רווח והפסד"
+                    className={`text-xs px-2 py-1 rounded-lg font-medium border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-300 ${typeInfo.color}`}
+                  >
+                    {(Object.entries(TYPE_LABELS) as [CategoryType, { label: string }][]).map(([k, v]) => (
+                      <option key={k} value={k}>{v.label}</option>
+                    ))}
+                  </select>
                   <span className="font-semibold text-gray-800">{cat.name}</span>
                   <span className="text-xs text-gray-400 mr-auto">
                     {catRules.length > 0 ? `${catRules.length} כלל${catRules.length > 1 ? "ים" : ""}` : "ללא כללים"}
