@@ -63,7 +63,12 @@ function InlineCategorySelect({
 
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<RuleField>(tx.supplier_name ? "supplier_name" : "description");
+  const [ruleMatchValue, setRuleMatchValue] = useState("");
   const [savingRule, setSavingRule] = useState(false);
+
+  // Generic descriptions that should warn the user to pick a more specific field
+  const GENERIC_DESCS = ["העברה דיגיטל", "העברה בנקאית", "העברה", "תשלום", "פקודת זיכוי", "פקודת חיוב", "זיכוי", "חיוב", "הוראת קבע"];
+  const isGenericDesc = GENERIC_DESCS.some((g) => tx.description?.trim() === g);
 
   const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
   const [ruleStyle, setRuleStyle] = useState<React.CSSProperties>({});
@@ -96,10 +101,10 @@ function InlineCategorySelect({
 
   const cat = localCatId ? catMap.get(localCatId) : undefined;
 
-  const ruleValue = (): string => {
-    if (ruleField === "supplier_name") return tx.supplier_name ?? "";
-    if (ruleField === "details") return tx.details ?? "";
-    if (ruleField === "operation_code") return tx.operation_code ?? "";
+  const ruleValueForField = (field: RuleField): string => {
+    if (field === "supplier_name") return tx.supplier_name ?? "";
+    if (field === "details") return tx.details ?? "";
+    if (field === "operation_code") return tx.operation_code ?? "";
     return tx.description ?? "";
   };
 
@@ -112,6 +117,19 @@ function InlineCategorySelect({
     setOpen(true);
   };
 
+  const openRulePrompt = () => {
+    // Smart default field: if description is generic, prefer details or supplier_name
+    let defaultField: RuleField = tx.supplier_name ? "supplier_name" : "description";
+    if (isGenericDesc) {
+      if (tx.supplier_name) defaultField = "supplier_name";
+      else if (tx.details) defaultField = "details";
+    }
+    setRuleField(defaultField);
+    setRuleMatchValue(ruleValueForField(defaultField));
+    if (buttonRef.current) setRuleStyle(calcDropdownPos(buttonRef.current, 268));
+    setShowRulePrompt(true);
+  };
+
   const handleSelect = async (catId: string | null) => {
     setOpen(false);
     setSearch("");
@@ -121,10 +139,7 @@ function InlineCategorySelect({
     setSaving(true);
     try {
       await onClassify?.(tx.id, catId);
-      if (catId && buttonRef.current) {
-        setRuleStyle(calcDropdownPos(buttonRef.current, 248));
-        setShowRulePrompt(true);
-      }
+      if (catId) openRulePrompt();
     } catch {
       setLocalCatId(prevId);
     } finally {
@@ -133,7 +148,7 @@ function InlineCategorySelect({
   };
 
   const handleCreateRule = async () => {
-    if (!localCatId || !ruleValue()) return;
+    if (!localCatId || !ruleMatchValue.trim()) return;
     setSavingRule(true);
     try {
       await fetch("/api/finance/categories/rules", {
@@ -143,7 +158,7 @@ function InlineCategorySelect({
           category_id: localCatId,
           match_field: ruleField,
           match_type: "contains",
-          match_value: ruleValue(),
+          match_value: ruleMatchValue.trim(),
         }),
       });
     } finally {
@@ -171,10 +186,7 @@ function InlineCategorySelect({
         setAddMode(false);
         setNewName("");
         setSearch("");
-        if (buttonRef.current) {
-          setRuleStyle(calcDropdownPos(buttonRef.current, 248));
-          setShowRulePrompt(true);
-        }
+        openRulePrompt();
       }
     } finally {
       setSaving(false);
@@ -375,25 +387,49 @@ function InlineCategorySelect({
           dir="rtl"
         >
           <p className="text-xs font-semibold text-purple-800">צור כלל אוטומטי לתנועות דומות?</p>
-          <div className="flex items-center gap-1.5">
-            <select
-              value={ruleField}
-              onChange={(e) => setRuleField(e.target.value as RuleField)}
-              className="border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-400 shrink-0"
-            >
-              {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
-              <option value="description">תיאור</option>
-              {tx.details && <option value="details">פרטים</option>}
-              {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
-            </select>
-            <span className="text-[10px] text-purple-600 truncate font-mono min-w-0 max-w-[120px]">
-              &quot;{ruleValue()}&quot;
-            </span>
-          </div>
+
+          {/* Warning for generic descriptions */}
+          {isGenericDesc && ruleField === "description" && (
+            <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1.5">
+              <span className="text-amber-500 text-[11px] leading-none mt-0.5">⚠</span>
+              <p className="text-[10px] text-amber-700 leading-snug">
+                &quot;{tx.description}&quot; הוא תיאור גנרי — כלל כזה יסווג את כל ההעברות הדיגיטליות.<br />
+                מומלץ לבחור <strong>פרטים</strong> או <strong>שם ספק</strong> לסיווג ספציפי.
+              </p>
+            </div>
+          )}
+
+          {/* Field selector */}
+          <select
+            value={ruleField}
+            onChange={(e) => {
+              const f = e.target.value as RuleField;
+              setRuleField(f);
+              setRuleMatchValue(ruleValueForField(f));
+            }}
+            className="w-full border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
+          >
+            {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
+            <option value="description">תיאור</option>
+            {tx.details && <option value="details">פרטים</option>}
+            {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
+          </select>
+
+          {/* Editable match value */}
+          <input
+            type="text"
+            value={ruleMatchValue}
+            onChange={(e) => setRuleMatchValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleCreateRule(); if (e.key === "Escape") setShowRulePrompt(false); }}
+            placeholder="ערך לחיפוש..."
+            className="w-full border border-purple-200 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-purple-400 bg-white"
+          />
+          <p className="text-[9px] text-purple-400">ניתן לקצר את הערך — החיפוש הוא &quot;מכיל&quot;</p>
+
           <div className="flex items-center gap-2">
             <button
               onClick={handleCreateRule}
-              disabled={savingRule || !ruleValue()}
+              disabled={savingRule || !ruleMatchValue.trim()}
               className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
             >
               {savingRule && <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />}
