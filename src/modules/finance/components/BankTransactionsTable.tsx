@@ -887,6 +887,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   const [showFilters, setShowFilters] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchFilter);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [collapsedSplitGroups, setCollapsedSplitGroups] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const hasActiveFilters = searchFilter !== "" || categoryFilter !== "";
@@ -908,6 +909,16 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
 
   // Clear selection when transaction list changes (new page / filter)
   useEffect(() => { setSelected(new Set()); }, [transactions]);
+
+  // Default: keep split groups collapsed for cleaner table.
+  useEffect(() => {
+    const groups = new Set(
+      transactions
+        .filter((t) => t.is_split_line && t.split_parent_id)
+        .map((t) => t.split_parent_id!)
+    );
+    setCollapsedSplitGroups(groups);
+  }, [transactions]);
 
   const clearAllFilters = () => {
     setLocalSearch("");
@@ -934,18 +945,73 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
     });
   }, []);
 
+  const selectableTransactions = transactions.filter((t) => !t.is_split_line);
+
   const toggleAll = useCallback(() => {
     setSelected((prev) =>
-      prev.size === transactions.length
+      prev.size === selectableTransactions.length
         ? new Set()
-        : new Set(transactions.map((t) => t.id))
+        : new Set(selectableTransactions.map((t) => t.id))
     );
-  }, [transactions]);
+  }, [selectableTransactions]);
 
   const handleMerge = () => {
-    const selectedTxs = transactions.filter((t) => selected.has(t.id));
+    const selectedTxs = transactions.filter((t) => selected.has(t.id) && !t.is_split_line);
     if (selectedTxs.length >= 2) onMergeSelected?.(selectedTxs);
   };
+
+  type DisplayRow =
+    | {
+      kind: "split_header";
+      key: string;
+      groupId: string;
+      label: string;
+      date: string;
+      rows: number;
+      amount: number;
+    }
+    | {
+      kind: "tx";
+      key: string;
+      tx: BankTransaction;
+    };
+
+  const displayRows: DisplayRow[] = [];
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i]!;
+    const groupId = tx.split_parent_id;
+    if (!tx.is_split_line || !groupId) {
+      displayRows.push({ kind: "tx", key: tx.id, tx });
+      continue;
+    }
+
+    const firstInGroup = i === 0 || transactions[i - 1]?.split_parent_id !== groupId;
+    if (!firstInGroup) continue;
+
+    const groupRows: BankTransaction[] = [];
+    let j = i;
+    while (j < transactions.length && transactions[j]?.split_parent_id === groupId) {
+      groupRows.push(transactions[j]!);
+      j++;
+    }
+    const amount = groupRows.reduce((sum, r) => sum + Math.abs((r.debit > 0 ? r.debit : r.credit) || 0), 0);
+    const label = groupRows[0]?.split_source_label ?? "כרטיס";
+    const date = groupRows[0]?.date ?? "";
+    displayRows.push({
+      kind: "split_header",
+      key: `split-header-${groupId}`,
+      groupId,
+      label,
+      date,
+      rows: groupRows.length,
+      amount,
+    });
+    if (!collapsedSplitGroups.has(groupId)) {
+      for (const row of groupRows) {
+        displayRows.push({ kind: "tx", key: row.id, tx: row });
+      }
+    }
+  }
 
   if (isLoading) {
     return (
@@ -1007,8 +1073,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               <th className="px-3 py-3 w-8">
                 <input
                   type="checkbox"
-                  checked={selCount > 0 && selCount === transactions.length}
-                  ref={(el) => { if (el) el.indeterminate = selCount > 0 && selCount < transactions.length; }}
+                  checked={selCount > 0 && selCount === selectableTransactions.length}
+                  ref={(el) => { if (el) el.indeterminate = selCount > 0 && selCount < selectableTransactions.length; }}
                   onChange={toggleAll}
                   className="w-3.5 h-3.5 rounded accent-indigo-600 cursor-pointer"
                 />
@@ -1166,7 +1232,46 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 </td>
               </tr>
             ) : (
-              transactions.map((tx) => {
+              displayRows.map((row) => {
+                if (row.kind === "split_header") {
+                  const isCollapsed = collapsedSplitGroups.has(row.groupId);
+                  return (
+                    <tr key={row.key} className="bg-purple-50/70 border-y border-purple-100">
+                      <td colSpan={10} className="px-4 py-2.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCollapsedSplitGroups((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(row.groupId)) next.delete(row.groupId);
+                              else next.add(row.groupId);
+                              return next;
+                            });
+                          }}
+                          className="w-full flex items-center justify-between text-right"
+                        >
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="text-purple-700 font-semibold">💳 {row.label}</span>
+                            <span className="text-purple-400">•</span>
+                            <span className="text-purple-600">{row.rows} שורות</span>
+                            <span className="text-purple-400">•</span>
+                            <span className="text-purple-600 font-mono">{formatDate(row.date)}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <span className="text-purple-700 font-semibold font-mono text-xs">{fmt(row.amount)}</span>
+                            {isCollapsed ? (
+                              <ChevronDown className="w-3.5 h-3.5 text-purple-500" />
+                            ) : (
+                              <ChevronUp className="w-3.5 h-3.5 text-purple-500" />
+                            )}
+                          </div>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                }
+                const tx = row.tx;
                 const isDebit = tx.debit > 0;
                 const isCredit = tx.credit > 0;
                 const bankInfo = BANK_LABELS[tx.source_bank];

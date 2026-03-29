@@ -205,6 +205,9 @@ export function useBankTransactions(): UseBankTransactionsReturn {
               notes: split.notes ?? tx.notes,
               debit: isDebitParent ? amt : 0,
               credit: isDebitParent ? 0 : amt,
+              // Critical business rule: split lines use the charge date of the parent bank transaction.
+              // This keeps P&L and bank table aligned to the real billing date (e.g. Diners 15th).
+              date: tx.date,
               is_split_line: true,
               split_parent_id: tx.id,
               split_source_label: sourceLabel,
