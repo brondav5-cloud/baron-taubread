@@ -12,6 +12,14 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
 
+function cleanText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function normalizeText(value: string): string {
+  return cleanText(value).toLowerCase();
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabaseAuth = createServerSupabaseClient();
@@ -96,7 +104,7 @@ export async function POST(request: NextRequest) {
     const rows = splits.map((s, i) => ({
       transaction_id: tx_id,
       company_id: companyId,
-      description: s.description ?? "",
+      description: cleanText(s.description ?? ""),
       supplier_name: s.supplier_name || null,
       category_id: s.category_id || null,
       amount: Number(s.amount) || 0,
@@ -113,7 +121,101 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "שגיאה בשמירת פיצולים" }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, count: rows.length });
+    // Atomic follow-up: create/update split rules and retroactively classify similar
+    // uncategorized split rows. This keeps behavior deterministic and reliable.
+    const classifiedRows = rows.filter((r) => r.category_id && r.description);
+
+    const ruleByNormalizedDescription = new Map<string, { match_value: string; category_id: string }>();
+    const conflictingKeys = new Set<string>();
+    const conflictingDescriptions = new Set<string>();
+
+    for (const row of classifiedRows) {
+      const normalized = normalizeText(row.description);
+      if (!normalized || !row.category_id) continue;
+      if (conflictingKeys.has(normalized)) continue;
+
+      const existing = ruleByNormalizedDescription.get(normalized);
+      if (!existing) {
+        ruleByNormalizedDescription.set(normalized, {
+          match_value: cleanText(row.description),
+          category_id: row.category_id,
+        });
+        continue;
+      }
+
+      if (existing.category_id !== row.category_id) {
+        conflictingKeys.add(normalized);
+        conflictingDescriptions.add(cleanText(row.description));
+        ruleByNormalizedDescription.delete(normalized);
+      }
+    }
+
+    const rulesToUpsert = Array.from(ruleByNormalizedDescription.values()).map((r) => ({
+      company_id: companyId,
+      match_value: r.match_value,
+      category_id: r.category_id,
+      updated_at: new Date().toISOString(),
+    }));
+
+    let savedRules = 0;
+    if (rulesToUpsert.length > 0) {
+      const { error: rulesErr } = await supabase
+        .from("split_classification_rules")
+        .upsert(rulesToUpsert, { onConflict: "company_id,match_value" });
+      if (rulesErr) {
+        logError("splits POST upsert rules", rulesErr);
+      } else {
+        savedRules = rulesToUpsert.length;
+      }
+    }
+
+    let retroUpdated = 0;
+    if (ruleByNormalizedDescription.size > 0) {
+      const { data: uncategorized, error: uncategorizedErr } = await supabase
+        .from("bank_transaction_splits")
+        .select("id, description")
+        .eq("company_id", companyId)
+        .is("category_id", null);
+
+      if (uncategorizedErr) {
+        logError("splits POST retro load uncategorized", uncategorizedErr);
+      } else if (uncategorized && uncategorized.length > 0) {
+        const idsByCategory = new Map<string, string[]>();
+        for (const row of uncategorized as { id: string; description: string }[]) {
+          const normalized = normalizeText(row.description ?? "");
+          const matchedRule = ruleByNormalizedDescription.get(normalized);
+          if (!matchedRule) continue;
+          const bucket = idsByCategory.get(matchedRule.category_id) ?? [];
+          bucket.push(row.id);
+          idsByCategory.set(matchedRule.category_id, bucket);
+        }
+
+        for (const [categoryId, ids] of Array.from(idsByCategory.entries())) {
+          const chunkSize = 200;
+          for (let i = 0; i < ids.length; i += chunkSize) {
+            const chunk = ids.slice(i, i + chunkSize);
+            const { data, error: retroErr } = await supabase
+              .from("bank_transaction_splits")
+              .update({ category_id: categoryId })
+              .in("id", chunk)
+              .select("id");
+            if (retroErr) {
+              logError("splits POST retro update", retroErr);
+              continue;
+            }
+            retroUpdated += data?.length ?? 0;
+          }
+        }
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      count: rows.length,
+      saved_rules: savedRules,
+      retro_updated: retroUpdated,
+      conflicts: Array.from(conflictingDescriptions),
+    });
   } catch (err) {
     logError("splits POST unhandled", err);
     return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });

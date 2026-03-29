@@ -254,47 +254,28 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
         toast.error(err.error ?? "שגיאה בשמירה");
         return;
       }
+      const data = (await res.json().catch(() => ({}))) as {
+        saved_rules?: number;
+        retro_updated?: number;
+        conflicts?: string[];
+      };
       setHasSplits(true);
       toast.success(`פיצול נשמר — ${payload.length} שורות`);
       onSaved?.();
 
-      // Classified rows: description + category_id
-      const classifiedRows = validRows.filter((r) => r.description.trim() && r.category_id);
-      if (classifiedRows.length === 0) return;
-
-      const rules = classifiedRows.map((r) => ({
-        match_value: r.description.trim(),
-        category_id: r.category_id,
-      }));
-
-      // 1. Auto-save split rules silently (for future auto-import)
-      fetch("/api/finance/splits/rules", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rules }),
-      }).catch(() => null);
-
-      // 2. Retroactively classify all existing unclassified splits with same description
-      const bulkRules = classifiedRows.map((r) => ({
-        description: r.description.trim(),
-        category_id: r.category_id,
-      }));
-      fetch("/api/finance/splits/bulk-classify", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rules: bulkRules }),
-      })
-        .then((res) => res.json())
-        .then((data: { updated?: number }) => {
-          if (data.updated && data.updated > 0) {
-            setAppliedCount(data.updated);
-          }
-        })
-        .catch(() => null);
+      if (data.saved_rules && data.saved_rules > 0) {
+        toast.success(`נשמרו ${data.saved_rules} כללי פיצול אוטומטיים`);
+      }
+      if (data.retro_updated && data.retro_updated > 0) {
+        setAppliedCount(data.retro_updated);
+      }
+      if (data.conflicts && data.conflicts.length > 0) {
+        toast.error(`לא נשמר כלל עבור ${data.conflicts.length} ספקים בגלל התנגשות קטגוריה`);
+      }
     } finally {
       setSaving(false);
     }
-  }, [rows, txId, categories, onSaved]);
+  }, [rows, txId, onSaved]);
 
 
   // ── Remove all splits ────────────────────────────────────────────────────
