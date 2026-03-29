@@ -230,7 +230,7 @@ function CategoryRow({
                     {txFiltered.map((g) => (
                       <Link
                         key={g.representative_id}
-                        href={`/dashboard/finance?tx=${g.representative_id}`}
+                        href={`/dashboard/finance?tx=${g.open_tx_id}`}
                         className="flex items-center gap-3 px-3 py-2.5 hover:bg-blue-50/60 transition-colors group"
                       >
                         <span className="text-xs text-gray-400 font-mono w-12 shrink-0">

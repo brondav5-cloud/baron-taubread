@@ -14,6 +14,8 @@ import { logError } from "@/lib/api/logger";
 export interface CategoryTransactionGroup {
   /** Open transaction detail / analysis for this group */
   representative_id: string;
+  /** Real bank transaction id for opening the transaction drawer */
+  open_tx_id: string;
   count: number;
   amount: number;
   date: string;
@@ -50,8 +52,8 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch transactions for this category
-    let query = supabase
+    // Fetch transactions in the period first (we'll apply category filter after split replacement)
+    const query = supabase
       .from("bank_transactions")
       .select("id, date, description, details, debit, credit, reference, source_bank, notes, supplier_name, category_id")
       .eq("company_id", companyId)
@@ -59,12 +61,6 @@ export async function GET(request: NextRequest) {
       .lte("date", dateTo)
       .is("merged_into_id", null)
       .order("date", { ascending: false });
-
-    if (categoryId) {
-      query = query.eq("category_id", categoryId);
-    } else {
-      query = query.is("category_id", null);
-    }
 
     const { data: transactions, error: txError } = await query;
     if (txError) throw txError;
@@ -86,8 +82,47 @@ export async function GET(request: NextRequest) {
 
     const isExpenseOrTransfer = categoryType === "expense" || categoryType === "transfer";
 
+    type TxWithMeta = {
+      id: string;
+      date: string;
+      description: string;
+      details: string;
+      debit: number;
+      credit: number;
+      reference: string;
+      source_bank: string;
+      notes: string | null;
+      supplier_name: string | null;
+      category_id: string | null;
+    };
+
+    const txRows = (transactions ?? []) as TxWithMeta[];
+    const txMap = new Map<string, TxWithMeta>(txRows.map((t) => [t.id, t]));
+
+    // Load splits for all transactions in the period
+    const txIds = txRows.map((t) => t.id);
+    type SplitRow = {
+      transaction_id: string;
+      category_id: string | null;
+      amount: number;
+      description: string;
+      supplier_name: string | null;
+      notes: string | null;
+    };
+    let splitRows: SplitRow[] = [];
+    if (txIds.length > 0) {
+      const { data: splitsData } = await supabase
+        .from("bank_transaction_splits")
+        .select("transaction_id, category_id, amount, description, supplier_name, notes")
+        .in("transaction_id", txIds)
+        .eq("company_id", companyId);
+      splitRows = (splitsData ?? []) as SplitRow[];
+    }
+    const splitTxIds = new Set(splitRows.map((s) => s.transaction_id));
+
     type TxRow = {
       id: string;
+      open_tx_id: string;
       date: string;
       description: string;
       details: string;
@@ -98,17 +133,50 @@ export async function GET(request: NextRequest) {
       supplier_name: string | null;
     };
 
-    const rows: TxRow[] = (transactions ?? []).map((tx) => ({
-      id: tx.id,
-      date: tx.date,
-      description: tx.supplier_name ?? tx.description ?? "",
-      details: tx.details ?? "",
-      amount: isExpenseOrTransfer ? Number(tx.debit) - Number(tx.credit) : Number(tx.credit) - Number(tx.debit),
-      reference: tx.reference ?? "",
-      source_bank: tx.source_bank ?? "",
-      notes: tx.notes ?? null,
-      supplier_name: tx.supplier_name ?? null,
-    }));
+    const rows: TxRow[] = [];
+
+    // 1) Unsplit transactions only
+    for (const tx of txRows) {
+      if (splitTxIds.has(tx.id)) continue;
+      const matchesCategory = categoryId ? tx.category_id === categoryId : tx.category_id == null;
+      if (!matchesCategory) continue;
+
+      rows.push({
+        id: tx.id,
+        open_tx_id: tx.id,
+        date: tx.date,
+        description: tx.supplier_name ?? tx.description ?? "",
+        details: tx.details ?? "",
+        amount: isExpenseOrTransfer ? Number(tx.debit) - Number(tx.credit) : Number(tx.credit) - Number(tx.debit),
+        reference: tx.reference ?? "",
+        source_bank: tx.source_bank ?? "",
+        notes: tx.notes ?? null,
+        supplier_name: tx.supplier_name ?? null,
+      });
+    }
+
+    // 2) Split rows replace their parent transactions
+    for (const s of splitRows) {
+      const parent = txMap.get(s.transaction_id);
+      if (!parent) continue;
+      const matchesCategory = categoryId ? s.category_id === categoryId : s.category_id == null;
+      if (!matchesCategory) continue;
+
+      const label = s.supplier_name?.trim() || s.description?.trim() || parent.supplier_name || parent.description || "";
+      const splitKey = `${parent.id}::${label}::${parent.reference ?? ""}`;
+      rows.push({
+        id: splitKey,
+        open_tx_id: parent.id,
+        date: parent.date,
+        description: label,
+        details: parent.details ?? "",
+        amount: Number(s.amount) || 0,
+        reference: parent.reference ?? "",
+        source_bank: parent.source_bank ?? "",
+        notes: s.notes ?? parent.notes ?? null,
+        supplier_name: s.supplier_name ?? parent.supplier_name ?? null,
+      });
+    }
 
     const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
     const groupMap = new Map<string, TxRow[]>();
@@ -131,6 +199,7 @@ export async function GET(request: NextRequest) {
         const date = txs.reduce((a, b) => (a >= b.date ? a : b.date), txs[0]!.date);
         return {
           representative_id: rep.id,
+          open_tx_id: rep.open_tx_id,
           count: txs.length,
           amount,
           date,
