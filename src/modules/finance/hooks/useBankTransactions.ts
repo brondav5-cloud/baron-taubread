@@ -24,6 +24,11 @@ function emptyFilters(): BankTransactionFilters {
   return { dateFrom: "", dateTo: "", bankAccountId: "", sourceBank: "", search: "", categoryId: "" };
 }
 
+function extractCardLabel(text: string): string {
+  const m = text.match(/\b\d{4}\b/);
+  return m ? `כרטיס ${m[0]}` : text.slice(0, 24);
+}
+
 export interface UseBankTransactionsReturn {
   transactions: BankTransaction[];
   accounts: BankAccount[];
@@ -133,12 +138,6 @@ export function useBankTransactions(): UseBankTransactionsReturn {
       const s = `%${filters.search.trim()}%`;
       query = query.or(`description.ilike.${s},details.ilike.${s},reference.ilike.${s},supplier_name.ilike.${s}`);
     }
-    if (filters.categoryId === "none") {
-      query = query.is("category_id", null);
-    } else if (filters.categoryId) {
-      query = query.eq("category_id", filters.categoryId);
-    }
-
     query.then(async ({ data, count, error: qErr }) => {
       if (cancelled) return;
       if (qErr) {
@@ -147,24 +146,84 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         return;
       }
       const txs = (data ?? []) as BankTransaction[];
-      setTransactions(txs);
       setTotalCount(count ?? 0);
 
-      // Fetch split counts for this page's transactions
+      // Fetch split details for this page's transactions
       if (txs.length > 0) {
         const ids = txs.map((t) => t.id);
         const { data: splitsData } = await supabase
           .from("bank_transaction_splits")
-          .select("transaction_id")
+          .select("id, transaction_id, description, supplier_name, category_id, amount, notes, sort_order")
           .in("transaction_id", ids)
-          .eq("company_id", selectedCompanyId);
+          .eq("company_id", selectedCompanyId)
+          .order("sort_order");
 
         const counts = new Map<string, number>();
-        for (const s of (splitsData ?? []) as { transaction_id: string }[]) {
+        const splitsByTx = new Map<string, {
+          id: string;
+          transaction_id: string;
+          description: string;
+          supplier_name: string | null;
+          category_id: string | null;
+          amount: number;
+          notes: string | null;
+        }[]>();
+
+        for (const s of (splitsData ?? []) as {
+          id: string;
+          transaction_id: string;
+          description: string;
+          supplier_name: string | null;
+          category_id: string | null;
+          amount: number;
+          notes: string | null;
+        }[]) {
           counts.set(s.transaction_id, (counts.get(s.transaction_id) ?? 0) + 1);
+          const arr = splitsByTx.get(s.transaction_id) ?? [];
+          arr.push(s);
+          splitsByTx.set(s.transaction_id, arr);
         }
-        if (!cancelled) setSplitCounts(counts);
+
+        // Replace parent summary rows with split rows in main table
+        const visibleRows: BankTransaction[] = [];
+        for (const tx of txs) {
+          const txSplits = splitsByTx.get(tx.id) ?? [];
+          if (txSplits.length === 0) {
+            visibleRows.push(tx);
+            continue;
+          }
+          const isDebitParent = Number(tx.debit) > 0;
+          const sourceLabel = extractCardLabel(tx.description ?? "");
+          for (const split of txSplits) {
+            const amt = Math.abs(Number(split.amount) || 0);
+            visibleRows.push({
+              ...tx,
+              id: `${tx.id}::split::${split.id}`,
+              description: split.description || tx.description,
+              supplier_name: split.supplier_name ?? tx.supplier_name,
+              category_id: split.category_id ?? undefined,
+              notes: split.notes ?? tx.notes,
+              debit: isDebitParent ? amt : 0,
+              credit: isDebitParent ? 0 : amt,
+              is_split_line: true,
+              split_parent_id: tx.id,
+              split_source_label: sourceLabel,
+            });
+          }
+        }
+
+        const categoryFilteredRows = filters.categoryId === "none"
+          ? visibleRows.filter((r) => !r.category_id)
+          : filters.categoryId
+            ? visibleRows.filter((r) => r.category_id === filters.categoryId)
+            : visibleRows;
+
+        if (!cancelled) {
+          setTransactions(categoryFilteredRows);
+          setSplitCounts(counts);
+        }
       } else {
+        setTransactions([]);
         setSplitCounts(new Map());
       }
       setIsLoading(false);

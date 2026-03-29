@@ -71,6 +71,10 @@ export interface BankTransaction {
   source_bank: SourceBank;
   raw_row: Record<string, unknown>;
   created_at: string;
+  // Virtual fields used for UI rows derived from transaction splits
+  is_split_line?: boolean;
+  split_parent_id?: string;
+  split_source_label?: string;
 }
 
 export interface BankCategory {

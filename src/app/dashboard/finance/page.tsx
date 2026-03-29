@@ -75,6 +75,40 @@ function FinancePageInner() {
     hook.refresh();
   }, [hook]);
 
+  const openTransactionFromRow = useCallback(async (row: BankTransaction) => {
+    const openId = row.split_parent_id ?? row.id;
+    if (!selectedCompanyId) return;
+    if (!row.split_parent_id) {
+      setSelectedTx(row);
+      return;
+    }
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("bank_transactions")
+      .select("*")
+      .eq("id", openId)
+      .eq("company_id", selectedCompanyId)
+      .maybeSingle();
+    if (data) setSelectedTx(data as BankTransaction);
+  }, [selectedCompanyId]);
+
+  const openEditFromRow = useCallback(async (row: BankTransaction) => {
+    const openId = row.split_parent_id ?? row.id;
+    if (!selectedCompanyId) return;
+    if (!row.split_parent_id) {
+      setEditTx(row);
+      return;
+    }
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("bank_transactions")
+      .select("*")
+      .eq("id", openId)
+      .eq("company_id", selectedCompanyId)
+      .maybeSingle();
+    if (data) setEditTx(data as BankTransaction);
+  }, [selectedCompanyId]);
+
   const clearTxQueryParam = useCallback(() => {
     const p = new URLSearchParams(searchParams.toString());
     if (!p.has("tx")) return;
@@ -346,8 +380,8 @@ function FinancePageInner() {
         sortBy={hook.sortBy}
         sortDir={hook.sortDir}
         onSort={hook.setSort}
-        onRowClick={setSelectedTx}
-        onEditClick={setEditTx}
+        onRowClick={(tx) => { void openTransactionFromRow(tx); }}
+        onEditClick={(tx) => { void openEditFromRow(tx); }}
         onMergeSelected={setMergeTxs}
         onUnmergeClick={handleUnmerge}
         splitCounts={hook.splitCounts}

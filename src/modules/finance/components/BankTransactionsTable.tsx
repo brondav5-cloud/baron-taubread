@@ -1174,6 +1174,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 const splitCount = splitCounts?.get(tx.id) ?? 0;
                 const isSelected = selected.has(tx.id);
                 const isMerged = isMergedMaster(tx);
+                const isSplitLine = Boolean(tx.is_split_line);
 
                 return (
                   <tr
@@ -1187,11 +1188,18 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     }`}
                   >
                     {/* Checkbox */}
-                    <td className="px-3 py-3" onClick={(e) => toggleSelect(tx.id, e)}>
+                    <td
+                      className="px-3 py-3"
+                      onClick={(e) => {
+                        if (isSplitLine) return;
+                        toggleSelect(tx.id, e);
+                      }}
+                    >
                       <input
                         type="checkbox"
                         checked={isSelected}
                         onChange={() => {}}
+                        disabled={isSplitLine}
                         className="w-3.5 h-3.5 rounded accent-indigo-600 cursor-pointer"
                       />
                     </td>
@@ -1238,6 +1246,11 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                           {splitCount > 0 && (
                             <span className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5">
                               ⬡ {splitCount} פיצולים
+                            </span>
+                          )}
+                          {isSplitLine && (
+                            <span className="inline-flex items-center gap-1 mt-0.5 mr-1 text-[10px] font-medium text-purple-700 bg-purple-50 border border-purple-100 rounded-full px-1.5 py-0.5">
+                              💳 {tx.split_source_label ?? "כרטיס"}
                             </span>
                           )}
                           {isMerged && (
@@ -1292,7 +1305,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     </td>
                     {showClassifyCol && (
                       <td className="px-4 py-3 hidden lg:table-cell">
-                        {onClassify ? (
+                        {onClassify && !isSplitLine ? (
                           <InlineCategorySelect
                             tx={tx}
                             categories={categories}
@@ -1301,6 +1314,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                             onClassify={onClassify}
                             onCategoryAdded={onCategoryAdded}
                           />
+                        ) : isSplitLine ? (
+                          <span className="text-[10px] text-purple-500">סיווג דרך פיצול</span>
                         ) : (
                           cat && (
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"}`}>
