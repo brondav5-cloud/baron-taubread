@@ -303,6 +303,8 @@ function InlineCategorySelect({
   const [ruleField, setRuleField] = useState<RuleField>(tx.supplier_name ? "supplier_name" : "description");
   const [ruleMatchValue, setRuleMatchValue] = useState("");
   const [savingRule, setSavingRule] = useState(false);
+  const isSplitLine = Boolean(tx.is_split_line);
+  const isParentWithSplits = hasSplits && !isSplitLine;
 
   // Generic descriptions that should warn the user to pick a more specific field
   const GENERIC_DESCS = ["העברה דיגיטל", "העברה בנקאית", "העברה", "תשלום", "פקודת זיכוי", "פקודת חיוב", "זיכוי", "חיוב", "הוראת קבע"];
@@ -371,7 +373,7 @@ function InlineCategorySelect({
   };
 
   const handleOpen = () => {
-    if (hasSplits) return;
+    if (isParentWithSplits) return;
     if (saving) return;
     if (open) { setOpen(false); return; }
     if (buttonRef.current) {
@@ -398,7 +400,7 @@ function InlineCategorySelect({
   };
 
   const handleSelect = async (catId: string | null) => {
-    if (hasSplits) return;
+    if (isParentWithSplits) return;
     setOpen(false);
     setSearch("");
     setAddMode(false);
@@ -408,7 +410,7 @@ function InlineCategorySelect({
     try {
       await onClassify?.(tx.id, catId);
       if (!catId) setManualLock(false);
-      if (catId) openRulePrompt();
+      if (catId && !isSplitLine) openRulePrompt();
     } catch {
       setLocalCatId(prevId);
     } finally {
@@ -455,7 +457,7 @@ function InlineCategorySelect({
         setAddMode(false);
         setNewName("");
         setSearch("");
-        openRulePrompt();
+        if (!isSplitLine) openRulePrompt();
       }
     } finally {
       setSaving(false);
@@ -473,7 +475,7 @@ function InlineCategorySelect({
   const hasResults = filteredCategories.length > 0;
 
   const handleLockPersist = async () => {
-    if (hasSplits) return;
+    if (isParentWithSplits) return;
     if (!localCatId || saving) return;
     setSaving(true);
     try {
@@ -510,7 +512,7 @@ function InlineCategorySelect({
         ref={buttonRef}
         onClick={handleOpen}
         title={
-          hasSplits
+          isParentWithSplits
             ? "לתנועה זו יש פיצול פעיל — הסיווג הראשי נעול כדי למנוע התנגשות"
             : cat
             ? manualLock
@@ -522,7 +524,7 @@ function InlineCategorySelect({
           cat
             ? `${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"} border-transparent hover:opacity-80`
             : "text-gray-400 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-600 bg-transparent"
-        } ${saving ? "opacity-50 cursor-wait" : hasSplits ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+        } ${saving ? "opacity-50 cursor-wait" : isParentWithSplits ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
       >
         {saving ? (
           <span className="inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin" />
@@ -537,7 +539,7 @@ function InlineCategorySelect({
       </button>
 
       {/* ── Category picker — rendered via portal so it escapes table overflow ── */}
-      {open && !hasSplits && typeof document !== "undefined" && createPortal(
+      {open && !isParentWithSplits && typeof document !== "undefined" && createPortal(
         <div
           ref={dropRef}
           style={dropStyle}
@@ -635,7 +637,7 @@ function InlineCategorySelect({
           </div>
 
           {/* Manual lock — persists category against auto-classify */}
-          {cat && (
+          {cat && !isSplitLine && (
             <div className="shrink-0 border-t border-amber-100 bg-amber-50/50 px-2 py-2 space-y-1">
               {manualLock ? (
                 <>
@@ -727,7 +729,7 @@ function InlineCategorySelect({
       )}
 
       {/* ── Rule prompt — also via portal ── */}
-      {showRulePrompt && localCatId && !hasSplits && typeof document !== "undefined" && createPortal(
+      {showRulePrompt && localCatId && !isParentWithSplits && !isSplitLine && typeof document !== "undefined" && createPortal(
         <div
           ref={ruleRef}
           style={ruleStyle}
@@ -1410,17 +1412,15 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     </td>
                     {showClassifyCol && (
                       <td className="px-4 py-3 hidden lg:table-cell">
-                        {onClassify && !isSplitLine ? (
+                        {onClassify ? (
                           <InlineCategorySelect
                             tx={tx}
                             categories={categories}
                             catMap={catMap}
-                            hasSplits={splitCount > 0}
+                            hasSplits={isSplitLine ? false : splitCount > 0}
                             onClassify={onClassify}
                             onCategoryAdded={onCategoryAdded}
                           />
-                        ) : isSplitLine ? (
-                          <span className="text-[10px] text-purple-500">סיווג דרך פיצול</span>
                         ) : (
                           cat && (
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"}`}>

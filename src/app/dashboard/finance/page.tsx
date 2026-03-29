@@ -138,6 +138,18 @@ function FinancePageInner() {
   }, [txQueryId, selectedCompanyId]);
 
   const handleClassify = useCallback(async (txId: string, categoryId: string | null) => {
+    const splitMarker = "::split::";
+    if (txId.includes(splitMarker)) {
+      const splitId = txId.split(splitMarker)[1];
+      if (!splitId) return;
+      await fetch("/api/finance/transactions/splits", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ split_id: splitId, category_id: categoryId }),
+      });
+      return;
+    }
+
     const body = categoryId
       ? { mode: "manual", tx_id: txId, category_id: categoryId }
       : { mode: "clear", tx_id: txId };

@@ -221,3 +221,38 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });
   }
 }
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const supabaseAuth = createServerSupabaseClient();
+    const { data: { user }, error } = await supabaseAuth.auth.getUser();
+    if (error || !user) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+
+    const { companyId } = await resolveSelectedCompanyId(supabaseAuth, user.id);
+    if (!companyId) return NextResponse.json({ error: "לא נבחרה חברה" }, { status: 400 });
+
+    let body: Record<string, unknown>;
+    try { body = await request.json(); }
+    catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
+
+    const { split_id, category_id } = body as { split_id?: string; category_id?: string | null };
+    if (!split_id) return NextResponse.json({ error: "split_id חסר" }, { status: 400 });
+
+    const supabase = getSupabaseAdmin();
+    const { error: updErr } = await supabase
+      .from("bank_transaction_splits")
+      .update({ category_id: category_id || null })
+      .eq("id", split_id)
+      .eq("company_id", companyId);
+
+    if (updErr) {
+      logError("splits PATCH", updErr);
+      return NextResponse.json({ error: "שגיאה בעדכון סיווג פיצול" }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    logError("splits PATCH unhandled", err);
+    return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });
+  }
+}
