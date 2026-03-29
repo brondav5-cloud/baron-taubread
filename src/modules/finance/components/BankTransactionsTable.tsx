@@ -25,6 +25,8 @@ const TYPE_LABELS: Record<string, string> = {
   ignore: "התעלם",
 };
 
+type RuleField = "description" | "details" | "operation_code" | "supplier_name";
+
 // ── Inline category selector ──────────────────────────────────────────────────
 function InlineCategorySelect({
   tx,
@@ -45,24 +47,39 @@ function InlineCategorySelect({
   const [newType, setNewType] = useState<CategoryType>("expense");
   const [saving, setSaving] = useState(false);
   const [localCatId, setLocalCatId] = useState<string | undefined>(tx.category_id);
+
+  // Rule prompt state — shown after a category is selected
+  const [showRulePrompt, setShowRulePrompt] = useState(false);
+  const [ruleField, setRuleField] = useState<RuleField>(tx.supplier_name ? "supplier_name" : "description");
+  const [savingRule, setSavingRule] = useState(false);
+
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocalCatId(tx.category_id); }, [tx.category_id]);
 
+  // Close on outside click — but only when rule prompt is not shown
   useEffect(() => {
-    if (!open) return;
+    if (!open && !showRulePrompt) return;
     const handler = (e: MouseEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
         setOpen(false);
+        setShowRulePrompt(false);
         setAddMode(false);
         setNewName("");
       }
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+  }, [open, showRulePrompt]);
 
   const cat = localCatId ? catMap.get(localCatId) : undefined;
+
+  const ruleValue = (): string => {
+    if (ruleField === "supplier_name") return tx.supplier_name ?? "";
+    if (ruleField === "details") return tx.details ?? "";
+    if (ruleField === "operation_code") return tx.operation_code ?? "";
+    return tx.description ?? "";
+  };
 
   const handleSelect = async (catId: string | null) => {
     setOpen(false);
@@ -72,10 +89,32 @@ function InlineCategorySelect({
     setSaving(true);
     try {
       await onClassify?.(tx.id, catId);
+      // Show rule prompt only when assigning (not removing)
+      if (catId) setShowRulePrompt(true);
     } catch {
       setLocalCatId(prevId);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCreateRule = async () => {
+    if (!localCatId || !ruleValue()) return;
+    setSavingRule(true);
+    try {
+      await fetch("/api/finance/categories/rules", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          category_id: localCatId,
+          match_field: ruleField,
+          match_type: "contains",
+          match_value: ruleValue(),
+        }),
+      });
+    } finally {
+      setSavingRule(false);
+      setShowRulePrompt(false);
     }
   };
 
@@ -97,6 +136,7 @@ function InlineCategorySelect({
         setOpen(false);
         setAddMode(false);
         setNewName("");
+        setShowRulePrompt(true);
       }
     } finally {
       setSaving(false);
@@ -107,8 +147,9 @@ function InlineCategorySelect({
 
   return (
     <div ref={wrapRef} className="relative" onClick={(e) => e.stopPropagation()}>
+      {/* ── Trigger badge ── */}
       <button
-        onClick={() => { if (!saving) setOpen(!open); }}
+        onClick={() => { if (!saving) { setOpen(!open); setShowRulePrompt(false); } }}
         className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-all ${
           cat
             ? `${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"} border-transparent hover:opacity-80`
@@ -124,6 +165,7 @@ function InlineCategorySelect({
         )}
       </button>
 
+      {/* ── Category picker dropdown ── */}
       {open && (
         <div
           className="absolute z-[200] top-full mt-1 w-52 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 overflow-hidden"
@@ -219,6 +261,52 @@ function InlineCategorySelect({
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Rule creation prompt (shown after classify, separate panel) ── */}
+      {showRulePrompt && localCatId && (
+        <div
+          className="absolute z-[200] top-full mt-1 w-60 bg-purple-50 border border-purple-200 rounded-xl shadow-2xl p-3 space-y-2"
+          style={{ right: 0 }}
+          dir="rtl"
+        >
+          <p className="text-xs font-semibold text-purple-800">
+            צור כלל אוטומטי לתנועות דומות?
+          </p>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={ruleField}
+              onChange={(e) => setRuleField(e.target.value as RuleField)}
+              className="border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-400 shrink-0"
+            >
+              {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
+              <option value="description">תיאור</option>
+              {tx.details && <option value="details">פרטים</option>}
+              {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
+            </select>
+            <span className="text-[10px] text-purple-600 truncate font-mono min-w-0">
+              &quot;{ruleValue()}&quot;
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleCreateRule}
+              disabled={savingRule || !ruleValue()}
+              className="flex items-center gap-1 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
+            >
+              {savingRule ? (
+                <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+              ) : null}
+              צור כלל
+            </button>
+            <button
+              onClick={() => setShowRulePrompt(false)}
+              className="text-xs text-purple-400 hover:text-purple-600 transition-colors"
+            >
+              דלג
+            </button>
           </div>
         </div>
       )}
