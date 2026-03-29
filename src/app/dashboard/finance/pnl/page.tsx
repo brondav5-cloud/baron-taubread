@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   ChevronRight, Loader2, TrendingUp, TrendingDown, Minus,
-  Download, BarChart3, ChevronDown, Scale, X,
+  Download, BarChart3, ChevronDown, Scale, X, ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -13,7 +13,7 @@ import {
 } from "recharts";
 import { loadXlsx } from "@/lib/loadXlsx";
 import type { PnlResponse, PnlCategoryLine } from "@/app/api/finance/pnl/route";
-import type { CategoryTransaction } from "@/app/api/finance/pnl/category/route";
+import type { CategoryTransactionGroup } from "@/app/api/finance/pnl/category/route";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +75,7 @@ function CategoryRow({
   year: number;
 }) {
   const [open, setOpen] = useState(false);
-  const [txData, setTxData] = useState<CategoryTransaction[] | null>(null);
+  const [txData, setTxData] = useState<CategoryTransactionGroup[] | null>(null);
   const [txLoading, setTxLoading] = useState(false);
   const [activeMonth, setActiveMonth] = useState<string | null>(null);
 
@@ -94,8 +94,8 @@ function CategoryRow({
       try {
         const param = line.category_id ? `categoryId=${line.category_id}` : "categoryId=";
         const res = await fetch(`/api/finance/pnl/category?year=${year}&${param}`);
-        const d = await res.json() as { transactions: CategoryTransaction[] };
-        setTxData(d.transactions ?? []);
+        const d = await res.json() as { groups?: CategoryTransactionGroup[] };
+        setTxData(d.groups ?? []);
       } catch {
         setTxData([]);
       } finally {
@@ -105,8 +105,10 @@ function CategoryRow({
   };
 
   const txFiltered = activeMonth
-    ? (txData ?? []).filter((t) => t.date.slice(0, 7) === activeMonth)
+    ? (txData ?? []).filter((g) => g.date.slice(0, 7) === activeMonth)
     : (txData ?? []);
+
+  const totalTxCount = txFiltered.reduce((s, g) => s + g.count, 0);
 
   return (
     <>
@@ -205,10 +207,15 @@ function CategoryRow({
               <div onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-xs text-gray-500 font-semibold">
-                    תנועות {activeMonth ? `— ${monthLabel(activeMonth)}` : ""}
+                    קיבוצי תנועות {activeMonth ? `— ${monthLabel(activeMonth)}` : ""}
                     {!txLoading && txData !== null && (
-                      <span className="font-normal text-gray-300 mr-1">({txFiltered.length})</span>
+                      <span className="font-normal text-gray-300 mr-1">
+                        ({txFiltered.length} שורות · {totalTxCount} תנועות)
+                      </span>
                     )}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    שורות זהות (תאריך, תיאור, ספק, אסמכתא) מקובצות. לחיצה פותחת ניתוח מלא לתנועה המייצגת.
                   </p>
                 </div>
 
@@ -220,31 +227,43 @@ function CategoryRow({
                   <p className="text-xs text-gray-300 text-center py-4">אין תנועות</p>
                 ) : (
                   <div className="max-h-56 overflow-y-auto divide-y divide-gray-50 rounded-lg border border-gray-100 bg-white">
-                    {txFiltered.map((tx) => (
-                      <div key={tx.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition-colors">
+                    {txFiltered.map((g) => (
+                      <Link
+                        key={g.representative_id}
+                        href={`/dashboard/finance?tx=${g.representative_id}`}
+                        className="flex items-center gap-3 px-3 py-2.5 hover:bg-blue-50/60 transition-colors group"
+                      >
                         <span className="text-xs text-gray-400 font-mono w-12 shrink-0">
-                          {tx.date.slice(5).split("-").reverse().join("/")}
+                          {g.date.slice(5).split("-").reverse().join("/")}
                         </span>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-700 truncate leading-tight">
-                            {tx.supplier_name ?? tx.description}
-                          </p>
-                          {tx.notes && (
-                            <p className="text-xs text-blue-500 truncate">{tx.notes}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="text-sm text-gray-700 truncate leading-tight">
+                              {g.supplier_name ?? g.description}
+                            </p>
+                            {g.count > 1 && (
+                              <span className="text-[10px] font-medium text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full shrink-0">
+                                ×{g.count}
+                              </span>
+                            )}
+                            <ExternalLink className="w-3 h-3 text-blue-400 opacity-0 group-hover:opacity-100 shrink-0" aria-hidden />
+                          </div>
+                          {g.notes && (
+                            <p className="text-xs text-blue-500 truncate">{g.notes}</p>
                           )}
                           <div className="flex items-center gap-2">
-                            {tx.source_bank && (
-                              <span className="text-xs text-gray-300">{BANK_LABELS[tx.source_bank] ?? tx.source_bank}</span>
+                            {g.source_bank && (
+                              <span className="text-xs text-gray-300">{BANK_LABELS[g.source_bank] ?? g.source_bank}</span>
                             )}
-                            {tx.reference && (
-                              <span className="text-xs text-gray-300">#{tx.reference}</span>
+                            {g.reference && (
+                              <span className="text-xs text-gray-300">#{g.reference}</span>
                             )}
                           </div>
                         </div>
                         <span className={`font-mono font-semibold text-sm shrink-0 ${style.text}`}>
-                          {fmt(tx.amount)}
+                          {fmt(g.amount)}
                         </span>
-                      </div>
+                      </Link>
                     ))}
                   </div>
                 )}

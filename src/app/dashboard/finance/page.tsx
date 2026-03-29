@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { Upload, ChevronRight, ChevronLeft, Settings, BarChart3, Download, Clock, Receipt } from "lucide-react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useBankTransactions } from "@/modules/finance/hooks/useBankTransactions";
 import { BankTransactionsTable } from "@/modules/finance/components/BankTransactionsTable";
 import { UploadBankFileModal } from "@/modules/finance/components/UploadBankFileModal";
@@ -31,10 +32,12 @@ function getMonthRange(year: number, month: number): { from: string; to: string 
   return { from, to };
 }
 
-export default function FinancePage() {
+function FinancePageInner() {
   const { canAccess } = usePermissions();
   const hook = useBankTransactions();
   const { state } = useSupabaseAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   // All hooks must appear before any conditional return (Rules of Hooks)
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
@@ -71,6 +74,34 @@ export default function FinancePage() {
   const handleUploadSuccess = useCallback(() => {
     hook.refresh();
   }, [hook]);
+
+  const clearTxQueryParam = useCallback(() => {
+    const p = new URLSearchParams(searchParams.toString());
+    if (!p.has("tx")) return;
+    p.delete("tx");
+    const qs = p.toString();
+    router.replace(`/dashboard/finance${qs ? `?${qs}` : ""}`, { scroll: false });
+  }, [router, searchParams]);
+
+  const txQueryId = searchParams.get("tx");
+  useEffect(() => {
+    if (!txQueryId || !selectedCompanyId) return;
+    let cancelled = false;
+    const supabase = createClient();
+    supabase
+      .from("bank_transactions")
+      .select("*")
+      .eq("id", txQueryId)
+      .eq("company_id", selectedCompanyId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled || error || !data) return;
+        setSelectedTx(data as BankTransaction);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [txQueryId, selectedCompanyId]);
 
   const handleClassify = useCallback(async (txId: string, categoryId: string | null) => {
     const body = categoryId
@@ -378,9 +409,13 @@ export default function FinancePage() {
       {selectedTx && (
         <TransactionDetailModal
           transaction={selectedTx}
-          onClose={() => setSelectedTx(null)}
+          onClose={() => {
+            setSelectedTx(null);
+            clearTxQueryParam();
+          }}
           onSupplierClick={(key, name) => {
             setSelectedTx(null);
+            clearTxQueryParam();
             setOpenSupplier({ key, name });
           }}
         />
@@ -412,5 +447,13 @@ export default function FinancePage() {
         />
       )}
     </div>
+  );
+}
+
+export default function FinancePage() {
+  return (
+    <Suspense fallback={<div className="flex justify-center py-16 text-gray-400 text-sm">טוען...</div>}>
+      <FinancePageInner />
+    </Suspense>
   );
 }
