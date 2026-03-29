@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useState, useEffect, useRef, useCallback, type ReactNode } from "react";
+import { memo, useState, useEffect, useLayoutEffect, useRef, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
@@ -28,15 +28,58 @@ const TYPE_LABELS: Record<string, string> = {
 
 type RuleField = "description" | "details" | "operation_code" | "supplier_name";
 
-function calcDropdownPos(btn: HTMLButtonElement, dropW: number) {
+const VIEWPORT_MARGIN = 8;
+const FLOAT_GAP = 4;
+/** Above extension bars / table UI */
+const FLOAT_Z_INDEX = 100_050;
+
+/**
+ * Fixed panel aligned to trigger (RTL: `right`). Flips above when not enough space below.
+ * Sets maxHeight so the panel stays inside the viewport; use flex + min-h-0 inside for scroll.
+ */
+function calcFloatingPanelStyle(
+  btn: HTMLButtonElement,
+  panelWidth: number,
+  opts?: { estimatedMinHeight?: number; maxHeightCap?: number }
+): React.CSSProperties {
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
   const rect = btn.getBoundingClientRect();
-  const spaceRight = window.innerWidth - rect.right;
-  // Prefer right-aligned; if not enough room on left, push in from left edge
-  const right = Math.max(8, spaceRight);
-  // If the dropdown would overflow the left edge, clamp it
-  const effectiveLeft = window.innerWidth - right - dropW;
-  const clampedRight = effectiveLeft < 8 ? window.innerWidth - dropW - 8 : right;
-  return { top: rect.bottom + 4, right: clampedRight, width: dropW };
+  const minH = opts?.estimatedMinHeight ?? 200;
+  const cap = opts?.maxHeightCap ?? 460;
+
+  let right = Math.max(VIEWPORT_MARGIN, vw - rect.right);
+  if (vw - right - panelWidth < VIEWPORT_MARGIN) {
+    right = Math.max(VIEWPORT_MARGIN, vw - panelWidth - VIEWPORT_MARGIN);
+  }
+
+  const spaceBelow = vh - rect.bottom - VIEWPORT_MARGIN - FLOAT_GAP;
+  const spaceAbove = rect.top - VIEWPORT_MARGIN - FLOAT_GAP;
+
+  let placeAbove = spaceBelow < minH && spaceAbove > spaceBelow;
+  let maxH = Math.min(cap, Math.max(120, placeAbove ? spaceAbove : spaceBelow));
+
+  if (maxH < minH * 0.55 && spaceAbove !== spaceBelow) {
+    placeAbove = spaceAbove >= spaceBelow;
+    maxH = Math.min(cap, Math.max(120, placeAbove ? spaceAbove : spaceBelow));
+  }
+
+  const base: React.CSSProperties = {
+    position: "fixed",
+    width: panelWidth,
+    right,
+    zIndex: FLOAT_Z_INDEX,
+    maxHeight: maxH,
+    boxSizing: "border-box",
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+  };
+
+  if (placeAbove) {
+    return { ...base, bottom: vh - rect.top + FLOAT_GAP, top: "auto" };
+  }
+  return { ...base, top: rect.bottom + FLOAT_GAP, bottom: "auto" };
 }
 
 type SmartFieldKind = "supplier" | "description";
@@ -96,9 +139,27 @@ function SmartTxnFieldMenu({
 
   const toggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (btnRef.current) setMenuStyle(calcDropdownPos(btnRef.current, 240));
+    if (btnRef.current) {
+      setMenuStyle(calcFloatingPanelStyle(btnRef.current, 240, { estimatedMinHeight: 160, maxHeightCap: 360 }));
+    }
     setOpen((o) => !o);
   };
+
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const update = () => {
+      if (btnRef.current) {
+        setMenuStyle(calcFloatingPanelStyle(btnRef.current, 240, { estimatedMinHeight: 160, maxHeightCap: 360 }));
+      }
+    };
+    update();
+    window.addEventListener("scroll", update, true);
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", update);
+    };
+  }, [open]);
 
   const close = () => setOpen(false);
 
@@ -131,11 +192,12 @@ function SmartTxnFieldMenu({
       {open && typeof document !== "undefined" && createPortal(
         <div
           ref={menuRef}
-          style={{ position: "fixed", ...menuStyle, zIndex: 10000 }}
-          className="bg-white rounded-xl shadow-2xl border border-gray-100 py-1 overflow-hidden"
+          style={menuStyle}
+          className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
           dir="rtl"
           onClick={(e) => e.stopPropagation()}
         >
+          <div className="overflow-y-auto min-h-0 flex-1 py-1">
           {pageMatches > 1 && (
             <p className="px-3 pt-2 pb-1 text-[10px] text-gray-400 leading-tight">
               {pageMatches} תנועות זהות בעמוד זה
@@ -203,6 +265,7 @@ function SmartTxnFieldMenu({
               <Copy className="w-3.5 h-3.5 shrink-0 text-gray-400" />
               העתק טקסט
             </button>
+          </div>
           </div>
         </div>,
         document.body
@@ -275,6 +338,27 @@ function InlineCategorySelect({
     return () => document.removeEventListener("mousedown", handler);
   }, [open, showRulePrompt]);
 
+  const repositionFloating = useCallback(() => {
+    if (!buttonRef.current) return;
+    if (open) {
+      setDropStyle(calcFloatingPanelStyle(buttonRef.current, 256, { estimatedMinHeight: 280, maxHeightCap: 480 }));
+    }
+    if (showRulePrompt) {
+      setRuleStyle(calcFloatingPanelStyle(buttonRef.current, 292, { estimatedMinHeight: 260, maxHeightCap: 420 }));
+    }
+  }, [open, showRulePrompt]);
+
+  useLayoutEffect(() => {
+    if (!open && !showRulePrompt) return;
+    repositionFloating();
+    window.addEventListener("scroll", repositionFloating, true);
+    window.addEventListener("resize", repositionFloating);
+    return () => {
+      window.removeEventListener("scroll", repositionFloating, true);
+      window.removeEventListener("resize", repositionFloating);
+    };
+  }, [open, showRulePrompt, repositionFloating]);
+
   const cat = localCatId ? catMap.get(localCatId) : undefined;
 
   const ruleValueForField = (field: RuleField): string => {
@@ -287,7 +371,9 @@ function InlineCategorySelect({
   const handleOpen = () => {
     if (saving) return;
     if (open) { setOpen(false); return; }
-    if (buttonRef.current) setDropStyle(calcDropdownPos(buttonRef.current, 224));
+    if (buttonRef.current) {
+      setDropStyle(calcFloatingPanelStyle(buttonRef.current, 256, { estimatedMinHeight: 280, maxHeightCap: 480 }));
+    }
     setSearch("");
     setShowRulePrompt(false);
     setOpen(true);
@@ -302,7 +388,9 @@ function InlineCategorySelect({
     }
     setRuleField(defaultField);
     setRuleMatchValue(ruleValueForField(defaultField));
-    if (buttonRef.current) setRuleStyle(calcDropdownPos(buttonRef.current, 268));
+    if (buttonRef.current) {
+      setRuleStyle(calcFloatingPanelStyle(buttonRef.current, 292, { estimatedMinHeight: 260, maxHeightCap: 420 }));
+    }
     setShowRulePrompt(true);
   };
 
@@ -445,12 +533,12 @@ function InlineCategorySelect({
       {open && typeof document !== "undefined" && createPortal(
         <div
           ref={dropRef}
-          style={{ position: "fixed", ...dropStyle, zIndex: 9999 }}
-          className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
+          style={dropStyle}
+          className="bg-white rounded-xl shadow-2xl border border-gray-100"
           dir="rtl"
         >
           {/* Search input */}
-          <div className="px-2 pt-2 pb-1">
+          <div className="shrink-0 px-2 pt-2 pb-1 border-b border-gray-50">
             <div className="relative">
               <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
               <input
@@ -475,7 +563,7 @@ function InlineCategorySelect({
             </div>
           </div>
 
-          <div className="max-h-64 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
             {/* Remove option */}
             {cat && !search && (
               <>
@@ -541,7 +629,7 @@ function InlineCategorySelect({
 
           {/* Manual lock — persists category against auto-classify */}
           {cat && (
-            <div className="border-t border-amber-100 bg-amber-50/50 px-2 py-2 space-y-1">
+            <div className="shrink-0 border-t border-amber-100 bg-amber-50/50 px-2 py-2 space-y-1">
               {manualLock ? (
                 <>
                   <p className="text-[10px] text-amber-900/80 px-1 leading-snug">
@@ -576,7 +664,7 @@ function InlineCategorySelect({
           )}
 
           {/* Add new category */}
-          <div className="border-t border-gray-100">
+          <div className="shrink-0 border-t border-gray-100">
             {!addMode ? (
               <button
                 onClick={() => setAddMode(true)}
@@ -635,10 +723,11 @@ function InlineCategorySelect({
       {showRulePrompt && localCatId && typeof document !== "undefined" && createPortal(
         <div
           ref={ruleRef}
-          style={{ position: "fixed", ...ruleStyle, zIndex: 9999 }}
-          className="bg-purple-50 border border-purple-200 rounded-xl shadow-2xl p-3 space-y-2"
+          style={ruleStyle}
+          className="bg-purple-50 border border-purple-200 rounded-xl shadow-2xl flex flex-col overflow-hidden"
           dir="rtl"
         >
+          <div className="overflow-y-auto overscroll-contain min-h-0 flex-1 p-3 space-y-2">
           <p className="text-xs font-semibold text-purple-800">צור כלל אוטומטי לתנועות דומות?</p>
 
           {/* Warning for generic descriptions */}
@@ -694,6 +783,7 @@ function InlineCategorySelect({
             >
               דלג
             </button>
+          </div>
           </div>
         </div>,
         document.body
