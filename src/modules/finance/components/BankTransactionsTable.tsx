@@ -1,10 +1,10 @@
 "use client";
 
-import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { memo, useState, useEffect, useRef, useCallback, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
-  Search, X, Filter, Pencil, Eye, EyeOff,
+  Search, X, Filter, Pencil, Eye, EyeOff, Copy, LayoutList,
 } from "lucide-react";
 import type { CategoryType } from "../types";
 
@@ -37,6 +37,178 @@ function calcDropdownPos(btn: HTMLButtonElement, dropW: number) {
   const effectiveLeft = window.innerWidth - right - dropW;
   const clampedRight = effectiveLeft < 8 ? window.innerWidth - dropW - 8 : right;
   return { top: rect.bottom + 4, right: clampedRight, width: dropW };
+}
+
+type SmartFieldKind = "supplier" | "description";
+
+/** Click description or supplier → portal menu: filter, supplier insights panel, copy */
+function SmartTxnFieldMenu({
+  kind,
+  tx,
+  pageTransactions,
+  onSearchChange,
+  onOpenSupplierInsights,
+  className,
+  children,
+}: {
+  kind: SmartFieldKind;
+  tx: BankTransaction;
+  pageTransactions: BankTransaction[];
+  onSearchChange?: (v: string) => void;
+  onOpenSupplierInsights?: (key: string, displayName: string) => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const primaryText = kind === "supplier" ? (tx.supplier_name ?? "") : (tx.description ?? "");
+  const pageMatches =
+    kind === "supplier" && tx.supplier_name
+      ? pageTransactions.filter((t) => t.supplier_name === tx.supplier_name).length
+      : pageTransactions.filter((t) => t.description === tx.description).length;
+
+  const insightsKey =
+    kind === "supplier" && tx.supplier_name
+      ? tx.supplier_name
+      : tx.supplier_name?.trim()
+        ? tx.supplier_name
+        : tx.description ?? "";
+  const insightsDisplay =
+    kind === "supplier" && tx.supplier_name
+      ? tx.supplier_name
+      : tx.supplier_name?.trim()
+        ? `${tx.supplier_name} · ${tx.description ?? ""}`.trim()
+        : (tx.description ?? "");
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (btnRef.current) setMenuStyle(calcDropdownPos(btnRef.current, 240));
+    setOpen((o) => !o);
+  };
+
+  const close = () => setOpen(false);
+
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* ignore */
+    }
+    close();
+  };
+
+  const hasAnyAction = Boolean(onSearchChange || onOpenSupplierInsights);
+
+  if (!primaryText.trim() || !hasAnyAction) {
+    return <span className={className}>{children}</span>;
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        ref={btnRef}
+        onClick={toggle}
+        title="פעולות — סינון, סקירה, העתקה"
+        className={className}
+      >
+        {children}
+      </button>
+      {open && typeof document !== "undefined" && createPortal(
+        <div
+          ref={menuRef}
+          style={{ position: "fixed", ...menuStyle, zIndex: 10000 }}
+          className="bg-white rounded-xl shadow-2xl border border-gray-100 py-1 overflow-hidden"
+          dir="rtl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {pageMatches > 1 && (
+            <p className="px-3 pt-2 pb-1 text-[10px] text-gray-400 leading-tight">
+              {pageMatches} תנועות זהות בעמוד זה
+            </p>
+          )}
+          {onSearchChange && kind === "supplier" && tx.supplier_name && (
+            <button
+              type="button"
+              onClick={() => { onSearchChange(tx.supplier_name!); close(); }}
+              className="w-full text-right px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              סנן בטבלה לפי שם ספק
+            </button>
+          )}
+          {onSearchChange && kind === "description" && tx.description && (
+            <button
+              type="button"
+              onClick={() => { onSearchChange(tx.description); close(); }}
+              className="w-full text-right px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              סנן בטבלה לפי תיאור
+            </button>
+          )}
+          {onSearchChange && kind === "description" && tx.details?.trim() && (
+            <button
+              type="button"
+              onClick={() => { onSearchChange(tx.details!); close(); }}
+              className="w-full text-right px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              סנן לפי שורת פרטים
+            </button>
+          )}
+          {onSearchChange && kind === "description" && tx.reference?.trim() && (
+            <button
+              type="button"
+              onClick={() => { onSearchChange(tx.reference!); close(); }}
+              className="w-full text-right px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Search className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              סנן לפי אסמכתא
+            </button>
+          )}
+          {onOpenSupplierInsights && insightsKey.trim() && (
+            <button
+              type="button"
+              onClick={() => {
+                onOpenSupplierInsights(insightsKey, insightsDisplay.slice(0, 120));
+                close();
+              }}
+              className="w-full text-right px-3 py-2 text-xs text-indigo-700 hover:bg-indigo-50 flex items-center gap-2 border-t border-gray-50"
+            >
+              <LayoutList className="w-3.5 h-3.5 shrink-0" />
+              סקירה, גרפים ותנועות דומות
+            </button>
+          )}
+          <div className="border-t border-gray-100 mt-0.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => copyText(primaryText)}
+              className="w-full text-right px-3 py-2 text-xs text-gray-600 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Copy className="w-3.5 h-3.5 shrink-0 text-gray-400" />
+              העתק טקסט
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </>
+  );
 }
 
 // ── Inline category selector ──────────────────────────────────────────────────
@@ -499,6 +671,8 @@ interface Props {
   showClassifyCol?: boolean;
   /** Toggle classify column visibility */
   onToggleClassifyCol?: () => void;
+  /** Open supplier insights side panel (same as from transaction detail) */
+  onOpenSupplierInsights?: (key: string, displayName: string) => void;
 }
 
 function SortIcon({ col, sortBy, sortDir }: { col: SortBy; sortBy?: SortBy; sortDir?: SortDir }) {
@@ -528,6 +702,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   onCategoryAdded,
   showClassifyCol = true,
   onToggleClassifyCol,
+  onOpenSupplierInsights,
 }: Props) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
@@ -561,6 +736,16 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
     onSearchChange?.("");
     onCategoryChange?.("");
   };
+
+  /** Immediate filter from smart menu + show filter row */
+  const applySearchFilter = useCallback(
+    (v: string) => {
+      setLocalSearch(v);
+      onSearchChange?.(v);
+      setShowFilters(true);
+    },
+    [onSearchChange]
+  );
 
   const toggleSelect = useCallback((id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -840,9 +1025,16 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     {/* ── שם ספק column ── */}
                     <td className="px-4 py-3 hidden lg:table-cell max-w-[160px]">
                       {tx.supplier_name && (
-                        <span className="text-sm font-medium text-gray-800 truncate block" title={tx.supplier_name}>
+                        <SmartTxnFieldMenu
+                          kind="supplier"
+                          tx={tx}
+                          pageTransactions={transactions}
+                          onSearchChange={applySearchFilter}
+                          onOpenSupplierInsights={onOpenSupplierInsights}
+                          className="text-sm font-medium text-gray-800 truncate block max-w-[150px] text-right hover:text-blue-600 hover:underline underline-offset-2 transition-colors cursor-pointer"
+                        >
                           {tx.supplier_name}
-                        </span>
+                        </SmartTxnFieldMenu>
                       )}
                     </td>
 
@@ -850,9 +1042,16 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     <td className="px-4 py-3">
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
-                          <p className="font-medium text-gray-800 truncate max-w-[200px]" title={tx.description}>
+                          <SmartTxnFieldMenu
+                            kind="description"
+                            tx={tx}
+                            pageTransactions={transactions}
+                            onSearchChange={applySearchFilter}
+                            onOpenSupplierInsights={onOpenSupplierInsights}
+                            className="font-medium text-gray-800 truncate max-w-[200px] block text-right hover:text-blue-600 hover:underline underline-offset-2 transition-colors cursor-pointer"
+                          >
                             {tx.description}
-                          </p>
+                          </SmartTxnFieldMenu>
                           {tx.details && (
                             <p className="text-xs text-gray-400 truncate max-w-[200px]" title={tx.details}>
                               {tx.details}

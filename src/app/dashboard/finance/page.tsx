@@ -328,6 +328,7 @@ export default function FinancePage() {
         onCategoryAdded={handleCategoryAdded}
         showClassifyCol={showClassifyCol}
         onToggleClassifyCol={handleToggleClassifyCol}
+        onOpenSupplierInsights={(key, name) => setOpenSupplier({ key, name })}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}
