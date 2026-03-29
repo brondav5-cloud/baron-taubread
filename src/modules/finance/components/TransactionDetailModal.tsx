@@ -240,7 +240,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
         return;
       }
       setSelectedCatId(catId);
-      setManualLocked(catId ? true : false);
+      if (!catId) setManualLocked(false);
       if (catId) setShowRulePrompt(true);
       else setShowRulePrompt(false);
     } catch {
@@ -543,7 +543,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                 {savingCat && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
               </div>
               <p className="text-[10px] text-gray-500 leading-snug">
-                שינוי קטגוריה כאן נשמר כסיווג ידני קבוע. לתנועה שסווגה קודם אוטומטית — לחץ &quot;נעל סיווג ידני&quot; כדי למנוע עדכון בסיווג אוטומטי.
+                שינוי קטגוריה כאן לא מדליק מנעול. לחץ &quot;נעל סיווג ידני&quot; רק על תנועות שתרצה לסמן במנעול.
               </p>
               <div className="flex flex-wrap gap-2">
                 {selectedCatId && !manualLocked && (

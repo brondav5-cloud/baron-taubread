@@ -6,10 +6,11 @@
  *
  * Body options:
  *   { mode: "auto" }                     → run all rules on all unclassified tx (skips manual lock)
- *   { mode: "manual", tx_id, category_id } → set one tx manually (sets category_override=manual)
+ *   { mode: "manual", tx_id, category_id } → set category only (does not set category_override; use mode "lock" to lock)
  *   { mode: "clear", tx_id }             → remove category from one tx
  *   { mode: "lock", tx_id }              → keep category_id, set category_override=manual (persist lock)
  *   { mode: "unlock_manual", tx_id }     → clear category_override only (category_id unchanged)
+ *   { mode: "unlock_all_manual_flags", confirm: true } → clear category_override for all company txs (one-time cleanup)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -65,14 +66,19 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const supabase = getSupabaseAdmin();
 
-    // ── Manual set ────────────────────────────────────────────────────────────
+    // ── Manual set (category only — lock icon uses category_override via mode "lock") ──
     if (body.mode === "manual") {
       const { tx_id, category_id } = body;
       if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
 
+      const cid = category_id || null;
+      const payload: { category_id: string | null; category_override?: null } = cid
+        ? { category_id: cid }
+        : { category_id: null, category_override: null };
+
       await supabase
         .from("bank_transactions")
-        .update({ category_id: category_id || null, category_override: category_id ? "manual" : null })
+        .update(payload)
         .eq("id", tx_id)
         .eq("company_id", companyId);
 
@@ -106,6 +112,21 @@ export async function POST(request: NextRequest) {
         .eq("company_id", companyId);
 
       if (unErr) return NextResponse.json({ error: unErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Clear lock flags company-wide (categories unchanged) ─────────────────
+    if (body.mode === "unlock_all_manual_flags") {
+      if (body.confirm !== true) {
+        return NextResponse.json({ error: "נדרש confirm: true" }, { status: 400 });
+      }
+      const { error: bulkErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_override: null })
+        .eq("company_id", companyId)
+        .eq("category_override", "manual");
+
+      if (bulkErr) return NextResponse.json({ error: bulkErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 

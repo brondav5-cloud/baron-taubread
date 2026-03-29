@@ -167,6 +167,7 @@ export default function CategoriesPage() {
   const [rules, setRules] = useState<CategoryRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [classifying, setClassifying] = useState(false);
+  const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
 
   // New category form
@@ -304,6 +305,28 @@ export default function CategoriesPage() {
     }
   }, []);
 
+  /** One-time: clear category_override for all txs (fixes old behavior where every manual classify set lock) */
+  const handleRemoveAllLocks = useCallback(async () => {
+    if (!confirm("להסיר מנעול מכל התנועות בחברה? הקטגוריות נשארות; רק אייקון המנעול יוסר (אפשר לנעול שוב מתנועות בנק).")) return;
+    setUnlockingAllLocks(true);
+    setClassifyResult(null);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "unlock_all_manual_flags", confirm: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setClassifyResult(data.error ?? "שגיאה בהסרת נעילות");
+        return;
+      }
+      setClassifyResult("הוסר סימון נעילה מכל התנועות. רענן את דף תנועות הבנק.");
+    } finally {
+      setUnlockingAllLocks(false);
+    }
+  }, []);
+
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
@@ -315,7 +338,16 @@ export default function CategoriesPage() {
           <h1 className="text-2xl font-bold text-gray-900">קטגוריות סיווג</h1>
           <p className="text-sm text-gray-500 mt-0.5">הגדר קטגוריות וכללים לסיווג אוטומטי של תנועות</p>
         </div>
-        <div className="mr-auto flex gap-2">
+        <div className="mr-auto flex flex-wrap gap-2 justify-end">
+          <button
+            type="button"
+            onClick={() => { void handleRemoveAllLocks(); }}
+            disabled={unlockingAllLocks || classifying}
+            className="flex items-center gap-2 px-3 py-2 border border-amber-200 bg-amber-50 text-amber-900 rounded-xl text-xs font-medium hover:bg-amber-100 disabled:opacity-50 transition-colors"
+          >
+            {unlockingAllLocks ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            הסר מנעול מכל התנועות
+          </button>
           <button
             onClick={handleAutoClassify}
             disabled={classifying}

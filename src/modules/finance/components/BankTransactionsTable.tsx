@@ -315,7 +315,7 @@ function InlineCategorySelect({
     setSaving(true);
     try {
       await onClassify?.(tx.id, catId);
-      setManualLock(catId ? true : false);
+      if (!catId) setManualLock(false);
       if (catId) openRulePrompt();
     } catch {
       setLocalCatId(prevId);
@@ -359,7 +359,6 @@ function InlineCategorySelect({
         onCategoryAdded?.(newCat);
         setLocalCatId(data.id);
         await onClassify?.(tx.id, data.id);
-        setManualLock(true);
         setOpen(false);
         setAddMode(false);
         setNewName("");
@@ -420,8 +419,8 @@ function InlineCategorySelect({
         title={
           cat
             ? manualLock
-              ? "סיווג ידני קבוע — לחץ לשינוי או בטל נעילה"
-              : "בחר קטגוריה או נעל מפני סיווג אוטומטי"
+              ? "נעול — לחץ לבטל נעילה או לשנות קטגוריה"
+              : "בחר קטגוריה; נעילה אופציונלית בתפריט"
             : "הוסף סיווג"
         }
         className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-all ${
@@ -546,7 +545,7 @@ function InlineCategorySelect({
               {manualLock ? (
                 <>
                   <p className="text-[10px] text-amber-900/80 px-1 leading-snug">
-                    סיווג ידני קבוע — סיווג אוטומטי (העלאה / כללים) לא ישנה את הקטגוריה.
+                    תנועה זו מסומנת כנעולה (לחצת &quot;נעל&quot;). אפשר לבטל למטה.
                   </p>
                   <button
                     type="button"
@@ -560,7 +559,7 @@ function InlineCategorySelect({
               ) : (
                 <>
                   <p className="text-[10px] text-amber-900/80 px-1 leading-snug">
-                    נעל כדי שהסיווג הנוכחי לא ישתנה כשמריצים סיווג אוטומטי או מעלים קובץ.
+                    בחירת קטגוריה לא מפעילה מנעול. לחץ רק אם תרצה לסמן תנועה זו במנעול.
                   </p>
                   <button
                     type="button"
