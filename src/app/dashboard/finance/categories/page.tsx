@@ -165,6 +165,7 @@ export default function CategoriesPage() {
 
   const [categories, setCategories] = useState<BankCategory[]>([]);
   const [rules, setRules] = useState<CategoryRule[]>([]);
+  const [splitRules, setSplitRules] = useState<{ id: string; match_value: string; category_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [classifying, setClassifying] = useState(false);
   const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
@@ -193,13 +194,23 @@ export default function CategoriesPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/finance/categories");
-      const data = await res.json();
-      setCategories(data.categories ?? []);
-      setRules(data.rules ?? []);
+      const [catRes, splitRes] = await Promise.all([
+        fetch("/api/finance/categories"),
+        fetch("/api/finance/splits/rules"),
+      ]);
+      const catData = await catRes.json();
+      setCategories(catData.categories ?? []);
+      setRules(catData.rules ?? []);
+      const splitData = await splitRes.json();
+      setSplitRules(splitData.rules ?? []);
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleDeleteSplitRule = useCallback(async (id: string) => {
+    await fetch(`/api/finance/splits/rules?id=${id}`, { method: "DELETE" });
+    setSplitRules((prev) => prev.filter((r) => r.id !== id));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -432,6 +443,8 @@ export default function CategoriesPage() {
         <div className="space-y-3">
           {categories.map((cat) => {
             const catRules = rules.filter((r) => r.category_id === cat.id);
+            const catSplitCount = splitRules.filter((r) => r.category_id === cat.id).length;
+            const totalRules = catRules.length + catSplitCount;
             const typeInfo = TYPE_LABELS[cat.type] ?? TYPE_LABELS["expense"];
             return (
               <div key={cat.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
@@ -448,7 +461,9 @@ export default function CategoriesPage() {
                   </select>
                   <span className="font-semibold text-gray-800">{cat.name}</span>
                   <span className="text-xs text-gray-400 mr-auto">
-                    {catRules.length > 0 ? `${catRules.length} כלל${catRules.length > 1 ? "ים" : ""}` : "ללא כללים"}
+                    {totalRules > 0
+                      ? `${catRules.length} כלל${catRules.length !== 1 ? "ים" : ""}${catSplitCount > 0 ? ` + ${catSplitCount} פיצול` : ""}`
+                      : "ללא כללים"}
                   </span>
                   <button
                     onClick={() => handleDelete(cat.id)}
@@ -501,6 +516,29 @@ export default function CategoriesPage() {
                     )}
                   </div>
                 )}
+
+                {/* Split rules for this category */}
+                {(() => {
+                  const catSplitRules = splitRules.filter((r) => r.category_id === cat.id);
+                  if (catSplitRules.length === 0) return null;
+                  return (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {catSplitRules.map((sr) => (
+                        <span key={sr.id} className="group flex items-center gap-1 text-xs bg-purple-50 text-purple-700 border border-purple-100 rounded-md px-2 py-0.5">
+                          <span className="opacity-60 shrink-0">✂</span>
+                          <span className="font-mono font-medium">&ldquo;{sr.match_value}&rdquo;</span>
+                          <button
+                            onClick={() => handleDeleteSplitRule(sr.id)}
+                            className="opacity-0 group-hover:opacity-100 text-red-300 hover:text-red-500 transition-opacity mr-0.5"
+                            title="מחק כלל פיצול"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Add rule to existing category */}
                 {addingRuleCatId === cat.id ? (

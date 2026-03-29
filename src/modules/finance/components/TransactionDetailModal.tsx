@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown, BarChart3, Lock, ExternalLink,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
 import type { BankTransaction, DocDetailRow, DocType } from "../types";
@@ -164,6 +165,7 @@ function LinkedDocRow({ link, onDelete }: { link: LinkedDoc; onDelete: (id: stri
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function TransactionDetailModal({ transaction: tx, onClose, onSupplierClick }: Props) {
+  const router = useRouter();
   const [linkedDocs, setLinkedDocs] = useState<LinkedDoc[]>([]);
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
@@ -632,15 +634,13 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
           {/* Transaction splits */}
           <div className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/30">
             <div className="flex justify-end mb-2">
-              <a
-                href={`/dashboard/finance/split/${tx.id}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                onClick={() => { onClose(); router.push(`/dashboard/finance/split/${tx.id}`); }}
                 className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium"
               >
                 <ExternalLink className="w-3 h-3" />
                 פתח עורך מלא
-              </a>
+              </button>
             </div>
             <TransactionSplitsPanel
               txId={tx.id}

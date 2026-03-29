@@ -27,6 +27,7 @@ async function auth(request: NextRequest): Promise<{ companyId: string } | null>
 }
 
 // ── GET — find category matches for a list of descriptions ────────────────────
+// If no ?d= params → returns ALL rules for the company: { rules: [...] }
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,7 +36,17 @@ export async function GET(request: NextRequest) {
 
     // Collect ?d=name1&d=name2 params
     const descriptions = request.nextUrl.searchParams.getAll("d").filter(Boolean);
-    if (descriptions.length === 0) return NextResponse.json({ matches: {} });
+
+    // No descriptions → return full list of split rules for this company
+    if (descriptions.length === 0) {
+      const supabase = getSupabaseAdmin();
+      const { data: allRules } = await supabase
+        .from("split_classification_rules")
+        .select("id, match_value, category_id, updated_at")
+        .eq("company_id", a.companyId)
+        .order("match_value");
+      return NextResponse.json({ rules: allRules ?? [] });
+    }
 
     const supabase = getSupabaseAdmin();
 
@@ -194,6 +205,35 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, count: rows.length });
   } catch (err) {
     logError("splits/rules POST", err);
+    return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });
+  }
+}
+
+// ── DELETE — remove a split rule by id ───────────────────────────────────────
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const a = await auth(request);
+    if (!a) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+
+    const id = request.nextUrl.searchParams.get("id");
+    if (!id) return NextResponse.json({ error: "id חסר" }, { status: 400 });
+
+    const supabase = getSupabaseAdmin();
+    const { error: delErr } = await supabase
+      .from("split_classification_rules")
+      .delete()
+      .eq("id", id)
+      .eq("company_id", a.companyId);
+
+    if (delErr) {
+      logError("splits/rules DELETE", delErr);
+      return NextResponse.json({ error: "שגיאה במחיקה" }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    logError("splits/rules DELETE unhandled", err);
     return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });
   }
 }
