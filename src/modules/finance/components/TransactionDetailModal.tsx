@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown, BarChart3,
+  X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown, BarChart3, Lock,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
@@ -169,7 +169,9 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
   const [showUpload, setShowUpload] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; type: string }[]>([]);
   const [selectedCatId, setSelectedCatId] = useState<string>(tx.category_id ?? "");
+  const [manualLocked, setManualLocked] = useState(() => tx.category_override === "manual");
   const [savingCat, setSavingCat] = useState(false);
+  const [savingLock, setSavingLock] = useState(false);
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code" | "supplier_name">(
     tx.supplier_name ? "supplier_name" : "description"
@@ -212,6 +214,11 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
 
   useEffect(() => { loadDocs(); }, [loadDocs]);
 
+  useEffect(() => {
+    setSelectedCatId(tx.category_id ?? "");
+    setManualLocked(tx.category_override === "manual");
+  }, [tx.id, tx.category_id, tx.category_override]);
+
   // ── Save category ─────────────────────────────────────────────────────────
   const handleSaveCategory = useCallback(async (catId: string) => {
     const prevCatId = selectedCatId;
@@ -233,6 +240,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
         return;
       }
       setSelectedCatId(catId);
+      setManualLocked(catId ? true : false);
       if (catId) setShowRulePrompt(true);
       else setShowRulePrompt(false);
     } catch {
@@ -242,6 +250,54 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
       setSavingCat(false);
     }
   }, [tx.id, selectedCatId]);
+
+  const handleLockManual = useCallback(async () => {
+    if (!selectedCatId) {
+      toast.error("בחר קטגוריה לפני נעילה");
+      return;
+    }
+    setSavingLock(true);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "lock", tx_id: tx.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "שגיאה בנעילה");
+        return;
+      }
+      setManualLocked(true);
+      toast.success("הסיווג ננעל — סיווג אוטומטי לא ישנה אותו");
+    } catch {
+      toast.error("שגיאה בנעילה");
+    } finally {
+      setSavingLock(false);
+    }
+  }, [tx.id, selectedCatId]);
+
+  const handleUnlockManual = useCallback(async () => {
+    setSavingLock(true);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "unlock_manual", tx_id: tx.id }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error ?? "שגיאה");
+        return;
+      }
+      setManualLocked(false);
+      toast.success("נעילת הסיווג הוסרה");
+    } catch {
+      toast.error("שגיאה");
+    } finally {
+      setSavingLock(false);
+    }
+  }, [tx.id]);
 
   const handleSaveNotes = useCallback(async () => {
     setSavingNotes(true);
@@ -462,20 +518,57 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
 
           {/* Category selector */}
           {categories.length > 0 && (
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-medium text-gray-500 shrink-0">קטגוריה:</label>
-              <select
-                value={selectedCatId}
-                onChange={(e) => handleSaveCategory(e.target.value)}
-                disabled={savingCat}
-                className="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
-              >
-                <option value="">— ללא סיווג —</option>
-                {categories.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-              {savingCat && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-500 shrink-0">קטגוריה:</label>
+                {manualLocked && (
+                  <span className="inline-flex items-center gap-0.5 text-[10px] font-medium text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-md" title="סיווג אוטומטי לא יעדכן תנועה זו">
+                    <Lock className="w-3 h-3" />
+                    ידני קבוע
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <select
+                  value={selectedCatId}
+                  onChange={(e) => handleSaveCategory(e.target.value)}
+                  disabled={savingCat}
+                  className="flex-1 min-w-[12rem] border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+                >
+                  <option value="">— ללא סיווג —</option>
+                  {categories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                {savingCat && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
+              </div>
+              <p className="text-[10px] text-gray-500 leading-snug">
+                שינוי קטגוריה כאן נשמר כסיווג ידני קבוע. לתנועה שסווגה קודם אוטומטית — לחץ &quot;נעל סיווג ידני&quot; כדי למנוע עדכון בסיווג אוטומטי.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {selectedCatId && !manualLocked && (
+                  <button
+                    type="button"
+                    onClick={() => { void handleLockManual(); }}
+                    disabled={savingLock || savingCat}
+                    className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-900 bg-amber-100 hover:bg-amber-200/90 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {savingLock ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                    נעל סיווג ידני
+                  </button>
+                )}
+                {manualLocked && (
+                  <button
+                    type="button"
+                    onClick={() => { void handleUnlockManual(); }}
+                    disabled={savingLock}
+                    className="inline-flex items-center gap-1.5 text-xs text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {savingLock ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                    בטל נעילה
+                  </button>
+                )}
+              </div>
             </div>
           )}
 

@@ -5,9 +5,11 @@
  * Can also set a category manually on a single transaction.
  *
  * Body options:
- *   { mode: "auto" }                     → run all rules on all unclassified tx
- *   { mode: "manual", tx_id, category_id } → set one tx manually
+ *   { mode: "auto" }                     → run all rules on all unclassified tx (skips manual lock)
+ *   { mode: "manual", tx_id, category_id } → set one tx manually (sets category_override=manual)
  *   { mode: "clear", tx_id }             → remove category from one tx
+ *   { mode: "lock", tx_id }              → keep category_id, set category_override=manual (persist lock)
+ *   { mode: "unlock_manual", tx_id }     → clear category_override only (category_id unchanged)
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -74,6 +76,36 @@ export async function POST(request: NextRequest) {
         .eq("id", tx_id)
         .eq("company_id", companyId);
 
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Lock current category (manual persist) ────────────────────────────────
+    if (body.mode === "lock") {
+      const { tx_id } = body;
+      if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+
+      const { error: lockErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_override: "manual" })
+        .eq("id", tx_id)
+        .eq("company_id", companyId)
+        .not("category_id", "is", null);
+
+      if (lockErr) return NextResponse.json({ error: lockErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Clear manual lock only (keep category) ───────────────────────────────
+    if (body.mode === "unlock_manual") {
+      if (!body.tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+
+      const { error: unErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_override: null })
+        .eq("id", body.tx_id)
+        .eq("company_id", companyId);
+
+      if (unErr) return NextResponse.json({ error: unErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 
@@ -151,7 +183,8 @@ export async function POST(request: NextRequest) {
           .from("bank_transactions")
           .update({ category_id: catId })
           .in("id", chunk)
-          .eq("company_id", companyId);
+          .eq("company_id", companyId)
+          .is("category_override", null);
         if (!upErr) classified += chunk.length;
       }
     }

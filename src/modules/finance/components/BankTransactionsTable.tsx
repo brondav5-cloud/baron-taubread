@@ -4,7 +4,7 @@ import { memo, useState, useEffect, useRef, useCallback, type ReactNode } from "
 import { createPortal } from "react-dom";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
-  Search, X, Filter, Pencil, Eye, EyeOff, Copy, LayoutList,
+  Search, X, Filter, Pencil, Eye, EyeOff, Copy, LayoutList, Lock,
 } from "lucide-react";
 import type { CategoryType } from "../types";
 
@@ -232,6 +232,7 @@ function InlineCategorySelect({
   const [newType, setNewType] = useState<CategoryType>("expense");
   const [saving, setSaving] = useState(false);
   const [localCatId, setLocalCatId] = useState<string | undefined>(tx.category_id);
+  const [manualLock, setManualLock] = useState(() => tx.category_override === "manual");
 
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<RuleField>(tx.supplier_name ? "supplier_name" : "description");
@@ -250,6 +251,9 @@ function InlineCategorySelect({
   const ruleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocalCatId(tx.category_id); }, [tx.category_id]);
+  useEffect(() => {
+    setManualLock(tx.category_override === "manual");
+  }, [tx.id, tx.category_override]);
 
   // Outside click closes both panels
   useEffect(() => {
@@ -311,6 +315,7 @@ function InlineCategorySelect({
     setSaving(true);
     try {
       await onClassify?.(tx.id, catId);
+      setManualLock(catId ? true : false);
       if (catId) openRulePrompt();
     } catch {
       setLocalCatId(prevId);
@@ -354,6 +359,7 @@ function InlineCategorySelect({
         onCategoryAdded?.(newCat);
         setLocalCatId(data.id);
         await onClassify?.(tx.id, data.id);
+        setManualLock(true);
         setOpen(false);
         setAddMode(false);
         setNewName("");
@@ -375,12 +381,49 @@ function InlineCategorySelect({
 
   const hasResults = filteredCategories.length > 0;
 
+  const handleLockPersist = async () => {
+    if (!localCatId || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "lock", tx_id: tx.id }),
+      });
+      if (res.ok) setManualLock(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUnlockManual = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "unlock_manual", tx_id: tx.id }),
+      });
+      if (res.ok) setManualLock(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div onClick={(e) => e.stopPropagation()}>
       {/* ── Trigger badge ── */}
       <button
         ref={buttonRef}
         onClick={handleOpen}
+        title={
+          cat
+            ? manualLock
+              ? "סיווג ידני קבוע — לחץ לשינוי או בטל נעילה"
+              : "בחר קטגוריה או נעל מפני סיווג אוטומטי"
+            : "הוסף סיווג"
+        }
         className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-all ${
           cat
             ? `${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"} border-transparent hover:opacity-80`
@@ -390,7 +433,10 @@ function InlineCategorySelect({
         {saving ? (
           <span className="inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin" />
         ) : cat ? (
-          cat.name
+          <>
+            {manualLock && <Lock className="w-3 h-3 shrink-0 opacity-80" aria-hidden />}
+            <span>{cat.name}</span>
+          </>
         ) : (
           <span className="text-[10px] font-medium">+ סיווג</span>
         )}
@@ -493,6 +539,42 @@ function InlineCategorySelect({
                 ))
             }
           </div>
+
+          {/* Manual lock — persists category against auto-classify */}
+          {cat && (
+            <div className="border-t border-amber-100 bg-amber-50/50 px-2 py-2 space-y-1">
+              {manualLock ? (
+                <>
+                  <p className="text-[10px] text-amber-900/80 px-1 leading-snug">
+                    סיווג ידני קבוע — סיווג אוטומטי (העלאה / כללים) לא ישנה את הקטגוריה.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { void handleUnlockManual(); }}
+                    disabled={saving}
+                    className="w-full text-right px-3 py-1.5 text-xs text-gray-600 hover:bg-white/70 rounded-lg"
+                  >
+                    בטל נעילה בלבד
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-[10px] text-amber-900/80 px-1 leading-snug">
+                    נעל כדי שהסיווג הנוכחי לא ישתנה כשמריצים סיווג אוטומטי או מעלים קובץ.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { void handleLockPersist(); }}
+                    disabled={saving}
+                    className="w-full text-right px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100/80 rounded-lg flex items-center gap-2"
+                  >
+                    <Lock className="w-3.5 h-3.5 shrink-0" />
+                    נעל סיווג ידני
+                  </button>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Add new category */}
           <div className="border-t border-gray-100">
