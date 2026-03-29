@@ -279,12 +279,14 @@ function InlineCategorySelect({
   tx,
   categories,
   catMap,
+  hasSplits,
   onClassify,
   onCategoryAdded,
 }: {
   tx: BankTransaction;
   categories: BankCategory[];
   catMap: Map<string, BankCategory>;
+  hasSplits: boolean;
   onClassify?: (txId: string, catId: string | null) => Promise<void>;
   onCategoryAdded?: (cat: BankCategory) => void;
 }) {
@@ -369,6 +371,7 @@ function InlineCategorySelect({
   };
 
   const handleOpen = () => {
+    if (hasSplits) return;
     if (saving) return;
     if (open) { setOpen(false); return; }
     if (buttonRef.current) {
@@ -395,6 +398,7 @@ function InlineCategorySelect({
   };
 
   const handleSelect = async (catId: string | null) => {
+    if (hasSplits) return;
     setOpen(false);
     setSearch("");
     setAddMode(false);
@@ -469,6 +473,7 @@ function InlineCategorySelect({
   const hasResults = filteredCategories.length > 0;
 
   const handleLockPersist = async () => {
+    if (hasSplits) return;
     if (!localCatId || saving) return;
     setSaving(true);
     try {
@@ -505,7 +510,9 @@ function InlineCategorySelect({
         ref={buttonRef}
         onClick={handleOpen}
         title={
-          cat
+          hasSplits
+            ? "לתנועה זו יש פיצול פעיל — הסיווג הראשי נעול כדי למנוע התנגשות"
+            : cat
             ? manualLock
               ? "נעול — לחץ לבטל נעילה או לשנות קטגוריה"
               : "בחר קטגוריה; נעילה אופציונלית בתפריט"
@@ -515,7 +522,7 @@ function InlineCategorySelect({
           cat
             ? `${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"} border-transparent hover:opacity-80`
             : "text-gray-400 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-600 bg-transparent"
-        } ${saving ? "opacity-50 cursor-wait" : "cursor-pointer"}`}
+        } ${saving ? "opacity-50 cursor-wait" : hasSplits ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
       >
         {saving ? (
           <span className="inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin" />
@@ -530,7 +537,7 @@ function InlineCategorySelect({
       </button>
 
       {/* ── Category picker — rendered via portal so it escapes table overflow ── */}
-      {open && typeof document !== "undefined" && createPortal(
+      {open && !hasSplits && typeof document !== "undefined" && createPortal(
         <div
           ref={dropRef}
           style={dropStyle}
@@ -720,7 +727,7 @@ function InlineCategorySelect({
       )}
 
       {/* ── Rule prompt — also via portal ── */}
-      {showRulePrompt && localCatId && typeof document !== "undefined" && createPortal(
+      {showRulePrompt && localCatId && !hasSplits && typeof document !== "undefined" && createPortal(
         <div
           ref={ruleRef}
           style={ruleStyle}
@@ -1290,6 +1297,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                             tx={tx}
                             categories={categories}
                             catMap={catMap}
+                            hasSplits={splitCount > 0}
                             onClassify={onClassify}
                             onCategoryAdded={onCategoryAdded}
                           />

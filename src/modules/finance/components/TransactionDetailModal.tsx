@@ -170,6 +170,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
   const [loadingDocs, setLoadingDocs] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [categories, setCategories] = useState<{ id: string; name: string; type: string }[]>([]);
+  const [hasActiveSplits, setHasActiveSplits] = useState(false);
   const [selectedCatId, setSelectedCatId] = useState<string>(tx.category_id ?? "");
   const [manualLocked, setManualLocked] = useState(() => tx.category_override === "manual");
   const [savingCat, setSavingCat] = useState(false);
@@ -196,7 +197,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const [{ data: links }, { data: cats }] = await Promise.all([
+      const [{ data: links }, { data: cats }, { data: splitRows }] = await Promise.all([
         supabase
           .from("transaction_document_links")
           .select(`id, match_method, document:transaction_detail_documents(id, file_name, doc_type, doc_date, total_amount, reference, raw_data, uploaded_at)`)
@@ -206,9 +207,15 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
           .select("id, name, type")
           .order("sort_order")
           .order("name"),
+        supabase
+          .from("bank_transaction_splits")
+          .select("id")
+          .eq("transaction_id", tx.id)
+          .limit(1),
       ]);
       setLinkedDocs((links as unknown as LinkedDoc[]) ?? []);
       setCategories(cats ?? []);
+      setHasActiveSplits((splitRows?.length ?? 0) > 0);
     } finally {
       setLoadingDocs(false);
     }
@@ -223,6 +230,10 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
 
   // ── Save category ─────────────────────────────────────────────────────────
   const handleSaveCategory = useCallback(async (catId: string) => {
+    if (hasActiveSplits) {
+      toast.error("לתנועה זו יש פיצול פעיל. סווג מתוך מסך הפיצול.");
+      return;
+    }
     const prevCatId = selectedCatId;
     setSavingCat(true);
     try {
@@ -251,9 +262,13 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
     } finally {
       setSavingCat(false);
     }
-  }, [tx.id, selectedCatId]);
+  }, [tx.id, selectedCatId, hasActiveSplits]);
 
   const handleLockManual = useCallback(async () => {
+    if (hasActiveSplits) {
+      toast.error("לא ניתן לנעול סיווג ראשי כשיש פיצול פעיל");
+      return;
+    }
     if (!selectedCatId) {
       toast.error("בחר קטגוריה לפני נעילה");
       return;
@@ -277,7 +292,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
     } finally {
       setSavingLock(false);
     }
-  }, [tx.id, selectedCatId]);
+  }, [tx.id, selectedCatId, hasActiveSplits]);
 
   const handleUnlockManual = useCallback(async () => {
     setSavingLock(true);
@@ -534,7 +549,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                 <select
                   value={selectedCatId}
                   onChange={(e) => handleSaveCategory(e.target.value)}
-                  disabled={savingCat}
+                  disabled={savingCat || hasActiveSplits}
                   className="flex-1 min-w-[12rem] border border-gray-200 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
                 >
                   <option value="">— ללא סיווג —</option>
@@ -545,10 +560,12 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                 {savingCat && <Loader2 className="w-4 h-4 animate-spin text-gray-400 shrink-0" />}
               </div>
               <p className="text-[10px] text-gray-500 leading-snug">
-                שינוי קטגוריה כאן לא מדליק מנעול. לחץ &quot;נעל סיווג ידני&quot; רק על תנועות שתרצה לסמן במנעול.
+                {hasActiveSplits
+                  ? "לתנועה זו יש פיצול פעיל — הסיווג הראשי נעול כדי למנוע התנגשות."
+                  : "שינוי קטגוריה כאן לא מדליק מנעול. לחץ \"נעל סיווג ידני\" רק על תנועות שתרצה לסמן במנעול."}
               </p>
               <div className="flex flex-wrap gap-2">
-                {selectedCatId && !manualLocked && (
+                {selectedCatId && !manualLocked && !hasActiveSplits && (
                   <button
                     type="button"
                     onClick={() => { void handleLockManual(); }}
@@ -559,7 +576,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                     נעל סיווג ידני
                   </button>
                 )}
-                {manualLocked && (
+                {manualLocked && !hasActiveSplits && (
                   <button
                     type="button"
                     onClick={() => { void handleUnlockManual(); }}
@@ -575,7 +592,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
           )}
 
           {/* Rule creation prompt */}
-          {showRulePrompt && selectedCatId && (
+          {showRulePrompt && selectedCatId && !hasActiveSplits && (
             <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 space-y-2">
               <p className="text-xs font-medium text-purple-700">צור כלל אוטומטי מסיווג זה?</p>
               <div className="flex items-center gap-2">

@@ -39,6 +39,19 @@ interface BankTx {
   supplier_name: string | null;
 }
 
+async function transactionHasSplits(
+  supabase: ReturnType<typeof getSupabaseAdmin>,
+  companyId: string,
+  txId: string
+): Promise<boolean> {
+  const { count } = await supabase
+    .from("bank_transaction_splits")
+    .select("id", { count: "exact", head: true })
+    .eq("company_id", companyId)
+    .eq("transaction_id", txId);
+  return (count ?? 0) > 0;
+}
+
 function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
   const haystack = (tx[rule.match_field] ?? "").toLowerCase();
   const needle = rule.match_value.toLowerCase();
@@ -70,6 +83,12 @@ export async function POST(request: NextRequest) {
     if (body.mode === "manual") {
       const { tx_id, category_id } = body;
       if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+      if (await transactionHasSplits(supabase, companyId, tx_id)) {
+        return NextResponse.json(
+          { error: "לתנועה זו יש פיצול פעיל. יש לסווג בתוך מסך הפיצול בלבד." },
+          { status: 409 }
+        );
+      }
 
       const cid = category_id || null;
       const payload: { category_id: string | null; category_override?: null } = cid
@@ -89,6 +108,12 @@ export async function POST(request: NextRequest) {
     if (body.mode === "lock") {
       const { tx_id } = body;
       if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+      if (await transactionHasSplits(supabase, companyId, tx_id)) {
+        return NextResponse.json(
+          { error: "לא ניתן לנעול סיווג ראשי כשיש פיצול פעיל." },
+          { status: 409 }
+        );
+      }
 
       const { error: lockErr } = await supabase
         .from("bank_transactions")
@@ -133,6 +158,12 @@ export async function POST(request: NextRequest) {
     // ── Clear ─────────────────────────────────────────────────────────────────
     if (body.mode === "clear") {
       if (!body.tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+      if (await transactionHasSplits(supabase, companyId, body.tx_id)) {
+        return NextResponse.json(
+          { error: "לא ניתן לנקות סיווג ראשי כשיש פיצול פעיל." },
+          { status: 409 }
+        );
+      }
 
       await supabase
         .from("bank_transactions")
