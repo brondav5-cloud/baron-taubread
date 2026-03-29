@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
-  X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown, BarChart3, Lock,
+  X, FileSpreadsheet, Loader2, Trash2, Upload, AlertCircle, ChevronDown, BarChart3, Lock, ExternalLink,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
@@ -631,6 +631,17 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
 
           {/* Transaction splits */}
           <div className="border border-indigo-100 rounded-xl p-4 bg-indigo-50/30">
+            <div className="flex justify-end mb-2">
+              <a
+                href={`/dashboard/finance/split/${tx.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 font-medium"
+              >
+                <ExternalLink className="w-3 h-3" />
+                פתח עורך מלא
+              </a>
+            </div>
             <TransactionSplitsPanel
               txId={tx.id}
               txAmount={tx.debit > 0 ? tx.debit : tx.credit}
