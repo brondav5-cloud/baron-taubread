@@ -15,7 +15,7 @@ export interface BankTransactionFilters {
   categoryId: string;       // "" = all, "none" = unclassified
 }
 
-export type SortBy = "date" | "debit" | "credit" | "balance";
+export type SortBy = "date" | "debit" | "credit" | "balance" | "description" | "supplier_name";
 export type SortDir = "asc" | "desc";
 
 const PAGE_SIZE = 50;
@@ -78,7 +78,9 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         setSortDir((d) => (d === "asc" ? "desc" : "asc"));
         return prev;
       }
-      setSortDir("desc");
+      // Text sorts default to ascending (A→Z); numeric/date sorts default to descending
+      const defaultAsc: SortBy[] = ["description", "supplier_name"];
+      setSortDir(defaultAsc.includes(col) ? "asc" : "desc");
       return col;
     });
     setPage(0);

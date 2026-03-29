@@ -656,7 +656,18 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               >
                 תאריך<SortIcon col="date" sortBy={sortBy} sortDir={sortDir} />
               </th>
-              <th className="px-4 py-3">תיאור</th>
+              <th
+                className="px-4 py-3 hidden lg:table-cell whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("supplier_name")}
+              >
+                שם ספק<SortIcon col="supplier_name" sortBy={sortBy} sortDir={sortDir} />
+              </th>
+              <th
+                className="px-4 py-3 whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("description")}
+              >
+                תיאור<SortIcon col="description" sortBy={sortBy} sortDir={sortDir} />
+              </th>
               <th className="px-4 py-3 hidden md:table-cell">אסמכתא</th>
               <th
                 className="px-4 py-3 text-left whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
@@ -727,6 +738,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               <tr className="bg-blue-50/40 border-b border-blue-100 text-xs">
                 <th className="px-3 py-1.5" />
                 <th className="px-2 py-1.5" />
+                <th className="px-2 py-1.5 hidden lg:table-cell" />
                 <th className="px-2 py-1.5">
                   <div className="relative" dir="rtl">
                     <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
@@ -735,7 +747,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                       type="text"
                       value={localSearch}
                       onChange={(e) => setLocalSearch(e.target.value)}
-                      placeholder="חפש תיאור / אסמכתא..."
+                      placeholder="חפש שם / תיאור / אסמכתא..."
                       className="w-full border border-blue-200 rounded-md pr-6 pl-6 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white placeholder:text-gray-400"
                     />
                     {localSearch && (
@@ -785,7 +797,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
           <tbody className="divide-y divide-gray-50">
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-gray-400">
+                <td colSpan={10} className="px-4 py-12 text-center text-gray-400">
                   <p className="font-medium">לא נמצאו תנועות לפי הסינון</p>
                   <button onClick={clearAllFilters} className="text-sm text-blue-500 hover:underline mt-1">נקה סינון</button>
                 </td>
@@ -825,21 +837,26 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                       {formatDate(tx.date)}
                     </td>
 
+                    {/* ── שם ספק column ── */}
+                    <td className="px-4 py-3 hidden lg:table-cell max-w-[160px]">
+                      {tx.supplier_name && (
+                        <span className="text-sm font-medium text-gray-800 truncate block" title={tx.supplier_name}>
+                          {tx.supplier_name}
+                        </span>
+                      )}
+                    </td>
+
+                    {/* ── תיאור column ── */}
                     <td className="px-4 py-3">
                       <div className="flex items-start justify-between gap-1">
                         <div className="min-w-0">
-                          {tx.supplier_name ? (
-                            <>
-                              <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.supplier_name}</p>
-                              <p className="text-xs text-teal-500 truncate max-w-[200px]">{tx.description}</p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="font-medium text-gray-800 truncate max-w-[200px]">{tx.description}</p>
-                              {tx.details && (
-                                <p className="text-xs text-gray-400 truncate max-w-[200px]">{tx.details}</p>
-                              )}
-                            </>
+                          <p className="font-medium text-gray-800 truncate max-w-[200px]" title={tx.description}>
+                            {tx.description}
+                          </p>
+                          {tx.details && (
+                            <p className="text-xs text-gray-400 truncate max-w-[200px]" title={tx.details}>
+                              {tx.details}
+                            </p>
                           )}
                           {splitCount > 0 && (
                             <span className="inline-flex items-center gap-0.5 mt-0.5 text-[10px] font-medium text-indigo-600 bg-indigo-50 border border-indigo-100 rounded-full px-1.5 py-0.5">
