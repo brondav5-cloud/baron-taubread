@@ -1,6 +1,7 @@
 "use client";
 
 import { memo, useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
   Search, X, Filter, Pencil, Eye, EyeOff,
@@ -27,6 +28,17 @@ const TYPE_LABELS: Record<string, string> = {
 
 type RuleField = "description" | "details" | "operation_code" | "supplier_name";
 
+function calcDropdownPos(btn: HTMLButtonElement, dropW: number) {
+  const rect = btn.getBoundingClientRect();
+  const spaceRight = window.innerWidth - rect.right;
+  // Prefer right-aligned; if not enough room on left, push in from left edge
+  const right = Math.max(8, spaceRight);
+  // If the dropdown would overflow the left edge, clamp it
+  const effectiveLeft = window.innerWidth - right - dropW;
+  const clampedRight = effectiveLeft < 8 ? window.innerWidth - dropW - 8 : right;
+  return { top: rect.bottom + 4, right: clampedRight, width: dropW };
+}
+
 // ── Inline category selector ──────────────────────────────────────────────────
 function InlineCategorySelect({
   tx,
@@ -42,31 +54,41 @@ function InlineCategorySelect({
   onCategoryAdded?: (cat: BankCategory) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const [addMode, setAddMode] = useState(false);
   const [newName, setNewName] = useState("");
   const [newType, setNewType] = useState<CategoryType>("expense");
   const [saving, setSaving] = useState(false);
   const [localCatId, setLocalCatId] = useState<string | undefined>(tx.category_id);
 
-  // Rule prompt state — shown after a category is selected
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<RuleField>(tx.supplier_name ? "supplier_name" : "description");
   const [savingRule, setSavingRule] = useState(false);
 
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const [dropStyle, setDropStyle] = useState<React.CSSProperties>({});
+  const [ruleStyle, setRuleStyle] = useState<React.CSSProperties>({});
+
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const dropRef = useRef<HTMLDivElement>(null);
+  const ruleRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setLocalCatId(tx.category_id); }, [tx.category_id]);
 
-  // Close on outside click — but only when rule prompt is not shown
+  // Outside click closes both panels
   useEffect(() => {
     if (!open && !showRulePrompt) return;
     const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setShowRulePrompt(false);
-        setAddMode(false);
-        setNewName("");
-      }
+      const t = e.target as Node;
+      if (
+        buttonRef.current?.contains(t) ||
+        dropRef.current?.contains(t) ||
+        ruleRef.current?.contains(t)
+      ) return;
+      setOpen(false);
+      setShowRulePrompt(false);
+      setAddMode(false);
+      setSearch("");
+      setNewName("");
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -81,16 +103,28 @@ function InlineCategorySelect({
     return tx.description ?? "";
   };
 
+  const handleOpen = () => {
+    if (saving) return;
+    if (open) { setOpen(false); return; }
+    if (buttonRef.current) setDropStyle(calcDropdownPos(buttonRef.current, 224));
+    setSearch("");
+    setShowRulePrompt(false);
+    setOpen(true);
+  };
+
   const handleSelect = async (catId: string | null) => {
     setOpen(false);
+    setSearch("");
     setAddMode(false);
     const prevId = localCatId;
     setLocalCatId(catId ?? undefined);
     setSaving(true);
     try {
       await onClassify?.(tx.id, catId);
-      // Show rule prompt only when assigning (not removing)
-      if (catId) setShowRulePrompt(true);
+      if (catId && buttonRef.current) {
+        setRuleStyle(calcDropdownPos(buttonRef.current, 248));
+        setShowRulePrompt(true);
+      }
     } catch {
       setLocalCatId(prevId);
     } finally {
@@ -118,7 +152,7 @@ function InlineCategorySelect({
     }
   };
 
-  const handleCreate = async () => {
+  const handleCreateCategory = async () => {
     if (!newName.trim() || saving) return;
     setSaving(true);
     try {
@@ -136,7 +170,11 @@ function InlineCategorySelect({
         setOpen(false);
         setAddMode(false);
         setNewName("");
-        setShowRulePrompt(true);
+        setSearch("");
+        if (buttonRef.current) {
+          setRuleStyle(calcDropdownPos(buttonRef.current, 248));
+          setShowRulePrompt(true);
+        }
       }
     } finally {
       setSaving(false);
@@ -145,11 +183,20 @@ function InlineCategorySelect({
 
   const typeGroups: CategoryType[] = ["income", "expense", "transfer", "ignore"];
 
+  // Smart search: filter by name
+  const searchLower = search.toLowerCase();
+  const filteredCategories = searchLower
+    ? categories.filter((c) => c.name.toLowerCase().includes(searchLower))
+    : categories;
+
+  const hasResults = filteredCategories.length > 0;
+
   return (
-    <div ref={wrapRef} className="relative" onClick={(e) => e.stopPropagation()}>
+    <div onClick={(e) => e.stopPropagation()}>
       {/* ── Trigger badge ── */}
       <button
-        onClick={() => { if (!saving) { setOpen(!open); setShowRulePrompt(false); } }}
+        ref={buttonRef}
+        onClick={handleOpen}
         className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-all ${
           cat
             ? `${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"} border-transparent hover:opacity-80`
@@ -165,36 +212,85 @@ function InlineCategorySelect({
         )}
       </button>
 
-      {/* ── Category picker dropdown ── */}
-      {open && (
+      {/* ── Category picker — rendered via portal so it escapes table overflow ── */}
+      {open && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute z-[200] top-full mt-1 w-52 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 overflow-hidden"
-          style={{ right: 0 }}
+          ref={dropRef}
+          style={{ position: "fixed", ...dropStyle, zIndex: 9999 }}
+          className="bg-white rounded-xl shadow-2xl border border-gray-100 overflow-hidden"
           dir="rtl"
         >
-          {/* Remove category */}
-          {cat && (
-            <>
-              <button
-                onClick={() => handleSelect(null)}
-                className="w-full text-right px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors"
-              >
-                הסר סיווג
-              </button>
-              <div className="border-t border-gray-100 my-0.5" />
-            </>
-          )}
+          {/* Search input */}
+          <div className="px-2 pt-2 pb-1">
+            <div className="relative">
+              <Search className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
+              <input
+                autoFocus
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") { setOpen(false); setSearch(""); }
+                  if (e.key === "Enter" && filteredCategories.length === 1 && filteredCategories[0]) {
+                    handleSelect(filteredCategories[0].id);
+                  }
+                }}
+                placeholder="חפש קטגוריה..."
+                className="w-full border border-gray-200 rounded-lg pr-6 pl-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <X className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </div>
+          </div>
 
-          {/* Categories grouped by type */}
-          {typeGroups.map((type) => {
-            const cats = categories.filter((c) => c.type === type);
-            if (!cats.length) return null;
-            return (
-              <div key={type}>
-                <div className="px-3 pt-1.5 pb-0.5 text-[9px] uppercase font-bold tracking-wide text-gray-400">
-                  {TYPE_LABELS[type]}
-                </div>
-                {cats.map((c) => (
+          <div className="max-h-64 overflow-y-auto">
+            {/* Remove option */}
+            {cat && !search && (
+              <>
+                <button
+                  onClick={() => handleSelect(null)}
+                  className="w-full text-right px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  הסר סיווג
+                </button>
+                <div className="border-t border-gray-100" />
+              </>
+            )}
+
+            {/* No results */}
+            {!hasResults && (
+              <p className="px-3 py-3 text-xs text-gray-400 text-center">לא נמצאו קטגוריות</p>
+            )}
+
+            {/* Categories */}
+            {!searchLower
+              ? typeGroups.map((type) => {
+                  const cats = filteredCategories.filter((c) => c.type === type);
+                  if (!cats.length) return null;
+                  return (
+                    <div key={type}>
+                      <div className="px-3 pt-1.5 pb-0.5 text-[9px] uppercase font-bold tracking-wide text-gray-400 sticky top-0 bg-white">
+                        {TYPE_LABELS[type]}
+                      </div>
+                      {cats.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => handleSelect(c.id)}
+                          className={`w-full text-right px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors flex items-center justify-between gap-2 ${
+                            c.id === localCatId ? "font-semibold text-blue-600 bg-blue-50/60" : "text-gray-700"
+                          }`}
+                        >
+                          <span>{c.name}</span>
+                          {c.id === localCatId && <span className="text-blue-500 text-[10px]">✓</span>}
+                        </button>
+                      ))}
+                    </div>
+                  );
+                })
+              : filteredCategories.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => handleSelect(c.id)}
@@ -202,22 +298,26 @@ function InlineCategorySelect({
                       c.id === localCatId ? "font-semibold text-blue-600 bg-blue-50/60" : "text-gray-700"
                     }`}
                   >
-                    <span>{c.name}</span>
-                    {c.id === localCatId && <span className="text-blue-500 text-[10px]">✓</span>}
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`shrink-0 text-[9px] px-1 rounded font-medium ${CAT_TYPE_COLOR[c.type] ?? "bg-gray-100 text-gray-500"}`}>
+                        {TYPE_LABELS[c.type]}
+                      </span>
+                      <span className="truncate">{c.name}</span>
+                    </div>
+                    {c.id === localCatId && <span className="text-blue-500 text-[10px] shrink-0">✓</span>}
                   </button>
-                ))}
-              </div>
-            );
-          })}
+                ))
+            }
+          </div>
 
           {/* Add new category */}
-          <div className="border-t border-gray-100 mt-1">
+          <div className="border-t border-gray-100">
             {!addMode ? (
               <button
                 onClick={() => setAddMode(true)}
                 className="w-full text-right px-3 py-2 text-xs text-blue-500 hover:bg-blue-50 transition-colors flex items-center gap-1.5"
               >
-                <span className="font-bold text-base leading-none">+</span>
+                <span className="font-bold text-sm leading-none">+</span>
                 <span>הוסף קטגוריה חדשה</span>
               </button>
             ) : (
@@ -228,7 +328,7 @@ function InlineCategorySelect({
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") handleCreate();
+                    if (e.key === "Enter") handleCreateCategory();
                     if (e.key === "Escape") { setAddMode(false); setNewName(""); }
                   }}
                   placeholder="שם הקטגוריה"
@@ -246,7 +346,7 @@ function InlineCategorySelect({
                 </select>
                 <div className="flex gap-1">
                   <button
-                    onClick={handleCreate}
+                    onClick={handleCreateCategory}
                     disabled={saving || !newName.trim()}
                     className="flex-1 text-xs bg-blue-500 text-white rounded-lg px-2 py-1.5 hover:bg-blue-600 disabled:opacity-40 transition-colors font-medium"
                   >
@@ -262,19 +362,19 @@ function InlineCategorySelect({
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* ── Rule creation prompt (shown after classify, separate panel) ── */}
-      {showRulePrompt && localCatId && (
+      {/* ── Rule prompt — also via portal ── */}
+      {showRulePrompt && localCatId && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute z-[200] top-full mt-1 w-60 bg-purple-50 border border-purple-200 rounded-xl shadow-2xl p-3 space-y-2"
-          style={{ right: 0 }}
+          ref={ruleRef}
+          style={{ position: "fixed", ...ruleStyle, zIndex: 9999 }}
+          className="bg-purple-50 border border-purple-200 rounded-xl shadow-2xl p-3 space-y-2"
           dir="rtl"
         >
-          <p className="text-xs font-semibold text-purple-800">
-            צור כלל אוטומטי לתנועות דומות?
-          </p>
+          <p className="text-xs font-semibold text-purple-800">צור כלל אוטומטי לתנועות דומות?</p>
           <div className="flex items-center gap-1.5">
             <select
               value={ruleField}
@@ -286,7 +386,7 @@ function InlineCategorySelect({
               {tx.details && <option value="details">פרטים</option>}
               {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
             </select>
-            <span className="text-[10px] text-purple-600 truncate font-mono min-w-0">
+            <span className="text-[10px] text-purple-600 truncate font-mono min-w-0 max-w-[120px]">
               &quot;{ruleValue()}&quot;
             </span>
           </div>
@@ -294,11 +394,9 @@ function InlineCategorySelect({
             <button
               onClick={handleCreateRule}
               disabled={savingRule || !ruleValue()}
-              className="flex items-center gap-1 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
+              className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
             >
-              {savingRule ? (
-                <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
-              ) : null}
+              {savingRule && <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />}
               צור כלל
             </button>
             <button
@@ -308,7 +406,8 @@ function InlineCategorySelect({
               דלג
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
