@@ -3,8 +3,9 @@
 import { memo, useState, useEffect, useRef, useCallback } from "react";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
-  Search, X, Filter, Pencil,
+  Search, X, Filter, Pencil, Eye, EyeOff,
 } from "lucide-react";
+import type { CategoryType } from "../types";
 
 function MergeIcon({ className }: { className?: string }) {
   return (
@@ -16,6 +17,214 @@ function MergeIcon({ className }: { className?: string }) {
 }
 import type { BankTransaction, BankCategory, SourceBank } from "../types";
 import type { SortBy, SortDir } from "../hooks/useBankTransactions";
+
+const TYPE_LABELS: Record<string, string> = {
+  income: "הכנסה",
+  expense: "הוצאה",
+  transfer: "העברה",
+  ignore: "התעלם",
+};
+
+// ── Inline category selector ──────────────────────────────────────────────────
+function InlineCategorySelect({
+  tx,
+  categories,
+  catMap,
+  onClassify,
+  onCategoryAdded,
+}: {
+  tx: BankTransaction;
+  categories: BankCategory[];
+  catMap: Map<string, BankCategory>;
+  onClassify?: (txId: string, catId: string | null) => Promise<void>;
+  onCategoryAdded?: (cat: BankCategory) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [addMode, setAddMode] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newType, setNewType] = useState<CategoryType>("expense");
+  const [saving, setSaving] = useState(false);
+  const [localCatId, setLocalCatId] = useState<string | undefined>(tx.category_id);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setLocalCatId(tx.category_id); }, [tx.category_id]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+        setAddMode(false);
+        setNewName("");
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const cat = localCatId ? catMap.get(localCatId) : undefined;
+
+  const handleSelect = async (catId: string | null) => {
+    setOpen(false);
+    setAddMode(false);
+    const prevId = localCatId;
+    setLocalCatId(catId ?? undefined);
+    setSaving(true);
+    try {
+      await onClassify?.(tx.id, catId);
+    } catch {
+      setLocalCatId(prevId);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newName.trim() || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/finance/categories", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newName.trim(), type: newType }),
+      });
+      const data = await res.json();
+      if (data.ok && data.id) {
+        const newCat: BankCategory = { id: data.id, company_id: tx.company_id, name: newName.trim(), type: newType, sort_order: 0 };
+        onCategoryAdded?.(newCat);
+        setLocalCatId(data.id);
+        await onClassify?.(tx.id, data.id);
+        setOpen(false);
+        setAddMode(false);
+        setNewName("");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const typeGroups: CategoryType[] = ["income", "expense", "transfer", "ignore"];
+
+  return (
+    <div ref={wrapRef} className="relative" onClick={(e) => e.stopPropagation()}>
+      <button
+        onClick={() => { if (!saving) setOpen(!open); }}
+        className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border transition-all ${
+          cat
+            ? `${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"} border-transparent hover:opacity-80`
+            : "text-gray-400 border-dashed border-gray-300 hover:border-gray-400 hover:text-gray-600 bg-transparent"
+        } ${saving ? "opacity-50 cursor-wait" : "cursor-pointer"}`}
+      >
+        {saving ? (
+          <span className="inline-block w-2 h-2 border border-current border-t-transparent rounded-full animate-spin" />
+        ) : cat ? (
+          cat.name
+        ) : (
+          <span className="text-[10px] font-medium">+ סיווג</span>
+        )}
+      </button>
+
+      {open && (
+        <div
+          className="absolute z-[200] top-full mt-1 w-52 bg-white rounded-xl shadow-2xl border border-gray-100 py-1 overflow-hidden"
+          style={{ right: 0 }}
+          dir="rtl"
+        >
+          {/* Remove category */}
+          {cat && (
+            <>
+              <button
+                onClick={() => handleSelect(null)}
+                className="w-full text-right px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors"
+              >
+                הסר סיווג
+              </button>
+              <div className="border-t border-gray-100 my-0.5" />
+            </>
+          )}
+
+          {/* Categories grouped by type */}
+          {typeGroups.map((type) => {
+            const cats = categories.filter((c) => c.type === type);
+            if (!cats.length) return null;
+            return (
+              <div key={type}>
+                <div className="px-3 pt-1.5 pb-0.5 text-[9px] uppercase font-bold tracking-wide text-gray-400">
+                  {TYPE_LABELS[type]}
+                </div>
+                {cats.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => handleSelect(c.id)}
+                    className={`w-full text-right px-3 py-1.5 text-xs hover:bg-gray-50 transition-colors flex items-center justify-between gap-2 ${
+                      c.id === localCatId ? "font-semibold text-blue-600 bg-blue-50/60" : "text-gray-700"
+                    }`}
+                  >
+                    <span>{c.name}</span>
+                    {c.id === localCatId && <span className="text-blue-500 text-[10px]">✓</span>}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+
+          {/* Add new category */}
+          <div className="border-t border-gray-100 mt-1">
+            {!addMode ? (
+              <button
+                onClick={() => setAddMode(true)}
+                className="w-full text-right px-3 py-2 text-xs text-blue-500 hover:bg-blue-50 transition-colors flex items-center gap-1.5"
+              >
+                <span className="font-bold text-base leading-none">+</span>
+                <span>הוסף קטגוריה חדשה</span>
+              </button>
+            ) : (
+              <div className="px-2 py-2 space-y-1.5">
+                <input
+                  autoFocus
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreate();
+                    if (e.key === "Escape") { setAddMode(false); setNewName(""); }
+                  }}
+                  placeholder="שם הקטגוריה"
+                  className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                />
+                <select
+                  value={newType}
+                  onChange={(e) => setNewType(e.target.value as CategoryType)}
+                  className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                >
+                  <option value="income">הכנסה</option>
+                  <option value="expense">הוצאה</option>
+                  <option value="transfer">העברה</option>
+                  <option value="ignore">התעלם</option>
+                </select>
+                <div className="flex gap-1">
+                  <button
+                    onClick={handleCreate}
+                    disabled={saving || !newName.trim()}
+                    className="flex-1 text-xs bg-blue-500 text-white rounded-lg px-2 py-1.5 hover:bg-blue-600 disabled:opacity-40 transition-colors font-medium"
+                  >
+                    {saving ? "..." : "צור"}
+                  </button>
+                  <button
+                    onClick={() => { setAddMode(false); setNewName(""); }}
+                    className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 hover:bg-gray-50 text-gray-500 transition-colors"
+                  >
+                    ביטול
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const BANK_LABELS: Record<SourceBank, { label: string; color: string }> = {
   leumi: { label: "לאומי", color: "bg-blue-100 text-blue-700" },
@@ -59,6 +268,14 @@ interface Props {
   categoryFilter?: string;
   onSearchChange?: (v: string) => void;
   onCategoryChange?: (v: string) => void;
+  /** Inline quick-classify: when provided, table shows interactive category selector */
+  onClassify?: (txId: string, catId: string | null) => Promise<void>;
+  /** Called after a new category is created inline — pass the new category object */
+  onCategoryAdded?: (cat: BankCategory) => void;
+  /** Whether to show the classify column */
+  showClassifyCol?: boolean;
+  /** Toggle classify column visibility */
+  onToggleClassifyCol?: () => void;
 }
 
 function SortIcon({ col, sortBy, sortDir }: { col: SortBy; sortBy?: SortBy; sortDir?: SortDir }) {
@@ -84,6 +301,10 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   categoryFilter = "",
   onSearchChange,
   onCategoryChange,
+  onClassify,
+  onCategoryAdded,
+  showClassifyCol = true,
+  onToggleClassifyCol,
 }: Props) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
@@ -232,7 +453,34 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               >
                 יתרה ₪<SortIcon col="balance" sortBy={sortBy} sortDir={sortDir} />
               </th>
-              <th className="px-4 py-3 hidden lg:table-cell">קטגוריה</th>
+              {showClassifyCol && onClassify ? (
+                <th className="px-4 py-3 hidden lg:table-cell">
+                  <div className="flex items-center gap-1.5">
+                    <span>סיווג</span>
+                    {onToggleClassifyCol && (
+                      <button
+                        onClick={onToggleClassifyCol}
+                        title="הסתר עמודת סיווג"
+                        className="p-0.5 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                      >
+                        <EyeOff className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                </th>
+              ) : !showClassifyCol && onClassify && onToggleClassifyCol ? (
+                <th className="px-2 py-3 hidden lg:table-cell w-8">
+                  <button
+                    onClick={onToggleClassifyCol}
+                    title="הצג עמודת סיווג"
+                    className="p-0.5 rounded text-gray-300 hover:text-blue-500 hover:bg-blue-50 transition-colors"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                  </button>
+                </th>
+              ) : (
+                <th className="px-4 py-3 hidden lg:table-cell">קטגוריה</th>
+              )}
               <th className="px-4 py-3 hidden md:table-cell">
                 <div className="flex items-center justify-between gap-2">
                   <span>בנק</span>
@@ -282,7 +530,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 <th className="px-2 py-1.5" />
                 <th className="px-2 py-1.5 hidden lg:table-cell" />
                 <th className="px-2 py-1.5 hidden lg:table-cell">
-                  {categories.length > 0 && (
+                  {showClassifyCol && categories.length > 0 && (
                     <select
                       value={categoryFilter}
                       onChange={(e) => onCategoryChange?.(e.target.value)}
@@ -425,13 +673,37 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                         </span>
                       )}
                     </td>
-                    <td className="px-4 py-3 hidden lg:table-cell">
-                      {cat && (
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"}`}>
-                          {cat.name}
-                        </span>
-                      )}
-                    </td>
+                    {showClassifyCol && (
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {onClassify ? (
+                          <InlineCategorySelect
+                            tx={tx}
+                            categories={categories}
+                            catMap={catMap}
+                            onClassify={onClassify}
+                            onCategoryAdded={onCategoryAdded}
+                          />
+                        ) : (
+                          cat && (
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"}`}>
+                              {cat.name}
+                            </span>
+                          )
+                        )}
+                      </td>
+                    )}
+                    {!showClassifyCol && onClassify && (
+                      <td className="px-2 py-3 hidden lg:table-cell w-8" />
+                    )}
+                    {!showClassifyCol && !onClassify && (
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {cat && (
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${CAT_TYPE_COLOR[cat.type] ?? "bg-gray-100 text-gray-500"}`}>
+                            {cat.name}
+                          </span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-4 py-3 hidden md:table-cell">
                       {bankInfo && (
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${bankInfo.color}`}>

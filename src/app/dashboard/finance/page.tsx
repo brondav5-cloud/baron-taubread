@@ -22,7 +22,7 @@ import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import { usePermissions } from "@/hooks/usePermissions";
-import type { BankTransaction } from "@/modules/finance/types";
+import type { BankTransaction, BankCategory } from "@/modules/finance/types";
 
 function getMonthRange(year: number, month: number): { from: string; to: string } {
   const from = `${year}-${String(month + 1).padStart(2, "0")}-01`;
@@ -46,6 +46,11 @@ export default function FinancePage() {
   const [openSupplier, setOpenSupplier] = useState<{ key: string; name: string } | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [showClassifyCol, setShowClassifyCol] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("finance_show_classify_col") !== "false";
+  });
+  const [extraCategories, setExtraCategories] = useState<BankCategory[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const currentYear = new Date().getFullYear();
   const [selectedFilterYear, setSelectedFilterYear] = useState(currentYear);
@@ -66,6 +71,29 @@ export default function FinancePage() {
   const handleUploadSuccess = useCallback(() => {
     hook.refresh();
   }, [hook]);
+
+  const handleClassify = useCallback(async (txId: string, categoryId: string | null) => {
+    const body = categoryId
+      ? { mode: "manual", tx_id: txId, category_id: categoryId }
+      : { mode: "clear", tx_id: txId };
+    await fetch("/api/finance/classify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  }, []);
+
+  const handleCategoryAdded = useCallback((cat: BankCategory) => {
+    setExtraCategories((prev) => [...prev, cat]);
+  }, []);
+
+  const handleToggleClassifyCol = useCallback(() => {
+    setShowClassifyCol((prev) => {
+      const next = !prev;
+      localStorage.setItem("finance_show_classify_col", String(next));
+      return next;
+    });
+  }, []);
 
   const handleUnmerge = useCallback(async (tx: BankTransaction) => {
     if (!window.confirm(`לבטל מיזוג של "${tx.supplier_name ?? tx.description}"?`)) return;
@@ -282,7 +310,7 @@ export default function FinancePage() {
       {/* ── Table ──────────────────────────────────────────────────────────── */}
       <BankTransactionsTable
         transactions={hook.transactions}
-        categories={hook.categories}
+        categories={[...hook.categories, ...extraCategories.filter((e) => !hook.categories.some((c) => c.id === e.id))]}
         isLoading={hook.isLoading}
         sortBy={hook.sortBy}
         sortDir={hook.sortDir}
@@ -296,6 +324,10 @@ export default function FinancePage() {
         categoryFilter={hook.filters.categoryId}
         onSearchChange={handleSearchChange}
         onCategoryChange={handleCategoryChange}
+        onClassify={handleClassify}
+        onCategoryAdded={handleCategoryAdded}
+        showClassifyCol={showClassifyCol}
+        onToggleClassifyCol={handleToggleClassifyCol}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}
