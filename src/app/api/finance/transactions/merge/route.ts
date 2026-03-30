@@ -104,37 +104,43 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = getSupabaseAdmin();
 
-  // Fetch master to get current summed amounts (before unmerge)
-  const { data: master, error: masterFetchErr } = await supabase
-    .from("bank_transactions")
-    .select("debit, credit")
-    .eq("id", master_id)
-    .eq("company_id", ctx.companyId)
-    .single();
-  if (masterFetchErr) return NextResponse.json({ error: masterFetchErr.message }, { status: 500 });
+  // --- Step 1: fetch children amounts and master amounts to restore original ---
+  const [childrenResult, masterResult] = await Promise.all([
+    supabase
+      .from("bank_transactions")
+      .select("debit, credit")
+      .eq("merged_into_id", master_id),
+    supabase
+      .from("bank_transactions")
+      .select("debit, credit")
+      .eq("id", master_id)
+      .limit(1),
+  ]);
 
-  // Fetch children to calculate their contribution (so we can restore master's original amount)
-  const { data: children, error: childFetchErr } = await supabase
-    .from("bank_transactions")
-    .select("id, debit, credit")
-    .eq("merged_into_id", master_id)
-    .eq("company_id", ctx.companyId);
-  if (childFetchErr) return NextResponse.json({ error: childFetchErr.message }, { status: 500 });
+  if (childrenResult.error) {
+    return NextResponse.json({ error: `שליפת ילדים: ${childrenResult.error.message}` }, { status: 500 });
+  }
+  if (masterResult.error) {
+    return NextResponse.json({ error: `שליפת מאסטר: ${masterResult.error.message}` }, { status: 500 });
+  }
 
-  const childDebit = (children ?? []).reduce((s, c) => s + ((c as { debit: number }).debit ?? 0), 0);
-  const childCredit = (children ?? []).reduce((s, c) => s + ((c as { credit: number }).credit ?? 0), 0);
-  const restoredDebit = Math.max(0, (master?.debit ?? 0) - childDebit);
-  const restoredCredit = Math.max(0, (master?.credit ?? 0) - childCredit);
+  const children = childrenResult.data ?? [];
+  const masterRow = masterResult.data?.[0];
+  const childDebit = children.reduce((s, c) => s + (Number(c.debit) || 0), 0);
+  const childCredit = children.reduce((s, c) => s + (Number(c.credit) || 0), 0);
+  const restoredDebit = Math.max(0, (Number(masterRow?.debit) || 0) - childDebit);
+  const restoredCredit = Math.max(0, (Number(masterRow?.credit) || 0) - childCredit);
 
-  // Release all children
+  // --- Step 2: release all children (clear merged_into_id) ---
   const { error: childErr } = await supabase
     .from("bank_transactions")
     .update({ merged_into_id: null })
-    .eq("merged_into_id", master_id)
-    .eq("company_id", ctx.companyId);
-  if (childErr) return NextResponse.json({ error: childErr.message }, { status: 500 });
+    .eq("merged_into_id", master_id);
+  if (childErr) {
+    return NextResponse.json({ error: `שחרור ילדים: ${childErr.message}` }, { status: 500 });
+  }
 
-  // Restore master: clear merge note and restore original amounts
+  // --- Step 3: restore master to stand-alone transaction ---
   const { error: masterErr } = await supabase
     .from("bank_transactions")
     .update({
@@ -143,9 +149,10 @@ export async function DELETE(request: NextRequest) {
       debit: restoredDebit,
       credit: restoredCredit,
     })
-    .eq("id", master_id)
-    .eq("company_id", ctx.companyId);
-  if (masterErr) return NextResponse.json({ error: masterErr.message }, { status: 500 });
+    .eq("id", master_id);
+  if (masterErr) {
+    return NextResponse.json({ error: `עדכון מאסטר: ${masterErr.message}` }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true });
 }
