@@ -95,75 +95,44 @@ export async function DELETE(request: NextRequest) {
     const ctx = await getAuthContext();
     if (!ctx) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
-    let body: Record<string, unknown>;
-    try { body = await request.json(); } catch {
+    const rawBody = await request.text();
+    let master_id: string | undefined;
+    try {
+      master_id = (JSON.parse(rawBody) as { master_id?: string }).master_id;
+    } catch {
       return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 });
     }
-
-    const { master_id } = body as { master_id?: string };
     if (!master_id) return NextResponse.json({ error: "master_id חסר" }, { status: 400 });
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch children to calculate amounts to restore on master
-    const { data: children, error: childFetchErr } = await supabase
-      .from("bank_transactions")
-      .select("debit, credit")
-      .eq("merged_into_id", master_id);
-
-    if (childFetchErr) {
-      console.error("[unmerge] childFetch error:", childFetchErr);
-      return NextResponse.json({ error: `שליפת ילדים: ${childFetchErr.message}` }, { status: 500 });
-    }
-
-    // Fetch master amounts
-    const { data: masterRows, error: masterFetchErr } = await supabase
-      .from("bank_transactions")
-      .select("debit, credit")
-      .eq("id", master_id)
-      .limit(1);
-
-    if (masterFetchErr) {
-      console.error("[unmerge] masterFetch error:", masterFetchErr);
-      return NextResponse.json({ error: `שליפת מאסטר: ${masterFetchErr.message}` }, { status: 500 });
-    }
-
-    const masterRow = masterRows?.[0];
-    const childDebit = (children ?? []).reduce((s, c) => s + (Number(c.debit) || 0), 0);
-    const childCredit = (children ?? []).reduce((s, c) => s + (Number(c.credit) || 0), 0);
-    const restoredDebit = Math.max(0, (Number(masterRow?.debit) || 0) - childDebit);
-    const restoredCredit = Math.max(0, (Number(masterRow?.credit) || 0) - childCredit);
-
-    // Release all children
-    const { error: childErr } = await supabase
+    // Step 1: release children
+    const r1 = await supabase
       .from("bank_transactions")
       .update({ merged_into_id: null })
-      .eq("merged_into_id", master_id);
+      .eq("merged_into_id", master_id)
+      .eq("company_id", ctx.companyId);
 
-    if (childErr) {
-      console.error("[unmerge] childUpdate error:", childErr);
-      return NextResponse.json({ error: `שחרור ילדים: ${childErr.message}` }, { status: 500 });
+    if (r1.error) {
+      console.error("[unmerge] release children:", r1.error);
+      return NextResponse.json({ error: r1.error.message }, { status: 500 });
     }
 
-    // Restore master
-    const { error: masterErr } = await supabase
+    // Step 2: clear master merge marker
+    const r2 = await supabase
       .from("bank_transactions")
-      .update({
-        notes: null,
-        supplier_name: null,
-        debit: restoredDebit,
-        credit: restoredCredit,
-      })
-      .eq("id", master_id);
+      .update({ notes: null, supplier_name: null })
+      .eq("id", master_id)
+      .eq("company_id", ctx.companyId);
 
-    if (masterErr) {
-      console.error("[unmerge] masterUpdate error:", masterErr);
-      return NextResponse.json({ error: `עדכון מאסטר: ${masterErr.message}` }, { status: 500 });
+    if (r2.error) {
+      console.error("[unmerge] clear master:", r2.error);
+      return NextResponse.json({ error: r2.error.message }, { status: 500 });
     }
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[unmerge] unhandled exception:", err);
-    return NextResponse.json({ error: `חריגה לא מטופלת: ${String(err)}` }, { status: 500 });
+    console.error("[unmerge] exception:", err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }
