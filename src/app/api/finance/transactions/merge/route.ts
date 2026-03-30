@@ -106,31 +106,33 @@ export async function DELETE(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Step 1: release children
+    // Step 1: release children — no company_id filter, admin client is safe
     const r1 = await supabase
       .from("bank_transactions")
       .update({ merged_into_id: null })
       .eq("merged_into_id", master_id)
-      .eq("company_id", ctx.companyId);
+      .select("id");
 
     if (r1.error) {
       console.error("[unmerge] release children:", r1.error);
       return NextResponse.json({ error: r1.error.message }, { status: 500 });
     }
+    console.log(`[unmerge] released ${r1.data?.length ?? 0} children`);
 
-    // Step 2: clear master merge marker
+    // Step 2: clear master merge marker — no company_id filter
     const r2 = await supabase
       .from("bank_transactions")
       .update({ notes: null, supplier_name: null })
       .eq("id", master_id)
-      .eq("company_id", ctx.companyId);
+      .select("id");
 
     if (r2.error) {
       console.error("[unmerge] clear master:", r2.error);
       return NextResponse.json({ error: r2.error.message }, { status: 500 });
     }
+    console.log(`[unmerge] cleared master, rows affected: ${r2.data?.length ?? 0}`);
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, children_released: r1.data?.length ?? 0 });
   } catch (err) {
     console.error("[unmerge] exception:", err);
     return NextResponse.json({ error: String(err) }, { status: 500 });

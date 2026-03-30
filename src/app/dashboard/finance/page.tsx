@@ -188,8 +188,10 @@ function FinancePageInner() {
       });
       const data = await res.json();
       if (res.ok) {
-        toast.success("המיזוג בוטל בהצלחה", { id: toastId });
+        const released = data?.children_released ?? 0;
+        toast.success(`המיזוג בוטל — ${released} תנועות שוחררו`, { id: toastId });
         hook.refresh();
+        router.refresh();
       } else {
         toast.error(data?.error ?? "שגיאה בביטול מיזוג", { id: toastId });
       }
