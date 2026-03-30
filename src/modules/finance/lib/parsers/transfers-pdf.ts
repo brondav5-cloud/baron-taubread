@@ -78,11 +78,11 @@ async function ensurePdfJsLib(): Promise<void> {
 }
 
 /** Reconstruct lines from pdfjs content items using Y-coordinate grouping. */
-function pdfItemsToLines(items: { str: string; transform?: number[] }[]): string[] {
+function pdfItemsToLines(items: { str: string; transform?: number[] }[], yTol = 4): string[] {
   const lineMap = new Map<number, { x: number; str: string }[]>();
   for (const item of items) {
     if (!item.str.trim()) continue;
-    const y = Math.round((item.transform?.[5] ?? 0) / 3) * 3; // 3 pt tolerance
+    const y = Math.round((item.transform?.[5] ?? 0) / yTol) * yTol;
     const x = item.transform?.[4] ?? 0;
     if (!lineMap.has(y)) lineMap.set(y, []);
     lineMap.get(y)!.push({ x, str: item.str });
@@ -255,23 +255,32 @@ export async function parseTransfersPDF(file: File): Promise<TransfersPdfResult>
     const pdfjs = (window as unknown as Record<string, unknown>)["pdfjsLib"] as Lib | undefined;
     if (pdfjs) {
       const pdf = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
-      let fullText = "";
+
+      // Cache page items — try increasing Y tolerances until the sum matches
+      const pageItemsCache: { str: string; transform?: number[] }[][] = [];
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
-        const lines = pdfItemsToLines(content.items);
-        fullText += lines.join("\n") + "\n";
+        pageItemsCache.push(content.items as { str: string; transform?: number[] }[]);
       }
-      const result = extractFromText(fullText);
-      if (result.items.length > 0) {
-        // Validate: items sum should be within 2% of the declared total
-        const itemsSum = result.items.reduce((s, i) => s + i.amount, 0);
-        const isComplete =
-          result.total_amount <= 0 ||
-          Math.abs(itemsSum - result.total_amount) / result.total_amount < 0.02;
-        if (isComplete) return { ...result, errors };
-        // Sum mismatch — pdfjs gave partial results; fall through to FileReader
+
+      const buildText = (yTol: number): string =>
+        pageItemsCache
+          .map((items) => pdfItemsToLines(items, yTol).join("\n"))
+          .join("\n");
+
+      const isComplete = (result: Omit<TransfersPdfResult, "errors">): boolean => {
+        if (result.items.length === 0) return false;
+        if (result.total_amount <= 0) return true;
+        const sum = result.items.reduce((s, i) => s + i.amount, 0);
+        return Math.abs(sum - result.total_amount) / result.total_amount < 0.02;
+      };
+
+      for (const yTol of [4, 7, 12]) {
+        const result = extractFromText(buildText(yTol));
+        if (isComplete(result)) return { ...result, errors };
       }
+      // Fall through to FileReader if no tolerance gave a complete result
     }
   } catch (e) {
     errors.push(`שגיאת pdf.js: ${String(e)}`);
