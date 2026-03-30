@@ -37,72 +37,137 @@ export interface TransfersPdfResult {
   raw_text?: string;    // always populated so UI can show it even if parsing failed
 }
 
+function parseAmount(v: string): number {
+  const n = parseFloat((v ?? "").replace(/,/g, "").replace(/[^\d.-]/g, ""));
+  return Number.isFinite(n) ? Math.abs(n) : 0;
+}
+
+function parseDateToIso(raw: string): string {
+  const sep = raw.includes(".") ? "." : "/";
+  const parts = raw.split(sep);
+  if (parts.length !== 3) return "";
+  const [dd, mm, yy] = parts as [string, string, string];
+  const year = yy.length === 2 ? `20${yy}` : yy;
+  return `${year}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+}
+
+function extractFinalApprovalDate(text: string): string {
+  // In Leumi "ניהול חתימות", the final effective instruction date is the
+  // last signer date in the approval cycle (just before/around "בוצעו").
+  const sectionMatch =
+    text.match(/חתימות\s*סבב\s*סטטוס([\s\S]{0,1200})/) ??
+    text.match(/סבב\s*סטטוס([\s\S]{0,1200})/);
+  const scope = sectionMatch?.[1] ?? text;
+  const dateMatches = Array.from(scope.matchAll(/(\d{2}[./]\d{2}[./]\d{2,4})/g));
+  if (dateMatches.length === 0) return "";
+  const lastDate = dateMatches[dateMatches.length - 1]?.[1] ?? "";
+  return lastDate ? parseDateToIso(lastDate) : "";
+}
+
+async function ensurePdfJsLib(): Promise<void> {
+  const w = window as unknown as {
+    pdfjsLib?: unknown;
+    __pdfJsLoadPromise?: Promise<void>;
+  };
+  if (w.pdfjsLib) return;
+  if (w.__pdfJsLoadPromise) return w.__pdfJsLoadPromise;
+
+  w.__pdfJsLoadPromise = new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-pdfjs="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("failed to load pdfjs")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    script.async = true;
+    script.setAttribute("data-pdfjs", "true");
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("failed to load pdfjs"));
+    document.head.appendChild(script);
+  });
+
+  return w.__pdfJsLoadPromise;
+}
+
 function extractFromText(text: string): Omit<TransfersPdfResult, "errors"> {
   const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
 
   // Extract reference
-  const refMatch = text.match(/אסמכתא[:\s]*(\d+)/);
+  const refMatch = text.match(/(?:מספר\s*)?אסמכתא[:\s]*(\d+)/);
   const reference = refMatch?.[1] ?? "";
 
-  // Extract date
-  const dateMatch = text.match(/(\d{2}[./]\d{2}[./]\d{2,4})/);
-  let doc_date = "";
-  if (dateMatch) {
-    const raw = dateMatch[1] ?? "";
-    const sep = raw.includes(".") ? "." : "/";
-    const parts = raw.split(sep);
-    if (parts.length === 3) {
-      const [dd, mm, yy] = parts as [string, string, string];
-      const year = yy.length === 2 ? `20${yy}` : yy;
-      doc_date = `${year}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
-    }
+  // Extract date:
+  // 1) Prefer final approval signer date from status cycle.
+  // 2) Fallback to instruction date if available.
+  // 3) Last fallback: first date in document.
+  let doc_date = extractFinalApprovalDate(text);
+  if (!doc_date) {
+    const dateMatch =
+      text.match(/תאריך[^:\n]*ביצוע[^:\n]*[:\s]+(\d{2}[./]\d{2}[./]\d{2,4})/) ??
+      text.match(/תאריך[^:\n]*[:\s]+(\d{2}[./]\d{2}[./]\d{2,4})/) ??
+      text.match(/(\d{2}[./]\d{2}[./]\d{2,4})/);
+    if (dateMatch) doc_date = parseDateToIso(dateMatch[1] ?? "");
   }
 
   // Extract total
-  const totalMatch = text.match(/סה"כ[^₪\d]*([\d,]+\.?\d*)/);
-  const total_amount = totalMatch
-    ? parseFloat((totalMatch[1] ?? "").replace(/,/g, ""))
-    : 0;
+  const totalMatch =
+    text.match(/סה['"״]?כ\s*העברה[^0-9]*([\d,]+\.\d{2})/) ??
+    text.match(/סה['"״]?כ[^0-9]*([\d,]+\.\d{2})/);
+  const total_amount = totalMatch ? parseAmount(totalMatch[1] ?? "") : 0;
 
-  // Pattern: Hebrew name + ID (9 digits) + bank + branch + account + amount
-  // This is a heuristic — actual PDF layout varies
+  // Parse line-based rows for Leumi "פרטים נוספים" layout
+  // Example:
+  // 5,310.00  50454  20752/63  034  (11) בנק ...  יהב מלגזות
   const items: TransferItem[] = [];
-  const itemPattern = /([א-ת\s"']{2,30})\s+(\d{9})\s+(\d{1,3})\s+(\d{2,4})\s+([\d/-]{5,20})\s+([\d,]+\.?\d*)/g;
-
-  let match: RegExpExecArray | null;
   let idx = 0;
-  while ((match = itemPattern.exec(text)) !== null) {
-    const amount = parseFloat((match[6] ?? "").replace(/,/g, "")) || 0;
-    if (amount === 0) continue;
+  for (const line of lines) {
+    if (!/[\d,]+\.\d{2}/.test(line)) continue;
+    if (!/[א-ת]/.test(line)) continue;
+    if (line.includes("סה") || line.includes("נכון לתאריך") || line.includes("פרטים נוספים")) continue;
+    if (line.includes("סכום העברה") || line.includes("שם מוטב")) continue;
+
+    const amountMatch = line.match(/([\d,]+\.\d{2})/);
+    const amount = parseAmount(amountMatch?.[1] ?? "");
+    if (!amount) continue;
+
+    const bankMatch = line.match(/\((\d{2})\)\s*בנק/);
+    const accountMatch = line.match(/(\d{2,}\/\d{1,2})/);
+    const branchMatch = line.match(/\s(\d{3})\s+\(\d{2}\)\s*בנק/);
+    const idMatch = line.match(/\b(\d{9})\b/);
+
+    const nameMatch = line.match(/([א-ת][א-ת\s"'׳״-]{1,})$/);
+    const payeeName = (nameMatch?.[1] ?? "").trim().replace(/\s+/g, " ");
+    if (!payeeName) continue;
+
     items.push({
       row_index: idx++,
-      payee_name: (match[1] ?? "").trim(),
-      payee_id: match[2] ?? "",
-      bank: match[3] ?? "",
-      branch: match[4] ?? "",
-      account: match[5] ?? "",
+      payee_name: payeeName,
+      payee_id: idMatch?.[1] ?? "",
+      bank: bankMatch?.[1] ?? "",
+      branch: branchMatch?.[1] ?? "",
+      account: accountMatch?.[1] ?? "",
       amount,
     });
   }
 
-  // Fallback: extract lines with amounts only if pattern didn't work
+  // Fallback: extract amount + trailing Hebrew text lines
   if (items.length === 0) {
-    const amountLines = lines.filter((l) => /[\d,]+\.\d{2}/.test(l) && /[א-ת]/.test(l));
-    amountLines.forEach((line, i) => {
+    lines.forEach((line, i) => {
+      if (!/[\d,]+\.\d{2}/.test(line) || !/[א-ת]/.test(line)) return;
       const amtMatch = line.match(/([\d,]+\.\d{2})/);
-      const idMatch = line.match(/\b(\d{9})\b/);
-      if (amtMatch) {
-        const hebrewName = line.replace(/[\d,./₪\s]+/g, "").trim();
-        items.push({
-          row_index: i,
-          payee_name: hebrewName,
-          payee_id: idMatch?.[1] ?? "",
-          bank: "",
-          branch: "",
-          account: "",
-          amount: parseFloat((amtMatch[1] ?? "").replace(/,/g, "")) || 0,
-        });
-      }
+      const nameMatch = line.match(/([א-ת][א-ת\s"'׳״-]{1,})$/);
+      if (!amtMatch || !nameMatch) return;
+      items.push({
+        row_index: i,
+        payee_name: (nameMatch[1] ?? "").trim(),
+        payee_id: "",
+        bank: "",
+        branch: "",
+        account: "",
+        amount: parseAmount(amtMatch[1] ?? ""),
+      });
     });
   }
 
@@ -120,11 +185,12 @@ export async function parseTransfersPDF(file: File): Promise<TransfersPdfResult>
   const errors: string[] = [];
 
   // Read file as ArrayBuffer and try to extract text using PDF.js
-  // PDF.js is loaded dynamically to avoid bundling issues
+  // PDF.js is loaded dynamically from CDN to avoid bundling issues
   try {
+    await ensurePdfJsLib();
     const buffer = await file.arrayBuffer();
 
-    // Try pdfjs-dist if available in window
+    // Try pdfjs if available in window
     const pdfjs = (window as unknown as Record<string, unknown>)["pdfjsLib"] as
       | { getDocument: (src: { data: Uint8Array }) => { promise: Promise<{ numPages: number; getPage: (n: number) => Promise<{ getTextContent: () => Promise<{ items: { str: string }[] }> }> }> } }
       | undefined;
@@ -153,10 +219,8 @@ export async function parseTransfersPDF(file: File): Promise<TransfersPdfResult>
       reader.readAsText(file, "utf-8");
     });
 
-    if (text.includes("מוטב") || text.includes("אסמכתא")) {
-      const result = extractFromText(text);
-      return { ...result, errors };
-    }
+    const result = extractFromText(text);
+    if (result.items.length > 0 || result.total_amount > 0) return { ...result, errors };
   } catch {
     // ignore
   }

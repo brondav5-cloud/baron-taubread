@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { DocType } from "../types";
 import {
   parseCreditCardXLSX,
+  parseLeumiSignaturesStatusXLSX,
   parseLeumiCreditXLS,
   parseSalaryXLSX,
   parseTransfersPDF,
@@ -45,6 +46,12 @@ interface MatchCandidate {
   description: string;
   reference: string;
   debit: number;
+}
+
+interface ListHint {
+  amount: number;
+  executionDate: string;
+  instructionNumber: string;
 }
 
 function toISODate(dateLike: string): string {
@@ -148,16 +155,51 @@ export function BulkDetailUploadModal({ companyId, onClose, onDone }: Props) {
     setResults((prev) => prev.map((r) => (r.fileName === fileName ? { ...r, ...patch } : r)));
   };
 
+  const processMasterStatusFile = async (
+    file: File,
+    reservedTxIds: Set<string>,
+    listHints: ListHint[]
+  ): Promise<boolean> => {
+    const master = await parseLeumiSignaturesStatusXLSX(file);
+    if (!master) return false;
+    const supabase = createClient();
+    const direct = master.entries.filter((e) => !e.is_list);
+    const listed = master.entries.filter((e) => e.is_list);
+    listed.forEach((e) => listHints.push({ amount: e.amount, executionDate: e.execution_date, instructionNumber: e.instruction_number }));
+    const validDates = direct.map((e) => e.execution_date).filter(Boolean).sort();
+    const from = validDates.length > 0 ? shiftDays(validDates[0]!, -3) : shiftDays(new Date().toISOString().slice(0, 10), -120);
+    const to = validDates.length > 0 ? shiftDays(validDates[validDates.length - 1]!, 3) : new Date().toISOString().slice(0, 10);
+    const { data: txs } = await supabase.from("bank_transactions").select("id,date,description,reference,debit").eq("company_id", companyId).gte("date", from).lte("date", to).gt("debit", 0).is("merged_into_id", null).order("date", { ascending: false }).limit(1000);
+    let matched = 0;
+    let review = 0;
+    for (const e of direct) {
+      const candidates = ((txs ?? []) as MatchCandidate[]).filter((t) => !reservedTxIds.has(t.id)).map((t) => ({ tx: t, score: scoreCandidate(t, e.amount, e.execution_date || undefined, e.instruction_number || undefined) })).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
+      const best = candidates[0];
+      const second = candidates[1];
+      if (!best || best.score < 0.99 || (second && best.score - second.score < 0.05)) { review++; continue; }
+      const linkRes = await fetch("/api/finance/link-document", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transaction_id: best.tx.id, doc_type: "other", file_name: file.name, doc_date: e.execution_date || best.tx.date, total_amount: e.amount, reference: e.instruction_number || best.tx.reference || undefined, match_method: "auto_date_amount", raw_data: { rows: [e] } }) });
+      if (!linkRes.ok) { review++; continue; }
+      reservedTxIds.add(best.tx.id);
+      matched++;
+    }
+    updateResult(file.name, { status: review === 0 && listed.length === 0 ? "matched" : "needs_review", docType: "other", amount: master.entries.reduce((s, e) => s + e.amount, 0), message: `אקסל ראשי: ${matched} הותאמו, ${review} לבדיקה, ${listed.length} שורות 'רשימה' דורשות PDF.` });
+    return true;
+  };
+
   const run = async () => {
     if (files.length === 0) return;
     setProcessing(true);
     const supabase = createClient();
     const reservedTxIds = new Set<string>();
+    const listHints: ListHint[] = [];
 
     try {
       for (const file of files) {
         updateResult(file.name, { status: "processing", message: "" });
         try {
+          const wasMaster = await processMasterStatusFile(file, reservedTxIds, listHints);
+          if (wasMaster) continue;
+
           const parsed = await parseDetailFile(file);
           const amount = Math.abs(Number(parsed.total ?? 0));
           const docDate = toISODate(parsed.doc_date ?? "");
@@ -186,9 +228,10 @@ export function BulkDetailUploadModal({ companyId, onClose, onDone }: Props) {
             .order("date", { ascending: false })
             .limit(200);
 
+          const hint = listHints.find((h) => Math.abs(h.amount - amount) <= 0.01);
           const candidates = ((txs ?? []) as MatchCandidate[])
             .filter((t) => !reservedTxIds.has(t.id))
-            .map((t) => ({ tx: t, score: scoreCandidate(t, amount, docDate || undefined, reference || undefined) }))
+            .map((t) => ({ tx: t, score: Math.min(1, scoreCandidate(t, amount, docDate || undefined, reference || undefined) + (hint ? 0.05 : 0)) }))
             .filter((x) => x.score > 0)
             .sort((a, b) => b.score - a.score);
 
