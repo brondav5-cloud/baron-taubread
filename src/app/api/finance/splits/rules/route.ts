@@ -15,6 +15,13 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
 
+type RuleMatch = {
+  category_id: string;
+  category_name: string;
+  confidence: number;
+  source: "rule_exact" | "rule_partial" | "history_exact" | "history_partial";
+};
+
 // ── Auth helper ───────────────────────────────────────────────────────────────
 
 async function auth(request: NextRequest): Promise<{ companyId: string } | null> {
@@ -24,6 +31,32 @@ async function auth(request: NextRequest): Promise<{ companyId: string } | null>
   if (error || !user) return null;
   const { companyId } = await resolveSelectedCompanyId(supabaseAuth, user.id);
   return companyId ? { companyId } : null;
+}
+
+function normalizeText(v: string): string {
+  return v
+    .toLowerCase()
+    .replace(/["'`׳״]/g, "")
+    .replace(/[^a-z0-9א-ת\s]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getRuleConfidence(descNorm: string, ruleNorm: string): number {
+  if (!descNorm || !ruleNorm) return 0;
+  if (descNorm === ruleNorm) return 1;
+
+  const longer = Math.max(descNorm.length, ruleNorm.length);
+  const shorter = Math.min(descNorm.length, ruleNorm.length);
+  const ratio = shorter / longer;
+
+  if ((descNorm.startsWith(ruleNorm) || ruleNorm.startsWith(descNorm)) && ratio >= 0.85) {
+    return 0.92;
+  }
+  if ((descNorm.includes(ruleNorm) || ruleNorm.includes(descNorm)) && ratio >= 0.75) {
+    return 0.8;
+  }
+  return 0;
 }
 
 // ── GET — find category matches for a list of descriptions ────────────────────
@@ -71,20 +104,25 @@ export async function GET(request: NextRequest) {
     //    When multiple rules match, prefer the longest match_value (most specific).
     const ruleList = (rules ?? []) as { match_value: string; category_id: string }[];
 
-    const matches: Record<string, { category_id: string; category_name: string }> = {};
+    const matches: Record<string, RuleMatch> = {};
 
     for (const desc of descriptions) {
-      const lower = desc.toLowerCase();
-      let best: { match_value: string; category_id: string } | null = null;
+      const normDesc = normalizeText(desc);
+      let best:
+        | { match_value: string; category_id: string; confidence: number; source: RuleMatch["source"] }
+        | null = null;
 
       for (const rule of ruleList) {
         if (!rule.category_id) continue;
-        const mv = rule.match_value.toLowerCase();
-        // Match if description contains the rule keyword OR rule contains description
-        if (lower.includes(mv) || mv.includes(lower)) {
-          if (!best || rule.match_value.length > best.match_value.length) {
-            best = rule;
-          }
+        const normRule = normalizeText(rule.match_value);
+        const confidence = getRuleConfidence(normDesc, normRule);
+        if (confidence > 0 && (!best || confidence > best.confidence)) {
+          best = {
+            match_value: rule.match_value,
+            category_id: rule.category_id,
+            confidence,
+            source: confidence >= 1 ? "rule_exact" : "rule_partial",
+          };
         }
       }
 
@@ -92,6 +130,8 @@ export async function GET(request: NextRequest) {
         matches[desc] = {
           category_id: best.category_id,
           category_name: catMap.get(best.category_id) ?? "",
+          confidence: best.confidence,
+          source: best.source,
         };
       }
     }
@@ -114,22 +154,31 @@ export async function GET(request: NextRequest) {
         const freq = new Map<string, Map<string, number>>();
         for (const s of recentSplits as { description: string; category_id: string }[]) {
           if (!s.category_id || !s.description) continue;
-          const descLower = s.description.toLowerCase();
+          const descLower = normalizeText(s.description);
           if (!freq.has(descLower)) freq.set(descLower, new Map());
           const cm = freq.get(descLower)!;
           cm.set(s.category_id, (cm.get(s.category_id) ?? 0) + 1);
         }
 
         for (const desc of unmatched) {
-          const lower = desc.toLowerCase();
+          const lower = normalizeText(desc);
           // Try exact match first, then partial
           let catId: string | null = null;
           let topCount = 0;
+          let source: RuleMatch["source"] = "history_partial";
+          let confidence = 0.72;
 
           // Exact
           const exact = freq.get(lower);
           if (exact) {
-            exact.forEach((cnt, cid) => { if (cnt > topCount) { topCount = cnt; catId = cid; } });
+            exact.forEach((cnt, cid) => {
+              if (cnt > topCount) {
+                topCount = cnt;
+                catId = cid;
+                source = "history_exact";
+                confidence = 0.9;
+              }
+            });
           }
 
           // Partial: find any past description that shares significant overlap
@@ -137,7 +186,12 @@ export async function GET(request: NextRequest) {
             freq.forEach((catCounts, pastDesc) => {
               if (lower.includes(pastDesc) || pastDesc.includes(lower)) {
                 catCounts.forEach((cnt, cid) => {
-                  if (cnt > topCount) { topCount = cnt; catId = cid; }
+                  if (cnt > topCount) {
+                    topCount = cnt;
+                    catId = cid;
+                    source = "history_partial";
+                    confidence = 0.72;
+                  }
                 });
               }
             });
@@ -147,6 +201,8 @@ export async function GET(request: NextRequest) {
             matches[desc] = {
               category_id: catId,
               category_name: catMap.get(catId) ?? "",
+              confidence,
+              source,
             };
           }
         }

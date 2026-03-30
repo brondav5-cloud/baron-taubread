@@ -127,22 +127,33 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
       if (!res.ok) return importedRows;
 
       const { matches } = (await res.json()) as {
-        matches: Record<string, { category_id: string; category_name: string }>;
+        matches: Record<
+          string,
+          { category_id: string; category_name: string; confidence?: number; source?: string }
+        >;
       };
 
       let autoCount = 0;
+      let needsReviewCount = 0;
       const updated = importedRows.map((r) => {
         if (r.category_id || !r.description) return r;
         const match = matches[r.description];
-        if (match) {
+        const confidence = match?.confidence ?? 0;
+        if (match && confidence >= 1) {
           autoCount++;
           return { ...r, category_id: match.category_id, auto_classified: true };
         }
+        if (match) needsReviewCount++;
         return r;
       });
 
       if (autoCount > 0) {
         toast.success(`${autoCount} שורות סווגו אוטומטית`);
+      }
+      if (needsReviewCount > 0) {
+        toast(`${needsReviewCount} שורות דורשות בדיקה ידנית (התאמה לא מלאה)`, {
+          icon: "⚠️",
+        });
       }
       return updated;
     } catch {
