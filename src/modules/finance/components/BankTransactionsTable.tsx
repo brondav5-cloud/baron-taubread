@@ -1039,6 +1039,10 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   }
 
   const selCount = selected.size;
+  const selectedRows = selectableTransactions.filter((tx) => selected.has(tx.id));
+  const selectedDebitTotal = selectedRows.reduce((sum, tx) => sum + (tx.debit || 0), 0);
+  const selectedCreditTotal = selectedRows.reduce((sum, tx) => sum + (tx.credit || 0), 0);
+  const selectedPrimaryTotal = selectedDebitTotal > 0 ? selectedDebitTotal : selectedCreditTotal;
 
   return (
     <>
@@ -1049,6 +1053,9 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
           dir="rtl"
         >
           <span className="text-sm font-semibold">{selCount} תנועות נבחרו</span>
+          <div className="text-sm font-bold bg-indigo-800/60 px-3 py-1 rounded-xl">
+            סה"כ: ₪{selectedPrimaryTotal.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </div>
           <div className="w-px h-4 bg-indigo-400" />
           <button
             onClick={() => setSelected(new Set())}
