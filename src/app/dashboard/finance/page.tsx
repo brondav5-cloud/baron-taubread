@@ -178,11 +178,13 @@ function FinancePageInner() {
   const handleUnmerge = useCallback(async (tx: BankTransaction) => {
     if (!window.confirm(`לבטל מיזוג של "${tx.supplier_name ?? tx.description}"?`)) return;
     const toastId = toast.loading("מבטל מיזוג...");
+    // tx.id may be a composite "uuid::split::uuid" when the master has splits — extract the real UUID
+    const masterId = tx.id.includes("::") ? tx.id.split("::")[0]! : tx.id;
     try {
       const res = await fetch("/api/finance/transactions/merge", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ master_id: tx.id }),
+        body: JSON.stringify({ master_id: masterId }),
       });
       const data = await res.json();
       if (res.ok) {
