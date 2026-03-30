@@ -506,7 +506,19 @@ function FinancePageInner() {
         <MergeTransactionsModal
           transactions={mergeTxs}
           onClose={() => setMergeTxs(null)}
-          onMerged={() => { setMergeTxs(null); hook.refresh(); }}
+          onMerged={async (masterId) => {
+            setMergeTxs(null);
+            hook.refresh();
+            if (!selectedCompanyId) return;
+            const supabase = createClient();
+            const { data } = await supabase
+              .from("bank_transactions")
+              .select("*")
+              .eq("id", masterId)
+              .eq("company_id", selectedCompanyId)
+              .maybeSingle();
+            if (data) setSelectedTx(data as BankTransaction);
+          }}
         />
       )}
     </div>

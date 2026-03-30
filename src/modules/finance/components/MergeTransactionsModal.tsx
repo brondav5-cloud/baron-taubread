@@ -83,7 +83,7 @@ export function MergeTransactionsModal({ transactions, onClose, onMerged }: Prop
         <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
           <p className="text-xs text-indigo-700">
-            התנועות יאוחדו לשורה אחת. לאחר המיזוג תוכל לפצל אותה לפי קטגוריות עם כפתור הפיצול.
+            התנועות יאוחדו לשורה אחת. מיד אחרי המיזוג ייפתח חלון התנועה הראשית, שם אפשר להעלות קובץ פירוט ולסווג שורות כמו בכרטיס אשראי.
           </p>
         </div>
 

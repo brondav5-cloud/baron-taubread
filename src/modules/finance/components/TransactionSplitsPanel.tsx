@@ -62,15 +62,18 @@ function fromSplit(s: TransactionSplit): EditRow {
 
 function rowsFromDocRows(docRows: DocDetailRow[]): EditRow[] {
   return docRows
-    .map((row) => ({
+    .map((row) => {
+      const importedName = String(row.business_name ?? row.payee_name ?? "");
+      return {
       _key: nextKey(),
-      description: String(row.business_name ?? row.payee_name ?? ""),
-      supplier_name: "",
+      description: importedName,
+      supplier_name: importedName,
       category_id: "",
       amount: String(row.charge_amount ?? row.amount ?? 0),
       notes: "",
       transaction_date: String(row.transaction_date ?? ""),
-    }))
+      };
+    })
     .filter((r) => r.description || Number(r.amount) !== 0);
 }
 
