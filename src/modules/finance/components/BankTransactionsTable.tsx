@@ -1054,7 +1054,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
         >
           <span className="text-sm font-semibold">{selCount} תנועות נבחרו</span>
           <div className="text-sm font-bold bg-indigo-800/60 px-3 py-1 rounded-xl">
-            סה"כ: ₪{selectedPrimaryTotal.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            סה&quot;כ: ₪{selectedPrimaryTotal.toLocaleString("he-IL", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="w-px h-4 bg-indigo-400" />
           <button
