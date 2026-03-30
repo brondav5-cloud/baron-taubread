@@ -19,6 +19,7 @@ import { BankSupplierPanel } from "@/modules/finance/components/BankSupplierPane
 import { BankTransactionsFilterBar } from "@/modules/finance/components/BankTransactionsFilterBar";
 import { TransactionEditModal } from "@/modules/finance/components/TransactionEditModal";
 import { MergeTransactionsModal } from "@/modules/finance/components/MergeTransactionsModal";
+import { BulkDetailUploadModal } from "@/modules/finance/components/BulkDetailUploadModal";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
@@ -42,6 +43,7 @@ function FinancePageInner() {
   // All hooks must appear before any conditional return (Rules of Hooks)
   const selectedCompanyId = state.status === "authed" ? state.user.selectedCompanyId : null;
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false);
   const [checksOpen, setChecksOpen] = useState(false);
   const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
   const [editTx, setEditTx] = useState<BankTransaction | null>(null);
@@ -310,6 +312,13 @@ function FinancePageInner() {
             שיקים
           </button>
           <button
+            onClick={() => setBulkUploadOpen(true)}
+            className="flex items-center gap-2 px-3 py-2 border border-indigo-200 text-indigo-700 bg-indigo-50 rounded-xl text-sm font-medium hover:bg-indigo-100 transition-colors"
+          >
+            <Upload className="w-4 h-4" />
+            ייבוא מסמכים מרוכז
+          </button>
+          <button
             onClick={() => setUploadOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
           >
@@ -440,6 +449,14 @@ function FinancePageInner() {
         <UploadBankFileModal
           onClose={() => setUploadOpen(false)}
           onSuccess={handleUploadSuccess}
+        />
+      )}
+
+      {bulkUploadOpen && selectedCompanyId && (
+        <BulkDetailUploadModal
+          companyId={selectedCompanyId}
+          onClose={() => setBulkUploadOpen(false)}
+          onDone={handleUploadSuccess}
         />
       )}
 
