@@ -72,6 +72,14 @@ function shiftDays(isoDate: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+function daysBetweenIso(a: string, b: string): number {
+  if (!a || !b) return Number.POSITIVE_INFINITY;
+  const da = new Date(a).getTime();
+  const db = new Date(b).getTime();
+  if (!Number.isFinite(da) || !Number.isFinite(db)) return Number.POSITIVE_INFINITY;
+  return Math.abs(da - db) / (1000 * 60 * 60 * 24);
+}
+
 function detectDocType(file: File): DocType {
   const name = file.name.toLowerCase();
   if (name.endsWith(".pdf") || name.includes("motav")) return "transfers_pdf";
@@ -167,8 +175,8 @@ export function BulkDetailUploadModal({ companyId, onClose, onDone }: Props) {
     const listed = master.entries.filter((e) => e.is_list);
     listed.forEach((e) => listHints.push({ amount: e.amount, executionDate: e.execution_date, instructionNumber: e.instruction_number }));
     const validDates = direct.map((e) => e.execution_date).filter(Boolean).sort();
-    const from = validDates.length > 0 ? shiftDays(validDates[0]!, -3) : shiftDays(new Date().toISOString().slice(0, 10), -120);
-    const to = validDates.length > 0 ? shiftDays(validDates[validDates.length - 1]!, 3) : new Date().toISOString().slice(0, 10);
+    const from = validDates.length > 0 ? shiftDays(validDates[0]!, -1) : shiftDays(new Date().toISOString().slice(0, 10), -120);
+    const to = validDates.length > 0 ? shiftDays(validDates[validDates.length - 1]!, 1) : new Date().toISOString().slice(0, 10);
     const { data: txs } = await supabase.from("bank_transactions").select("id,date,description,reference,debit").eq("company_id", companyId).gte("date", from).lte("date", to).gt("debit", 0).is("merged_into_id", null).order("date", { ascending: false }).limit(1000);
     let matched = 0;
     let review = 0;
@@ -176,7 +184,15 @@ export function BulkDetailUploadModal({ companyId, onClose, onDone }: Props) {
       const candidates = ((txs ?? []) as MatchCandidate[]).filter((t) => !reservedTxIds.has(t.id)).map((t) => ({ tx: t, score: scoreCandidate(t, e.amount, e.execution_date || undefined, e.instruction_number || undefined) })).filter((x) => x.score > 0).sort((a, b) => b.score - a.score);
       const best = candidates[0];
       const second = candidates[1];
-      if (!best || best.score < 0.99 || (second && best.score - second.score < 0.05)) { review++; continue; }
+      if (!best) { review++; continue; }
+      const bestAmountDiff = Math.abs(best.tx.debit - e.amount);
+      const bestDayDiff = daysBetweenIso(best.tx.date, e.execution_date);
+      const secondAmountDiff = second ? Math.abs(second.tx.debit - e.amount) : Number.POSITIVE_INFINITY;
+      const secondDayDiff = second ? daysBetweenIso(second.tx.date, e.execution_date) : Number.POSITIVE_INFINITY;
+      const canAutoMatch =
+        best.score >= 0.99 ||
+        (bestAmountDiff <= 0.01 && bestDayDiff <= 1 && (secondAmountDiff > 0.01 || secondDayDiff > 1));
+      if (!canAutoMatch) { review++; continue; }
       const linkRes = await fetch("/api/finance/link-document", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transaction_id: best.tx.id, doc_type: "other", file_name: file.name, doc_date: e.execution_date || best.tx.date, total_amount: e.amount, reference: e.instruction_number || best.tx.reference || undefined, match_method: "auto_date_amount", raw_data: { rows: [e] } }) });
       if (!linkRes.ok) { review++; continue; }
       reservedTxIds.add(best.tx.id);
@@ -214,8 +230,8 @@ export function BulkDetailUploadModal({ companyId, onClose, onDone }: Props) {
             continue;
           }
 
-          const from = docDate ? shiftDays(docDate, -3) : shiftDays(new Date().toISOString().slice(0, 10), -120);
-          const to = docDate ? shiftDays(docDate, 3) : new Date().toISOString().slice(0, 10);
+          const from = docDate ? shiftDays(docDate, -1) : shiftDays(new Date().toISOString().slice(0, 10), -120);
+          const to = docDate ? shiftDays(docDate, 1) : new Date().toISOString().slice(0, 10);
 
           const { data: txs } = await supabase
             .from("bank_transactions")
@@ -249,7 +265,13 @@ export function BulkDetailUploadModal({ companyId, onClose, onDone }: Props) {
 
           const best = candidates[0]!;
           const second = candidates[1];
-          const canAutoMatch = best.score >= 0.99 && (!second || best.score - second.score >= 0.05);
+          const bestAmountDiff = Math.abs(best.tx.debit - amount);
+          const bestDayDiff = daysBetweenIso(best.tx.date, docDate);
+          const secondAmountDiff = second ? Math.abs(second.tx.debit - amount) : Number.POSITIVE_INFINITY;
+          const secondDayDiff = second ? daysBetweenIso(second.tx.date, docDate) : Number.POSITIVE_INFINITY;
+          const canAutoMatch =
+            (best.score >= 0.99 && (!second || best.score - second.score >= 0.05)) ||
+            (bestAmountDiff <= 0.01 && bestDayDiff <= 1 && (secondAmountDiff > 0.01 || secondDayDiff > 1));
 
           if (!canAutoMatch) {
             updateResult(file.name, {
