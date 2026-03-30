@@ -263,8 +263,14 @@ export async function parseTransfersPDF(file: File): Promise<TransfersPdfResult>
         fullText += lines.join("\n") + "\n";
       }
       const result = extractFromText(fullText);
-      if (result.items.length > 0 || result.total_amount > 0) {
-        return { ...result, errors };
+      if (result.items.length > 0) {
+        // Validate: items sum should be within 2% of the declared total
+        const itemsSum = result.items.reduce((s, i) => s + i.amount, 0);
+        const isComplete =
+          result.total_amount <= 0 ||
+          Math.abs(itemsSum - result.total_amount) / result.total_amount < 0.02;
+        if (isComplete) return { ...result, errors };
+        // Sum mismatch — pdfjs gave partial results; fall through to FileReader
       }
     }
   } catch (e) {
