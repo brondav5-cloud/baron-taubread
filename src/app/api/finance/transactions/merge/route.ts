@@ -91,7 +91,6 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  void request;  // required by Next.js route handler signature
   const ctx = await getAuthContext();
   if (!ctx) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
@@ -105,19 +104,48 @@ export async function DELETE(request: NextRequest) {
 
   const supabase = getSupabaseAdmin();
 
+  // Fetch master to get current summed amounts (before unmerge)
+  const { data: master, error: masterFetchErr } = await supabase
+    .from("bank_transactions")
+    .select("debit, credit")
+    .eq("id", master_id)
+    .eq("company_id", ctx.companyId)
+    .single();
+  if (masterFetchErr) return NextResponse.json({ error: masterFetchErr.message }, { status: 500 });
+
+  // Fetch children to calculate their contribution (so we can restore master's original amount)
+  const { data: children, error: childFetchErr } = await supabase
+    .from("bank_transactions")
+    .select("id, debit, credit")
+    .eq("merged_into_id", master_id)
+    .eq("company_id", ctx.companyId);
+  if (childFetchErr) return NextResponse.json({ error: childFetchErr.message }, { status: 500 });
+
+  const childDebit = (children ?? []).reduce((s, c) => s + ((c as { debit: number }).debit ?? 0), 0);
+  const childCredit = (children ?? []).reduce((s, c) => s + ((c as { credit: number }).credit ?? 0), 0);
+  const restoredDebit = Math.max(0, (master?.debit ?? 0) - childDebit);
+  const restoredCredit = Math.max(0, (master?.credit ?? 0) - childCredit);
+
   // Release all children
-  await supabase
+  const { error: childErr } = await supabase
     .from("bank_transactions")
     .update({ merged_into_id: null })
     .eq("merged_into_id", master_id)
     .eq("company_id", ctx.companyId);
+  if (childErr) return NextResponse.json({ error: childErr.message }, { status: 500 });
 
-  // Clear master's merge note
-  await supabase
+  // Restore master: clear merge note and restore original amounts
+  const { error: masterErr } = await supabase
     .from("bank_transactions")
-    .update({ notes: null, supplier_name: null })
+    .update({
+      notes: null,
+      supplier_name: null,
+      debit: restoredDebit,
+      credit: restoredCredit,
+    })
     .eq("id", master_id)
     .eq("company_id", ctx.companyId);
+  if (masterErr) return NextResponse.json({ error: masterErr.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

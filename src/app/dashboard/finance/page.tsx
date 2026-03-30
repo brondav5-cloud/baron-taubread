@@ -20,6 +20,7 @@ import { BankTransactionsFilterBar } from "@/modules/finance/components/BankTran
 import { TransactionEditModal } from "@/modules/finance/components/TransactionEditModal";
 import { MergeTransactionsModal } from "@/modules/finance/components/MergeTransactionsModal";
 import { BulkDetailUploadModal } from "@/modules/finance/components/BulkDetailUploadModal";
+import toast from "react-hot-toast";
 import { loadXlsx } from "@/lib/loadXlsx";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
@@ -176,14 +177,23 @@ function FinancePageInner() {
 
   const handleUnmerge = useCallback(async (tx: BankTransaction) => {
     if (!window.confirm(`לבטל מיזוג של "${tx.supplier_name ?? tx.description}"?`)) return;
+    const toastId = toast.loading("מבטל מיזוג...");
     try {
       const res = await fetch("/api/finance/transactions/merge", {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ master_id: tx.id }),
       });
-      if (res.ok) hook.refresh();
-    } catch { /* silent */ }
+      const data = await res.json();
+      if (res.ok) {
+        toast.success("המיזוג בוטל בהצלחה", { id: toastId });
+        hook.refresh();
+      } else {
+        toast.error(data?.error ?? "שגיאה בביטול מיזוג", { id: toastId });
+      }
+    } catch {
+      toast.error("שגיאת רשת — לא ניתן לבטל מיזוג", { id: toastId });
+    }
   }, [hook]);
 
   // Fetch available years from bank_transactions
