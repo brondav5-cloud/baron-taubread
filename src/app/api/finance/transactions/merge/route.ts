@@ -91,68 +91,79 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const ctx = await getAuthContext();
-  if (!ctx) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+  try {
+    const ctx = await getAuthContext();
+    if (!ctx) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
 
-  let body: Record<string, unknown>;
-  try { body = await request.json(); } catch {
-    return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 });
-  }
+    let body: Record<string, unknown>;
+    try { body = await request.json(); } catch {
+      return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 });
+    }
 
-  const { master_id } = body as { master_id?: string };
-  if (!master_id) return NextResponse.json({ error: "master_id חסר" }, { status: 400 });
+    const { master_id } = body as { master_id?: string };
+    if (!master_id) return NextResponse.json({ error: "master_id חסר" }, { status: 400 });
 
-  const supabase = getSupabaseAdmin();
+    const supabase = getSupabaseAdmin();
 
-  // --- Step 1: fetch children amounts and master amounts to restore original ---
-  const [childrenResult, masterResult] = await Promise.all([
-    supabase
+    // Fetch children to calculate amounts to restore on master
+    const { data: children, error: childFetchErr } = await supabase
       .from("bank_transactions")
       .select("debit, credit")
-      .eq("merged_into_id", master_id),
-    supabase
+      .eq("merged_into_id", master_id);
+
+    if (childFetchErr) {
+      console.error("[unmerge] childFetch error:", childFetchErr);
+      return NextResponse.json({ error: `שליפת ילדים: ${childFetchErr.message}` }, { status: 500 });
+    }
+
+    // Fetch master amounts
+    const { data: masterRows, error: masterFetchErr } = await supabase
       .from("bank_transactions")
       .select("debit, credit")
       .eq("id", master_id)
-      .limit(1),
-  ]);
+      .limit(1);
 
-  if (childrenResult.error) {
-    return NextResponse.json({ error: `שליפת ילדים: ${childrenResult.error.message}` }, { status: 500 });
+    if (masterFetchErr) {
+      console.error("[unmerge] masterFetch error:", masterFetchErr);
+      return NextResponse.json({ error: `שליפת מאסטר: ${masterFetchErr.message}` }, { status: 500 });
+    }
+
+    const masterRow = masterRows?.[0];
+    const childDebit = (children ?? []).reduce((s, c) => s + (Number(c.debit) || 0), 0);
+    const childCredit = (children ?? []).reduce((s, c) => s + (Number(c.credit) || 0), 0);
+    const restoredDebit = Math.max(0, (Number(masterRow?.debit) || 0) - childDebit);
+    const restoredCredit = Math.max(0, (Number(masterRow?.credit) || 0) - childCredit);
+
+    // Release all children
+    const { error: childErr } = await supabase
+      .from("bank_transactions")
+      .update({ merged_into_id: null })
+      .eq("merged_into_id", master_id);
+
+    if (childErr) {
+      console.error("[unmerge] childUpdate error:", childErr);
+      return NextResponse.json({ error: `שחרור ילדים: ${childErr.message}` }, { status: 500 });
+    }
+
+    // Restore master
+    const { error: masterErr } = await supabase
+      .from("bank_transactions")
+      .update({
+        notes: null,
+        supplier_name: null,
+        debit: restoredDebit,
+        credit: restoredCredit,
+      })
+      .eq("id", master_id);
+
+    if (masterErr) {
+      console.error("[unmerge] masterUpdate error:", masterErr);
+      return NextResponse.json({ error: `עדכון מאסטר: ${masterErr.message}` }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[unmerge] unhandled exception:", err);
+    return NextResponse.json({ error: `חריגה לא מטופלת: ${String(err)}` }, { status: 500 });
   }
-  if (masterResult.error) {
-    return NextResponse.json({ error: `שליפת מאסטר: ${masterResult.error.message}` }, { status: 500 });
-  }
-
-  const children = childrenResult.data ?? [];
-  const masterRow = masterResult.data?.[0];
-  const childDebit = children.reduce((s, c) => s + (Number(c.debit) || 0), 0);
-  const childCredit = children.reduce((s, c) => s + (Number(c.credit) || 0), 0);
-  const restoredDebit = Math.max(0, (Number(masterRow?.debit) || 0) - childDebit);
-  const restoredCredit = Math.max(0, (Number(masterRow?.credit) || 0) - childCredit);
-
-  // --- Step 2: release all children (clear merged_into_id) ---
-  const { error: childErr } = await supabase
-    .from("bank_transactions")
-    .update({ merged_into_id: null })
-    .eq("merged_into_id", master_id);
-  if (childErr) {
-    return NextResponse.json({ error: `שחרור ילדים: ${childErr.message}` }, { status: 500 });
-  }
-
-  // --- Step 3: restore master to stand-alone transaction ---
-  const { error: masterErr } = await supabase
-    .from("bank_transactions")
-    .update({
-      notes: null,
-      supplier_name: null,
-      debit: restoredDebit,
-      credit: restoredCredit,
-    })
-    .eq("id", master_id);
-  if (masterErr) {
-    return NextResponse.json({ error: `עדכון מאסטר: ${masterErr.message}` }, { status: 500 });
-  }
-
-  return NextResponse.json({ ok: true });
 }
