@@ -176,9 +176,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
   const [savingCat, setSavingCat] = useState(false);
   const [savingLock, setSavingLock] = useState(false);
   const [showRulePrompt, setShowRulePrompt] = useState(false);
-  const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code" | "supplier_name">(
-    tx.supplier_name ? "supplier_name" : "description"
-  );
+  const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code" | "supplier_name">("description");
   const [savingRule, setSavingRule] = useState(false);
   const [notes, setNotes] = useState(tx.notes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -601,8 +599,8 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                   onChange={(e) => setRuleField(e.target.value as typeof ruleField)}
                   className="border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none"
                 >
-                  {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
-                  <option value="description">תיאור</option>
+                  <option value="description">תיאור (מומלץ)</option>
+                  {tx.supplier_name && <option value="supplier_name">שם ספק (רק תנועות שנערכו)</option>}
                   {tx.details && <option value="details">פרטים</option>}
                   {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
                 </select>
@@ -615,6 +613,9 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                   }&quot;
                 </span>
               </div>
+              {ruleField === "supplier_name" && (
+                <p className="text-[10px] text-amber-600">שים לב: כלל על שם ספק יתאים רק לתנועות שנערכו ידנית עם אותו שם. לסיווג תנועות דומות השתמש ב&quot;תיאור&quot;.</p>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowRulePrompt(false)}

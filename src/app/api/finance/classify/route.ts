@@ -53,18 +53,33 @@ async function transactionHasSplits(
 }
 
 function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
-  const haystack = (tx[rule.match_field] ?? "").toLowerCase();
+  // When the rule targets supplier_name but the transaction has none,
+  // fall back to checking description and details so similar unedited
+  // transactions can still be classified.
+  const fieldsToCheck: MatchField[] =
+    rule.match_field === "supplier_name" && !tx.supplier_name
+      ? ["description", "details"]
+      : [rule.match_field];
+
   const needle = rule.match_value.toLowerCase();
 
-  switch (rule.match_type) {
-    case "contains":    return haystack.includes(needle);
-    case "starts_with": return haystack.startsWith(needle);
-    case "exact":       return haystack === needle;
-    case "regex": {
-      try { return new RegExp(rule.match_value, "i").test(tx[rule.match_field] ?? ""); }
-      catch { return false; }
+  for (const field of fieldsToCheck) {
+    const haystack = (tx[field] ?? "").toLowerCase();
+    if (!haystack) continue;
+    let matched = false;
+    switch (rule.match_type) {
+      case "contains":    matched = haystack.includes(needle); break;
+      case "starts_with": matched = haystack.startsWith(needle); break;
+      case "exact":       matched = haystack === needle; break;
+      case "regex": {
+        try { matched = new RegExp(rule.match_value, "i").test(tx[field] ?? ""); }
+        catch { matched = false; }
+        break;
+      }
     }
+    if (matched) return true;
   }
+  return false;
 }
 
 export async function POST(request: NextRequest) {
@@ -211,7 +226,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, classified: 0, message: "אין תנועות ללא סיווג" });
     }
 
-    // Apply rules — first matching rule wins (sorted by priority desc)
+    // ── Apply rules to bank_transactions ─────────────────────────────────────
+    // matchesRule() handles the fallback: supplier_name rules will also check
+    // description and details when the transaction has no supplier_name.
     const byCategory = new Map<string, string[]>(); // category_id → [tx_id, ...]
     for (const tx of allTransactions) {
       for (const rule of rules as CategoryRule[]) {
@@ -224,11 +241,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Batch UPDATE grouped by category (in() operator — 1 query per category)
+    // Batch UPDATE bank_transactions grouped by category
     let classified = 0;
     for (const catId of Array.from(byCategory.keys())) {
       const ids = byCategory.get(catId) ?? [];
-      // Supabase in() supports up to 1000 items per call
       for (let i = 0; i < ids.length; i += 1000) {
         const chunk = ids.slice(i, i + 1000);
         const { error: upErr } = await supabase
@@ -241,7 +257,66 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, classified, total: allTransactions.length });
+    // ── Apply rules to bank_transaction_splits (same logic, same rules) ───────
+    // Split rows are also suppliers — they should be classified exactly like
+    // regular transactions.
+    type SplitRow = { id: string; description: string; supplier_name: string | null };
+    let allSplits: SplitRow[] = [];
+    let splitOffset = 0;
+    while (true) {
+      const { data: splitBatch } = await supabase
+        .from("bank_transaction_splits")
+        .select("id, description, supplier_name")
+        .eq("company_id", companyId)
+        .is("category_id", null)
+        .range(splitOffset, splitOffset + FETCH_BATCH - 1);
+
+      if (!splitBatch || splitBatch.length === 0) break;
+      allSplits = allSplits.concat(splitBatch as SplitRow[]);
+      if (splitBatch.length < FETCH_BATCH) break;
+      splitOffset += FETCH_BATCH;
+    }
+
+    const splitsByCategory = new Map<string, string[]>();
+    for (const split of allSplits) {
+      // Build a BankTx-compatible object with the fields matchesRule needs
+      const asTx: BankTx = {
+        id: split.id,
+        description: split.description ?? "",
+        details: "",
+        reference: "",
+        operation_code: null,
+        supplier_name: split.supplier_name ?? null,
+      };
+      for (const rule of rules as CategoryRule[]) {
+        if (matchesRule(asTx, rule)) {
+          const arr = splitsByCategory.get(rule.category_id) ?? [];
+          arr.push(split.id);
+          splitsByCategory.set(rule.category_id, arr);
+          break;
+        }
+      }
+    }
+
+    let classifiedSplits = 0;
+    for (const catId of Array.from(splitsByCategory.keys())) {
+      const ids = splitsByCategory.get(catId) ?? [];
+      for (let i = 0; i < ids.length; i += 1000) {
+        const chunk = ids.slice(i, i + 1000);
+        const { error: upErr } = await supabase
+          .from("bank_transaction_splits")
+          .update({ category_id: catId })
+          .in("id", chunk)
+          .eq("company_id", companyId);
+        if (!upErr) classifiedSplits += chunk.length;
+      }
+    }
+
+    return NextResponse.json({
+      ok: true,
+      classified: classified + classifiedSplits,
+      total: allTransactions.length + allSplits.length,
+    });
   } catch (err) {
     logError("finance/classify: unhandled", err);
     return NextResponse.json({ error: "שגיאה פנימית" }, { status: 500 });

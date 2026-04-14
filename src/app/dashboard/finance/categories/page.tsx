@@ -170,6 +170,7 @@ export default function CategoriesPage() {
   const [classifying, setClassifying] = useState(false);
   const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
+  const [backfillingSuppliers, setBackfillingSuppliers] = useState(false);
 
   // New category form
   const [newName, setNewName] = useState("");
@@ -316,6 +317,26 @@ export default function CategoriesPage() {
     }
   }, []);
 
+  const handleBackfillSuppliers = useCallback(async () => {
+    if (!confirm('למלא אוטומטית שמות ספק מתוך שדה "פרטים" לכל התנועות שאין להן שם ספק?\n(לדוגמה: "העברה אל: הפניקס פנסיה..." → שם ספק: הפניקס פנסיה)')) return;
+    setBackfillingSuppliers(true);
+    setClassifyResult(null);
+    try {
+      const res = await fetch("/api/finance/transactions/backfill-suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setClassifyResult(`עודכנו ${(data as { updated?: number }).updated ?? 0} תנועות עם שם ספק אוטומטי`);
+      } else {
+        setClassifyResult(`שגיאה: ${(data as { error?: string }).error ?? "לא ידועה"}`);
+      }
+    } finally {
+      setBackfillingSuppliers(false);
+    }
+  }, []);
+
   /** One-time: clear category_override for all txs (fixes old behavior where every manual classify set lock) */
   const handleRemoveAllLocks = useCallback(async () => {
     if (!confirm("להסיר מנעול מכל התנועות בחברה? הקטגוריות נשארות; רק אייקון המנעול יוסר (אפשר לנעול שוב מתנועות בנק).")) return;
@@ -358,6 +379,15 @@ export default function CategoriesPage() {
           >
             {unlockingAllLocks ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
             הסר מנעול מכל התנועות
+          </button>
+          <button
+            type="button"
+            onClick={() => { void handleBackfillSuppliers(); }}
+            disabled={backfillingSuppliers || classifying}
+            className="flex items-center gap-2 px-3 py-2 border border-blue-200 bg-blue-50 text-blue-900 rounded-xl text-xs font-medium hover:bg-blue-100 disabled:opacity-50 transition-colors"
+          >
+            {backfillingSuppliers ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+            מלא שמות ספק אוטומטית
           </button>
           <button
             onClick={handleAutoClassify}

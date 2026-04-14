@@ -50,24 +50,88 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Fetch supplier transactions — exact supplier_name match OR description ilike
+  // Fetch supplier transactions — direct bank_transactions + split rows
   useEffect(() => {
     if (!companyId) return;
     setLoading(true);
     setError(null);
     const supabase = createClient();
-    supabase
+
+    const directQuery = supabase
       .from("bank_transactions")
       .select("*")
       .eq("company_id", companyId)
       .or(`supplier_name.eq.${supplierKey},description.ilike.%${supplierKey}%`)
       .order("date", { ascending: false })
-      .limit(2000)
-      .then(({ data, error: err }) => {
-        if (err) setError(err.message);
-        else setTxs((data as BankTransaction[]) ?? []);
-        setLoading(false);
+      .limit(2000);
+
+    // Also fetch split rows that match this supplier, joined with parent tx for date/amounts
+    const splitQuery = supabase
+      .from("bank_transaction_splits")
+      .select("id, transaction_id, description, supplier_name, category_id, amount, notes, bank_transactions!inner(id, date, debit, credit, source_bank, bank_account_id, company_id)")
+      .eq("company_id", companyId)
+      .or(`supplier_name.eq.${supplierKey},description.ilike.%${supplierKey}%`)
+      .limit(2000);
+
+    Promise.all([directQuery, splitQuery]).then(([{ data: direct, error: err1 }, { data: splits, error: err2 }]) => {
+      if (err1) { setError(err1.message); setLoading(false); return; }
+      if (err2) { setError(err2.message); setLoading(false); return; }
+
+      const directTxs = (direct as BankTransaction[]) ?? [];
+
+      // Convert split rows to BankTransaction shape so the panel can use them uniformly
+      type SplitRow = {
+        id: string;
+        transaction_id: string;
+        description: string;
+        supplier_name: string | null;
+        category_id: string | null;
+        amount: number;
+        notes: string | null;
+        bank_transactions: {
+          id: string;
+          date: string;
+          debit: number;
+          credit: number;
+          source_bank: string;
+          bank_account_id: string;
+          company_id: string;
+        };
+      };
+      const splitTxs: BankTransaction[] = ((splits as unknown as SplitRow[]) ?? []).map((s) => {
+        const parent = s.bank_transactions;
+        const isDebit = Number(parent.debit) > 0;
+        const amt = Math.abs(Number(s.amount) || 0);
+        return {
+          ...parent,
+          id: `${parent.id}::split::${s.id}`,
+          description: s.description || "",
+          supplier_name: s.supplier_name ?? null,
+          category_id: s.category_id ?? undefined,
+          notes: s.notes ?? null,
+          debit: isDebit ? amt : 0,
+          credit: isDebit ? 0 : amt,
+          balance: null,
+          details: "",
+          reference: "",
+          operation_code: null,
+          batch_code: null,
+          merged_into_id: null,
+          is_split_line: true,
+          split_parent_id: parent.id,
+        } as unknown as BankTransaction;
       });
+
+      // Merge: avoid duplicates (a direct tx that was split is already represented by split rows)
+      const splitParentIds = new Set(splitTxs.map((s) => s.split_parent_id).filter(Boolean));
+      const filteredDirect = directTxs.filter((t) => !splitParentIds.has(t.id));
+      const merged = [...filteredDirect, ...splitTxs].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      setTxs(merged);
+      setLoading(false);
+    });
   }, [companyId, supplierKey]);
 
   // Fetch total company expenses for the selected year (for % KPI)

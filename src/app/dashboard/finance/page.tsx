@@ -368,6 +368,7 @@ function FinancePageInner() {
             hook.setFilters((f) => ({ ...f, dateFrom: from, dateTo: to }));
           }
         }}
+        onClearMonthHighlight={() => setSelectedMonth(null)}
         onRefresh={hook.refresh}
       />
 

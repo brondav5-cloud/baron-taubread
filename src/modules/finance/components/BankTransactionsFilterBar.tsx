@@ -26,6 +26,8 @@ interface Props {
   onFiltersChange: (f: BankTransactionFilters | ((prev: BankTransactionFilters) => BankTransactionFilters)) => void;
   onYearChange: (yr: number) => void;
   onMonthChange: (month: number | null) => void;
+  /** Clears only the month-button highlight without touching the date range fields */
+  onClearMonthHighlight: () => void;
   onRefresh: () => void;
 }
 
@@ -39,6 +41,7 @@ export function BankTransactionsFilterBar({
   onFiltersChange,
   onYearChange,
   onMonthChange,
+  onClearMonthHighlight,
   onRefresh,
 }: Props) {
   return (
@@ -104,13 +107,34 @@ export function BankTransactionsFilterBar({
           ))}
         </select>
 
+        {/* Debit / Credit toggle */}
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs font-medium">
+          {(["all", "debit", "credit"] as const).map((type) => (
+            <button
+              key={type}
+              onClick={() => onFiltersChange((f) => ({ ...f, amountType: type }))}
+              className={`px-3 py-2 transition-colors border-r last:border-r-0 border-gray-200 ${
+                filters.amountType === type
+                  ? type === "debit"
+                    ? "bg-red-500 text-white"
+                    : type === "credit"
+                      ? "bg-green-500 text-white"
+                      : "bg-blue-600 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {type === "all" ? "הכל" : type === "debit" ? "חובה" : "זכות"}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-col gap-0.5">
           <label className="text-xs text-gray-400 font-medium">מתאריך</label>
           <input
             type="date"
             value={filters.dateFrom}
             onChange={(e) => {
-              onMonthChange(null);
+              onClearMonthHighlight();
               onFiltersChange((f) => ({ ...f, dateFrom: e.target.value }));
             }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
@@ -125,7 +149,7 @@ export function BankTransactionsFilterBar({
             type="date"
             value={filters.dateTo}
             onChange={(e) => {
-              onMonthChange(null);
+              onClearMonthHighlight();
               onFiltersChange((f) => ({ ...f, dateTo: e.target.value }));
             }}
             className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"

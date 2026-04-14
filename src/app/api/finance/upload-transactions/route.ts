@@ -8,6 +8,26 @@ import type { ParsedBankTransaction, SourceBank } from "@/modules/finance/types"
 
 const MAX_TRANSACTIONS = 5_000;
 
+/**
+ * Extracts a supplier/payee name from the bank transaction details field.
+ * Handles patterns like:
+ *   "העברה אל: הפניקס פנסיה 000678680..."  → "הפניקס פנסיה"
+ *   "העברה מ: ליאור כבנו 827-026560037..."  → "ליאור כבנו"
+ * Returns null if no recognisable pattern is found.
+ */
+function extractSupplierFromDetails(details: string): string | null {
+  if (!details) return null;
+  const m = details.match(/^העברה\s+(?:אל|מ)[:\s]+(.+)/);
+  if (!m) return null;
+  const words = m[1]!.trim().split(/\s+/);
+  const nameWords: string[] = [];
+  for (const word of words) {
+    if (/^\d/.test(word)) break;
+    nameWords.push(word);
+  }
+  return nameWords.length > 0 ? nameWords.join(" ") : null;
+}
+
 interface UploadRequest {
   bank: SourceBank;
   account_number: string;
@@ -160,6 +180,7 @@ export async function POST(request: NextRequest) {
       notes: tx.notes || null,
       source_bank: bank,
       raw_row: tx.raw_row ?? {},
+      supplier_name: extractSupplierFromDetails(tx.details ?? ""),
     }));
 
     // ── Insert with dedup handling ────────────────────────────────────────────

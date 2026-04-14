@@ -13,6 +13,7 @@ export interface BankTransactionFilters {
   sourceBank: SourceBank | "";
   search: string;
   categoryId: string;       // "" = all, "none" = unclassified
+  amountType: "all" | "debit" | "credit";
 }
 
 export type SortBy = "date" | "debit" | "credit" | "balance" | "description" | "supplier_name";
@@ -21,7 +22,7 @@ export type SortDir = "asc" | "desc";
 const PAGE_SIZE = 50;
 
 function emptyFilters(): BankTransactionFilters {
-  return { dateFrom: "", dateTo: "", bankAccountId: "", sourceBank: "", search: "", categoryId: "" };
+  return { dateFrom: "", dateTo: "", bankAccountId: "", sourceBank: "", search: "", categoryId: "", amountType: "all" };
 }
 
 function extractCardLabel(text: string): string {
@@ -134,6 +135,8 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     if (filters.dateTo) query = query.lte("date", filters.dateTo);
     if (filters.bankAccountId) query = query.eq("bank_account_id", filters.bankAccountId);
     if (filters.sourceBank) query = query.eq("source_bank", filters.sourceBank);
+    if (filters.amountType === "debit") query = query.gt("debit", 0);
+    if (filters.amountType === "credit") query = query.gt("credit", 0);
     if (filters.search.trim()) {
       const s = `%${filters.search.trim()}%`;
       query = query.or(`description.ilike.${s},details.ilike.${s},reference.ilike.${s},supplier_name.ilike.${s}`);
