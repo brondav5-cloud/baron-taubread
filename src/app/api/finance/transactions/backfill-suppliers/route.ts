@@ -16,9 +16,15 @@ function extractSupplierFromDetails(details: string): string | null {
   const m = details.match(/^העברה\s+(?:אל|מ)[:\s]+(.+)/);
   if (!m) return null;
   const words = m[1]!.trim().split(/\s+/);
+  const isAccountToken = (w: string) => /^[\d\-]+$/.test(w);
   const nameWords: string[] = [];
+  let foundName = false;
   for (const word of words) {
-    if (/^\d/.test(word)) break;
+    if (isAccountToken(word)) {
+      if (foundName) break;
+      continue;
+    }
+    foundName = true;
     nameWords.push(word);
   }
   return nameWords.length > 0 ? nameWords.join(" ") : null;

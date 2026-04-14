@@ -11,18 +11,27 @@ const MAX_TRANSACTIONS = 5_000;
 /**
  * Extracts a supplier/payee name from the bank transaction details field.
  * Handles patterns like:
- *   "העברה אל: הפניקס פנסיה 000678680..."  → "הפניקס פנסיה"
- *   "העברה מ: ליאור כבנו 827-026560037..."  → "ליאור כבנו"
- * Returns null if no recognisable pattern is found.
+ *   "העברה אל: הפניקס פנסיה 000678680..."   → "הפניקס פנסיה"
+ *   "העברה אל: 000181777 DAVID BRON..."      → "DAVID BRON"
+ *   "העברה מ: ליאור כבנו 827-026560037..."   → "ליאור כבנו"
+ * Account-number tokens (digits / digits-with-dashes) are skipped whether
+ * they appear before or after the name.
  */
 function extractSupplierFromDetails(details: string): string | null {
   if (!details) return null;
   const m = details.match(/^העברה\s+(?:אל|מ)[:\s]+(.+)/);
   if (!m) return null;
   const words = m[1]!.trim().split(/\s+/);
+  // A token is an "account number" if it consists solely of digits and dashes
+  const isAccountToken = (w: string) => /^[\d\-]+$/.test(w);
   const nameWords: string[] = [];
+  let foundName = false;
   for (const word of words) {
-    if (/^\d/.test(word)) break;
+    if (isAccountToken(word)) {
+      if (foundName) break; // trailing account number → done
+      continue;             // leading account number → skip
+    }
+    foundName = true;
     nameWords.push(word);
   }
   return nameWords.length > 0 ? nameWords.join(" ") : null;
