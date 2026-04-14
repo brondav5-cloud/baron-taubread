@@ -24,7 +24,6 @@ interface TxRow {
   debit: number;
   credit: number;
   category_id: string | null;
-  category_override: string | null;
 }
 
 interface SplitRow {
@@ -187,7 +186,7 @@ export async function GET(request: NextRequest) {
         .eq("company_id", companyId),
       supabase
         .from("bank_transactions")
-        .select("id, date, debit, credit, category_id, category_override")
+        .select("id, date, debit, credit, category_id")
         .eq("company_id", companyId)
         .gte("date", dateFrom)
         .lte("date", dateTo)
