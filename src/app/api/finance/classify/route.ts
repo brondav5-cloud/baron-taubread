@@ -190,6 +190,10 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Auto classify ─────────────────────────────────────────────────────────
+    // mode "force_auto" → re-classify ALL transactions (except manually locked ones)
+    // mode "auto"       → classify only unclassified transactions
+    const forceAll = body.mode === "force_auto";
+
     // Fetch all active rules (sorted by priority desc)
     const { data: rules } = await supabase
       .from("category_rules")
@@ -202,19 +206,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, classified: 0, message: "אין כללי סיווג" });
     }
 
-    // Fetch ALL unclassified transactions (paginate in batches of 1000)
+    // Fetch transactions: if force_auto, fetch all non-locked; otherwise only unclassified
     let allTransactions: BankTx[] = [];
     let offset = 0;
     const FETCH_BATCH = 1000;
     while (true) {
-      const { data: batch } = await supabase
+      let q = supabase
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
-        .is("category_id", null)
         .is("category_override", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
+
+      if (!forceAll) q = q.is("category_id", null);
+
+      const { data: batch } = await q;
 
       if (!batch || batch.length === 0) break;
       allTransactions = allTransactions.concat(batch as BankTx[]);
@@ -223,7 +230,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (allTransactions.length === 0) {
-      return NextResponse.json({ ok: true, classified: 0, message: "אין תנועות ללא סיווג" });
+      return NextResponse.json({
+        ok: true,
+        classified: 0,
+        message: forceAll ? "אין תנועות לסיווג מחדש" : "אין תנועות ללא סיווג",
+      });
     }
 
     // ── Apply rules to bank_transactions ─────────────────────────────────────
@@ -264,12 +275,15 @@ export async function POST(request: NextRequest) {
     let allSplits: SplitRow[] = [];
     let splitOffset = 0;
     while (true) {
-      const { data: splitBatch } = await supabase
+      let sq = supabase
         .from("bank_transaction_splits")
         .select("id, description, supplier_name")
         .eq("company_id", companyId)
-        .is("category_id", null)
         .range(splitOffset, splitOffset + FETCH_BATCH - 1);
+
+      if (!forceAll) sq = sq.is("category_id", null);
+
+      const { data: splitBatch } = await sq;
 
       if (!splitBatch || splitBatch.length === 0) break;
       allSplits = allSplits.concat(splitBatch as SplitRow[]);

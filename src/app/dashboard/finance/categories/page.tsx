@@ -168,6 +168,7 @@ export default function CategoriesPage() {
   const [splitRules, setSplitRules] = useState<{ id: string; match_value: string; category_id: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [classifying, setClassifying] = useState(false);
+  const [forceClassifying, setForceClassifying] = useState(false);
   const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
   const [backfillingSuppliers, setBackfillingSuppliers] = useState(false);
@@ -317,6 +318,27 @@ export default function CategoriesPage() {
     }
   }, []);
 
+  const handleForceClassify = useCallback(async () => {
+    if (!confirm("לסווג מחדש את כל התנועות לפי הכללים הנוכחיים?\n(תנועות נעולות ידנית לא ישתנו)")) return;
+    setForceClassifying(true);
+    setClassifyResult(null);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "force_auto" }),
+      });
+      const data = await res.json();
+      setClassifyResult(
+        data.classified !== undefined
+          ? `סווגו מחדש ${data.classified} תנועות מתוך ${data.total}`
+          : data.message ?? "בוצע"
+      );
+    } finally {
+      setForceClassifying(false);
+    }
+  }, []);
+
   const handleBackfillSuppliers = useCallback(async () => {
     if (!confirm('למלא אוטומטית שמות ספק מתוך שדה "פרטים" לכל התנועות שאין להן שם ספק?\n(לדוגמה: "העברה אל: הפניקס פנסיה..." → שם ספק: הפניקס פנסיה)')) return;
     setBackfillingSuppliers(true);
@@ -391,11 +413,20 @@ export default function CategoriesPage() {
           </button>
           <button
             onClick={handleAutoClassify}
-            disabled={classifying}
+            disabled={classifying || forceClassifying}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
           >
             {classifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             סווג אוטומטית
+          </button>
+          <button
+            onClick={() => { void handleForceClassify(); }}
+            disabled={classifying || forceClassifying}
+            title="מסווג מחדש את כל התנועות (כולל מסווגות) — נעולות ידנית לא ישתנו"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
+          >
+            {forceClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+            סווג מחדש הכל
           </button>
         </div>
       </div>
