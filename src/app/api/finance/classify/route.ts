@@ -53,13 +53,10 @@ async function transactionHasSplits(
 }
 
 function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
-  // When the rule targets supplier_name but the transaction has none,
-  // fall back to checking description and details so similar unedited
-  // transactions can still be classified.
-  const fieldsToCheck: MatchField[] =
-    rule.match_field === "supplier_name" && !tx.supplier_name
-      ? ["description", "details"]
-      : [rule.match_field];
+  // Only check the exact field defined in the rule — no fallback.
+  // A rule on "supplier_name" will NOT match a transaction that has no supplier_name,
+  // preventing false positives from description/details accidentally matching.
+  const fieldsToCheck: MatchField[] = [rule.match_field];
 
   const needle = rule.match_value.toLowerCase();
 
@@ -206,22 +203,34 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, classified: 0, message: "אין כללי סיווג" });
     }
 
+    // In force_auto mode: first wipe all non-locked category assignments so that
+    // transactions which no longer match any rule end up uncategorized (null).
+    if (forceAll) {
+      await supabase
+        .from("bank_transactions")
+        .update({ category_id: null })
+        .eq("company_id", companyId)
+        .is("category_override", null);
+
+      await supabase
+        .from("bank_transaction_splits")
+        .update({ category_id: null })
+        .eq("company_id", companyId);
+    }
+
     // Fetch transactions: if force_auto, fetch all non-locked; otherwise only unclassified
     let allTransactions: BankTx[] = [];
     let offset = 0;
     const FETCH_BATCH = 1000;
     while (true) {
-      let q = supabase
+      const { data: batch } = await supabase
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
+        .is("category_id", null)
         .is("category_override", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
-
-      if (!forceAll) q = q.is("category_id", null);
-
-      const { data: batch } = await q;
 
       if (!batch || batch.length === 0) break;
       allTransactions = allTransactions.concat(batch as BankTx[]);
@@ -238,8 +247,6 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Apply rules to bank_transactions ─────────────────────────────────────
-    // matchesRule() handles the fallback: supplier_name rules will also check
-    // description and details when the transaction has no supplier_name.
     const byCategory = new Map<string, string[]>(); // category_id → [tx_id, ...]
     for (const tx of allTransactions) {
       for (const rule of rules as CategoryRule[]) {
@@ -275,15 +282,12 @@ export async function POST(request: NextRequest) {
     let allSplits: SplitRow[] = [];
     let splitOffset = 0;
     while (true) {
-      let sq = supabase
+      const { data: splitBatch } = await supabase
         .from("bank_transaction_splits")
         .select("id, description, supplier_name")
         .eq("company_id", companyId)
+        .is("category_id", null)
         .range(splitOffset, splitOffset + FETCH_BATCH - 1);
-
-      if (!forceAll) sq = sq.is("category_id", null);
-
-      const { data: splitBatch } = await sq;
 
       if (!splitBatch || splitBatch.length === 0) break;
       allSplits = allSplits.concat(splitBatch as SplitRow[]);
