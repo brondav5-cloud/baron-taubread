@@ -199,6 +199,10 @@ export async function POST(request: NextRequest) {
       .eq("is_active", true)
       .order("priority", { ascending: false });
 
+    // In this API, only category_override = "manual" is treated as locked.
+    // Any other value (or null) is considered reclassifiable.
+    const unlockedFilter = "category_override.is.null,category_override.neq.manual";
+
     // In force_auto mode: first wipe all non-locked category assignments so that
     // transactions which no longer match any rule end up uncategorized (null).
     if (forceAll) {
@@ -206,7 +210,7 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId)
-        .is("category_override", null);
+        .or(unlockedFilter);
 
       await supabase
         .from("bank_transaction_splits")
@@ -233,8 +237,8 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
+        .or(unlockedFilter)
         .is("category_id", null)
-        .is("category_override", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
 
@@ -276,7 +280,7 @@ export async function POST(request: NextRequest) {
           .update({ category_id: catId })
           .in("id", chunk)
           .eq("company_id", companyId)
-          .is("category_override", null);
+          .or(unlockedFilter);
         if (!upErr) classified += chunk.length;
       }
     }
