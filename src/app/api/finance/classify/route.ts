@@ -199,10 +199,6 @@ export async function POST(request: NextRequest) {
       .eq("is_active", true)
       .order("priority", { ascending: false });
 
-    if (!rules || rules.length === 0) {
-      return NextResponse.json({ ok: true, classified: 0, message: "אין כללי סיווג" });
-    }
-
     // In force_auto mode: first wipe all non-locked category assignments so that
     // transactions which no longer match any rule end up uncategorized (null).
     if (forceAll) {
@@ -216,6 +212,16 @@ export async function POST(request: NextRequest) {
         .from("bank_transaction_splits")
         .update({ category_id: null })
         .eq("company_id", companyId);
+    }
+
+    if (!rules || rules.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        classified: 0,
+        message: forceAll
+          ? "לא קיימים כללים פעילים — הסיווגים נוקו מתנועות לא נעולות"
+          : "אין כללי סיווג",
+      });
     }
 
     // Fetch transactions: if force_auto, fetch all non-locked; otherwise only unclassified
