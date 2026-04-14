@@ -169,6 +169,7 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [classifying, setClassifying] = useState(false);
   const [forceClassifying, setForceClassifying] = useState(false);
+  const [clearingUnlocked, setClearingUnlocked] = useState(false);
   const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
   const [backfillingSuppliers, setBackfillingSuppliers] = useState(false);
@@ -262,13 +263,20 @@ export default function CategoriesPage() {
 
   const handleSaveRule = useCallback(async () => {
     if (!editingRuleId) return;
+    const cleanedValue = editValue.trim();
+    if (!cleanedValue) return;
     setSavingEdit(true);
     try {
-      await fetch("/api/finance/categories/rules", {
+      const res = await fetch("/api/finance/categories/rules", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingRuleId, match_field: editField, match_type: editType, match_value: editValue }),
+        body: JSON.stringify({ id: editingRuleId, match_field: editField, match_type: editType, match_value: cleanedValue }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setClassifyResult((data as { error?: string }).error ?? "שגיאה בעדכון כלל");
+        return;
+      }
       setEditingRuleId(null);
       await load();
     } finally {
@@ -282,14 +290,20 @@ export default function CategoriesPage() {
   }, [load]);
 
   const handleAddRule = useCallback(async (catId: string) => {
-    if (!addRuleValue.trim()) return;
+    const cleanedValue = addRuleValue.trim();
+    if (!cleanedValue) return;
     setSavingAddRule(true);
     try {
-      await fetch("/api/finance/categories/rules", {
+      const res = await fetch("/api/finance/categories/rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ category_id: catId, match_field: addRuleField, match_type: "contains", match_value: addRuleValue.trim() }),
+        body: JSON.stringify({ category_id: catId, match_field: addRuleField, match_type: "contains", match_value: cleanedValue }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setClassifyResult((data as { error?: string }).error ?? "שגיאה בהוספת כלל");
+        return;
+      }
       setAddingRuleCatId(null);
       setAddRuleValue("");
       await load();
@@ -336,6 +350,27 @@ export default function CategoriesPage() {
       );
     } finally {
       setForceClassifying(false);
+    }
+  }, []);
+
+  const handleClearUnlockedClassifications = useCallback(async () => {
+    if (!confirm("לאפס את כל הסיווגים הלא-נעולים ל\"ללא סיווג\"?\n(תנועות נעולות ידנית לא ישתנו)")) return;
+    setClearingUnlocked(true);
+    setClassifyResult(null);
+    try {
+      const res = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "clear_unlocked" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setClassifyResult((data as { error?: string }).error ?? "שגיאה באיפוס סיווגים");
+        return;
+      }
+      setClassifyResult(`אופסו ${(data as { cleared?: number }).cleared ?? 0} סיווגים לא-נעולים`);
+    } finally {
+      setClearingUnlocked(false);
     }
   }, []);
 
@@ -413,7 +448,7 @@ export default function CategoriesPage() {
           </button>
           <button
             onClick={handleAutoClassify}
-            disabled={classifying || forceClassifying}
+            disabled={classifying || forceClassifying || clearingUnlocked}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
           >
             {classifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
@@ -421,12 +456,21 @@ export default function CategoriesPage() {
           </button>
           <button
             onClick={() => { void handleForceClassify(); }}
-            disabled={classifying || forceClassifying}
+            disabled={classifying || forceClassifying || clearingUnlocked}
             title="מסווג מחדש את כל התנועות (כולל מסווגות) — נעולות ידנית לא ישתנו"
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
           >
             {forceClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
             סווג מחדש הכל
+          </button>
+          <button
+            onClick={() => { void handleClearUnlockedClassifications(); }}
+            disabled={classifying || forceClassifying || clearingUnlocked}
+            title="מאפס סיווגים לכל התנועות הלא-נעולות, בלי להחיל כללים"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
+          >
+            {clearingUnlocked ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+            אפס לא מסווג
           </button>
         </div>
       </div>

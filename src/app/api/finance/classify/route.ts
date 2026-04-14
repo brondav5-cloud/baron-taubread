@@ -39,6 +39,26 @@ interface BankTx {
   supplier_name: string | null;
 }
 
+function normalizeRuleValue(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function containsByTokenBoundary(haystack: string, needle: string): boolean {
+  const escaped = escapeRegex(needle);
+  try {
+    // Match only whole token/phrase boundaries to avoid false positives
+    // such as "גל" matching inside "דיגיטל".
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "iu");
+    return re.test(haystack);
+  } catch {
+    return haystack.toLowerCase().includes(needle.toLowerCase());
+  }
+}
+
 async function transactionHasSplits(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,
@@ -58,18 +78,27 @@ function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
   // preventing false positives from description/details accidentally matching.
   const fieldsToCheck: MatchField[] = [rule.match_field];
 
-  const needle = rule.match_value.toLowerCase();
+  const normalizedValue = normalizeRuleValue(rule.match_value);
+  if (!normalizedValue) return false;
+
+  // Very short "contains/starts_with" rules are too broad and create
+  // accidental matches. Ignore them during auto-classification.
+  if ((rule.match_type === "contains" || rule.match_type === "starts_with") && normalizedValue.length < 2) {
+    return false;
+  }
+
+  const needle = normalizedValue.toLowerCase();
 
   for (const field of fieldsToCheck) {
     const haystack = (tx[field] ?? "").toLowerCase();
     if (!haystack) continue;
     let matched = false;
     switch (rule.match_type) {
-      case "contains":    matched = haystack.includes(needle); break;
+      case "contains":    matched = containsByTokenBoundary(tx[field] ?? "", normalizedValue); break;
       case "starts_with": matched = haystack.startsWith(needle); break;
       case "exact":       matched = haystack === needle; break;
       case "regex": {
-        try { matched = new RegExp(rule.match_value, "i").test(tx[field] ?? ""); }
+        try { matched = new RegExp(normalizedValue, "i").test(tx[field] ?? ""); }
         catch { matched = false; }
         break;
       }
@@ -90,6 +119,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const supabase = getSupabaseAdmin();
+    // In this API, only category_override = "manual" is treated as locked.
+    // Any other value (or null) is considered reclassifiable.
+    const unlockedFilter = "category_override.is.null,category_override.neq.manual";
 
     // ── Manual set (category only — lock icon uses category_override via mode "lock") ──
     if (body.mode === "manual") {
@@ -186,6 +218,31 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // ── Clear all non-locked classifications (no reclassify) ──────────────────
+    if (body.mode === "clear_unlocked") {
+      const { data: txRows, error: txErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_id: null })
+        .eq("company_id", companyId)
+        .or(unlockedFilter)
+        .not("category_id", "is", null)
+        .select("id");
+      if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 });
+
+      const { data: splitRows, error: splitErr } = await supabase
+        .from("bank_transaction_splits")
+        .update({ category_id: null })
+        .eq("company_id", companyId)
+        .not("category_id", "is", null)
+        .select("id");
+      if (splitErr) return NextResponse.json({ error: splitErr.message }, { status: 500 });
+
+      return NextResponse.json({
+        ok: true,
+        cleared: (txRows?.length ?? 0) + (splitRows?.length ?? 0),
+      });
+    }
+
     // ── Auto classify ─────────────────────────────────────────────────────────
     // mode "force_auto" → re-classify ALL transactions (except manually locked ones)
     // mode "auto"       → classify only unclassified transactions
@@ -198,10 +255,6 @@ export async function POST(request: NextRequest) {
       .eq("company_id", companyId)
       .eq("is_active", true)
       .order("priority", { ascending: false });
-
-    // In this API, only category_override = "manual" is treated as locked.
-    // Any other value (or null) is considered reclassifiable.
-    const unlockedFilter = "category_override.is.null,category_override.neq.manual";
 
     // In force_auto mode: first wipe all non-locked category assignments so that
     // transactions which no longer match any rule end up uncategorized (null).
