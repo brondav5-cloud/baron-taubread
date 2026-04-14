@@ -39,19 +39,6 @@ interface BankTx {
   supplier_name: string | null;
 }
 
-async function hasCategoryOverrideColumn(
-  supabase: ReturnType<typeof getSupabaseAdmin>,
-  companyId: string
-): Promise<boolean> {
-  const { error } = await supabase
-    .from("bank_transactions")
-    .select("id, category_override")
-    .eq("company_id", companyId)
-    .limit(1);
-  if (!error) return true;
-  return !/category_override/i.test(error.message ?? "");
-}
-
 function normalizeRuleValue(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -132,10 +119,6 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json();
     const supabase = getSupabaseAdmin();
-    const hasCategoryOverride = await hasCategoryOverrideColumn(supabase, companyId);
-    // In this API, only category_override = "manual" is treated as locked.
-    // Any other value (or null) is considered reclassifiable.
-    const unlockedFilter = "category_override.is.null,category_override.neq.manual";
 
     // ── Manual set (category only — lock icon uses category_override via mode "lock") ──
     if (body.mode === "manual") {
@@ -149,11 +132,9 @@ export async function POST(request: NextRequest) {
       }
 
       const cid = category_id || null;
-      const payload: { category_id: string | null; category_override?: null } = cid
+      const payload: { category_id: string | null } = cid
         ? { category_id: cid }
-        : hasCategoryOverride
-          ? { category_id: null, category_override: null }
-          : { category_id: null };
+        : { category_id: null };
 
       await supabase
         .from("bank_transactions")
@@ -166,61 +147,18 @@ export async function POST(request: NextRequest) {
 
     // ── Lock current category (manual persist) ────────────────────────────────
     if (body.mode === "lock") {
-      if (!hasCategoryOverride) {
-        return NextResponse.json({ ok: true, message: "manual lock not supported in current schema" });
-      }
-      const { tx_id } = body;
-      if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
-      if (await transactionHasSplits(supabase, companyId, tx_id)) {
-        return NextResponse.json(
-          { error: "לא ניתן לנעול סיווג ראשי כשיש פיצול פעיל." },
-          { status: 409 }
-        );
-      }
-
-      const { error: lockErr } = await supabase
-        .from("bank_transactions")
-        .update({ category_override: "manual" })
-        .eq("id", tx_id)
-        .eq("company_id", companyId)
-        .not("category_id", "is", null);
-
-      if (lockErr) return NextResponse.json({ error: lockErr.message }, { status: 500 });
-      return NextResponse.json({ ok: true });
+      // Schema compatibility: category_override may not exist.
+      // Keep endpoint successful without failing classification flows.
+      return NextResponse.json({ ok: true, message: "manual lock not supported in current schema" });
     }
 
     // ── Clear manual lock only (keep category) ───────────────────────────────
     if (body.mode === "unlock_manual") {
-      if (!hasCategoryOverride) {
-        return NextResponse.json({ ok: true });
-      }
-      if (!body.tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
-
-      const { error: unErr } = await supabase
-        .from("bank_transactions")
-        .update({ category_override: null })
-        .eq("id", body.tx_id)
-        .eq("company_id", companyId);
-
-      if (unErr) return NextResponse.json({ error: unErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 
     // ── Clear lock flags company-wide (categories unchanged) ─────────────────
     if (body.mode === "unlock_all_manual_flags") {
-      if (!hasCategoryOverride) {
-        return NextResponse.json({ ok: true });
-      }
-      if (body.confirm !== true) {
-        return NextResponse.json({ error: "נדרש confirm: true" }, { status: 400 });
-      }
-      const { error: bulkErr } = await supabase
-        .from("bank_transactions")
-        .update({ category_override: null })
-        .eq("company_id", companyId)
-        .eq("category_override", "manual");
-
-      if (bulkErr) return NextResponse.json({ error: bulkErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 
@@ -236,7 +174,7 @@ export async function POST(request: NextRequest) {
 
       await supabase
         .from("bank_transactions")
-        .update(hasCategoryOverride ? { category_id: null, category_override: null } : { category_id: null })
+        .update({ category_id: null })
         .eq("id", body.tx_id)
         .eq("company_id", companyId);
 
@@ -245,14 +183,12 @@ export async function POST(request: NextRequest) {
 
     // ── Clear all non-locked classifications (no reclassify) ──────────────────
     if (body.mode === "clear_unlocked") {
-      let txQuery = supabase
+      const { data: txRows, error: txErr } = await supabase
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId)
         .not("category_id", "is", null)
         .select("id");
-      if (hasCategoryOverride) txQuery = txQuery.or(unlockedFilter);
-      const { data: txRows, error: txErr } = await txQuery;
       if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 });
 
       const { data: splitRows, error: splitErr } = await supabase
@@ -285,12 +221,10 @@ export async function POST(request: NextRequest) {
     // In force_auto mode: first wipe all non-locked category assignments so that
     // transactions which no longer match any rule end up uncategorized (null).
     if (forceAll) {
-      let clearTxQuery = supabase
+      await supabase
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId);
-      if (hasCategoryOverride) clearTxQuery = clearTxQuery.or(unlockedFilter);
-      await clearTxQuery;
 
       await supabase
         .from("bank_transaction_splits")
@@ -313,15 +247,13 @@ export async function POST(request: NextRequest) {
     let offset = 0;
     const FETCH_BATCH = 1000;
     while (true) {
-      let fetchTxQuery = supabase
+      const { data: batch } = await supabase
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
         .is("category_id", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
-      if (hasCategoryOverride) fetchTxQuery = fetchTxQuery.or(unlockedFilter);
-      const { data: batch } = await fetchTxQuery;
 
       if (!batch || batch.length === 0) break;
       allTransactions = allTransactions.concat(batch as BankTx[]);
@@ -356,13 +288,11 @@ export async function POST(request: NextRequest) {
       const ids = byCategory.get(catId) ?? [];
       for (let i = 0; i < ids.length; i += 1000) {
         const chunk = ids.slice(i, i + 1000);
-        let upQuery = supabase
+        const { error: upErr } = await supabase
           .from("bank_transactions")
           .update({ category_id: catId })
           .in("id", chunk)
           .eq("company_id", companyId);
-        if (hasCategoryOverride) upQuery = upQuery.or(unlockedFilter);
-        const { error: upErr } = await upQuery;
         if (!upErr) classified += chunk.length;
       }
     }
