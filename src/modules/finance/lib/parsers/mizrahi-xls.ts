@@ -12,17 +12,24 @@ function readFileAsText(file: File, encoding: string): Promise<string> {
 }
 
 /** DD/MM/YY | DD/MM/YYYY | DD.MM.YY | DD.MM.YYYY → YYYY-MM-DD */
-function parseDDMMYY(s: string): string {
-  const sep = s.includes("/") ? "/" : s.includes(".") ? "." : null;
-  if (!sep) return s;
-  const [dd, mm, yearPart] = s.split(sep);
-  if (!dd || !mm || !yearPart) return s;
+function parseDDMMYY(s: string): string | null {
+  const raw = s.trim();
+  const m = raw.match(/^(\d{1,2})[/.](\d{1,2})[/.](\d{2}|\d{4})(?:\s|$)/);
+  if (!m) return null;
+
+  const dd = parseInt(m[1] ?? "", 10);
+  const mm = parseInt(m[2] ?? "", 10);
+  const yearPart = m[3] ?? "";
   const yearNum = parseInt(yearPart, 10);
-  if (!Number.isFinite(yearNum)) return s;
+
+  if (!Number.isFinite(dd) || !Number.isFinite(mm) || !Number.isFinite(yearNum)) return null;
+  if (dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+
   const year = yearPart.length === 2
     ? yearNum + (yearNum < 50 ? 2000 : 1900)
     : yearNum;
-  return `${year}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+
+  return `${year}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
 }
 
 function parseAmount(s: string): number {
@@ -123,10 +130,11 @@ export async function parseMizrahiXLS(file: File): Promise<BankParseResult> {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i] ?? [];
     const dateRaw = col.date >= 0 ? (row[col.date] ?? "") : "";
-    if (!dateRaw || (!dateRaw.includes("/") && !dateRaw.includes("."))) continue;
+    if (!dateRaw) continue;
 
     try {
       const isoDate = parseDDMMYY(dateRaw);
+      if (!isoDate) continue;
 
       if (!dateFrom || isoDate < dateFrom) dateFrom = isoDate;
       if (!dateTo || isoDate > dateTo) dateTo = isoDate;
