@@ -52,10 +52,11 @@ export function ClassificationSearchPanel({ query, onQueryChange, isLoading, res
                 <span>·</span>
                 <span>{row.kind === "split" ? "פיצול" : "תנועה"}</span>
                 <span>·</span>
-                <span className="font-medium text-gray-700">{row.category_name}</span>
+                <span className="font-medium text-gray-700">{row.category_name || "ללא סיווג"}</span>
               </div>
               <p className="text-sm text-gray-800 mt-1">{row.description}</p>
               {row.supplier_name && <p className="text-xs text-blue-600 mt-1">ספק: {row.supplier_name}</p>}
+              {row.match_reason && <p className="text-[11px] text-amber-700 mt-1">{row.match_reason}</p>}
               <div className="flex items-center justify-between mt-1">
                 <span className="text-xs text-purple-700 bg-purple-50 border border-purple-100 rounded px-2 py-0.5">
                   {classificationSourceLabel(row.matched_by)}

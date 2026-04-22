@@ -1,28 +1,11 @@
 import type { BankCategory } from "@/modules/finance/types";
+import { baseSupplierKey, normalizeSupplierDisplay } from "@/modules/finance/classification/match";
 import type {
   CategoryRuleView,
   ClassificationSource,
   SupplierRuleConflict,
   SupplierSimilarityWarning,
 } from "./types";
-
-function normalizeSupplierValue(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/["'`׳״]/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function baseSupplierValue(value: string): string {
-  return normalizeSupplierValue(value)
-    .replace(/\bבעמ\b/g, "")
-    .replace(/\bבע\s?מ\b/g, "")
-    .replace(/\b(בע"מ|בע''מ|בע׳׳מ)\b/g, "")
-    .replace(/\bחברה\b/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 export function buildSupplierRuleConflicts(
   rules: CategoryRuleView[],
@@ -33,7 +16,7 @@ export function buildSupplierRuleConflicts(
   const grouped = new Map<string, CategoryRuleView[]>();
 
   for (const rule of supplierRules) {
-    const key = normalizeSupplierValue(rule.match_value);
+    const key = normalizeSupplierDisplay(rule.match_value);
     if (!key) continue;
     const list = grouped.get(key) ?? [];
     list.push(rule);
@@ -72,8 +55,8 @@ export function buildSupplierSimilarityWarnings(
   >();
 
   for (const rule of supplierRules) {
-    const normalized = normalizeSupplierValue(rule.match_value);
-    const base = baseSupplierValue(rule.match_value);
+    const normalized = normalizeSupplierDisplay(rule.match_value);
+    const base = baseSupplierKey(rule.match_value);
     if (!normalized || !base) continue;
     const group = byBase.get(base) ?? {
       variants: new Set<string>(),

@@ -282,6 +282,7 @@ function InlineCategorySelect({
   hasSplits,
   onClassify,
   onCategoryAdded,
+  onApplySimilarDone,
 }: {
   tx: BankTransaction;
   categories: BankCategory[];
@@ -289,6 +290,7 @@ function InlineCategorySelect({
   hasSplits: boolean;
   onClassify?: (txId: string, catId: string | null) => Promise<void>;
   onCategoryAdded?: (cat: BankCategory) => void;
+  onApplySimilarDone?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -418,11 +420,11 @@ function InlineCategorySelect({
     }
   };
 
-  const handleCreateRule = async () => {
+  const handleCreateRule = async (applyNow = false) => {
     if (!localCatId || !ruleMatchValue.trim()) return;
     setSavingRule(true);
     try {
-      await fetch("/api/finance/categories/rules", {
+      const ruleRes = await fetch("/api/finance/categories/rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -432,6 +434,15 @@ function InlineCategorySelect({
           match_value: ruleMatchValue.trim(),
         }),
       });
+      if (!ruleRes.ok) return;
+      if (applyNow) {
+        await fetch("/api/finance/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mode: "auto" }),
+        });
+        onApplySimilarDone?.();
+      }
     } finally {
       setSavingRule(false);
       setShowRulePrompt(false);
@@ -771,7 +782,7 @@ function InlineCategorySelect({
             type="text"
             value={ruleMatchValue}
             onChange={(e) => setRuleMatchValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleCreateRule(); if (e.key === "Escape") setShowRulePrompt(false); }}
+            onKeyDown={(e) => { if (e.key === "Enter") { void handleCreateRule(false); } if (e.key === "Escape") setShowRulePrompt(false); }}
             placeholder="ערך לחיפוש..."
             className="w-full border border-purple-200 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-purple-400 bg-white"
           />
@@ -779,12 +790,19 @@ function InlineCategorySelect({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCreateRule}
+              onClick={() => { void handleCreateRule(false); }}
               disabled={savingRule || !ruleMatchValue.trim()}
               className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
             >
               {savingRule && <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />}
               צור כלל
+            </button>
+            <button
+              onClick={() => { void handleCreateRule(true); }}
+              disabled={savingRule || !ruleMatchValue.trim()}
+              className="flex items-center gap-1.5 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
+            >
+              צור כלל + החל עכשיו
             </button>
             <button
               onClick={() => setShowRulePrompt(false)}
@@ -855,6 +873,8 @@ interface Props {
   onToggleClassifyCol?: () => void;
   /** Open supplier insights side panel (same as from transaction detail) */
   onOpenSupplierInsights?: (key: string, displayName: string) => void;
+  /** Called after inline rule is created and auto-applied */
+  onApplySimilarDone?: () => void;
 }
 
 function SortIcon({ col, sortBy, sortDir }: { col: SortBy; sortBy?: SortBy; sortDir?: SortDir }) {
@@ -887,6 +907,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   showClassifyCol = true,
   onToggleClassifyCol,
   onOpenSupplierInsights,
+  onApplySimilarDone,
 }: Props) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
@@ -1463,6 +1484,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                             hasSplits={isSplitLine ? false : splitCount > 0}
                             onClassify={onClassify}
                             onCategoryAdded={onCategoryAdded}
+                            onApplySimilarDone={onApplySimilarDone}
                           />
                         ) : (
                           cat && (

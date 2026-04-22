@@ -17,9 +17,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
-
-type MatchField = "description" | "details" | "reference" | "operation_code" | "supplier_name";
-type MatchType = "contains" | "starts_with" | "exact" | "regex";
+import {
+  matchesRuleNormalized,
+  normalizeForMatch,
+  type MatchField,
+  type MatchType,
+} from "@/modules/finance/classification/match";
 
 interface CategoryRule {
   id: string;
@@ -48,26 +51,6 @@ interface ReviewCandidate {
   reason: string;
 }
 
-function normalizeRuleValue(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function containsByTokenBoundary(haystack: string, needle: string): boolean {
-  const escaped = escapeRegex(needle);
-  try {
-    // Match only whole token/phrase boundaries to avoid false positives
-    // such as "גל" matching inside "דיגיטל".
-    const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "iu");
-    return re.test(haystack);
-  } catch {
-    return haystack.toLowerCase().includes(needle.toLowerCase());
-  }
-}
-
 async function transactionHasSplits(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,
@@ -82,12 +65,7 @@ async function transactionHasSplits(
 }
 
 function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
-  // Only check the exact field defined in the rule — no fallback.
-  // A rule on "supplier_name" will NOT match a transaction that has no supplier_name,
-  // preventing false positives from description/details accidentally matching.
-  const fieldsToCheck: MatchField[] = [rule.match_field];
-
-  const normalizedValue = normalizeRuleValue(rule.match_value);
+  const normalizedValue = normalizeForMatch(rule.match_value);
   if (!normalizedValue) return false;
 
   // Very short "contains/starts_with" rules are too broad and create
@@ -95,26 +73,7 @@ function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
   if ((rule.match_type === "contains" || rule.match_type === "starts_with") && normalizedValue.length < 2) {
     return false;
   }
-
-  const needle = normalizedValue.toLowerCase();
-
-  for (const field of fieldsToCheck) {
-    const haystack = (tx[field] ?? "").toLowerCase();
-    if (!haystack) continue;
-    let matched = false;
-    switch (rule.match_type) {
-      case "contains":    matched = containsByTokenBoundary(tx[field] ?? "", normalizedValue); break;
-      case "starts_with": matched = haystack.startsWith(needle); break;
-      case "exact":       matched = haystack === needle; break;
-      case "regex": {
-        try { matched = new RegExp(normalizedValue, "i").test(tx[field] ?? ""); }
-        catch { matched = false; }
-        break;
-      }
-    }
-    if (matched) return true;
-  }
-  return false;
+  return matchesRuleNormalized(tx, rule);
 }
 
 function isGenericDescription(text: string): boolean {
@@ -135,7 +94,7 @@ function isGenericDescription(text: string): boolean {
 }
 
 function isReviewCandidate(tx: BankTx, rule: CategoryRule): string | null {
-  const normalizedRuleValue = normalizeRuleValue(rule.match_value);
+  const normalizedRuleValue = normalizeForMatch(rule.match_value);
   if (rule.match_field === "description" && isGenericDescription(tx.description ?? "")) {
     return "תיאור תנועה כללי — מומלץ לבדוק שהסיווג מדויק";
   }

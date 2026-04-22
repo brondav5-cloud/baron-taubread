@@ -432,6 +432,7 @@ function FinancePageInner() {
         showClassifyCol={showClassifyCol}
         onToggleClassifyCol={handleToggleClassifyCol}
         onOpenSupplierInsights={(key, name) => setOpenSupplier({ key, name })}
+        onApplySimilarDone={hook.refresh}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}

@@ -36,8 +36,9 @@ export interface ClassifiedTransactionRow {
   description: string;
   supplier_name: string | null;
   amount: number;
-  category_id: string;
+  category_id: string | null;
   category_name: string;
   matched_by: ClassificationSource;
   matched_rule_value: string | null;
+  match_reason?: string;
 }

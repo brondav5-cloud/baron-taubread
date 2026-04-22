@@ -4,9 +4,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
 import type { ClassificationSource } from "@/modules/finance/categories/types";
-
-type MatchField = "description" | "details" | "reference" | "operation_code" | "supplier_name";
-type MatchType = "contains" | "starts_with" | "exact" | "regex";
+import {
+  matchesRuleNormalized,
+  normalizeForMatch,
+  type MatchField,
+  type MatchType,
+} from "@/modules/finance/classification/match";
 
 interface CategoryRule {
   id: string;
@@ -27,7 +30,7 @@ interface TxRow {
   details: string;
   reference: string;
   operation_code: string | null;
-  category_id: string;
+  category_id: string | null;
   category_override: string | null;
 }
 
@@ -37,54 +40,15 @@ interface SplitRow {
   description: string;
   supplier_name: string | null;
   amount: number;
-  category_id: string;
-}
-
-function normalize(value: string): string {
-  return value.trim().replace(/\s+/g, " ");
-}
-
-function escapeRegex(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function containsByTokenBoundary(haystack: string, needle: string): boolean {
-  const escaped = escapeRegex(needle);
-  try {
-    const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`, "iu");
-    return re.test(haystack);
-  } catch {
-    return haystack.toLowerCase().includes(needle.toLowerCase());
-  }
+  category_id: string | null;
 }
 
 type MatchableRow = Partial<Record<MatchField, string | null | undefined>>;
 
 function matchesRule(row: MatchableRow, rule: CategoryRule): boolean {
-  const normalizedValue = normalize(rule.match_value);
+  const normalizedValue = normalizeForMatch(rule.match_value);
   if (!normalizedValue) return false;
-
-  const haystackRaw = row[rule.match_field] ?? "";
-  const haystack = String(haystackRaw).toLowerCase();
-  if (!haystack) return false;
-  const needle = normalizedValue.toLowerCase();
-
-  switch (rule.match_type) {
-    case "contains":
-      return containsByTokenBoundary(String(haystackRaw), normalizedValue);
-    case "starts_with":
-      return haystack.startsWith(needle);
-    case "exact":
-      return haystack === needle;
-    case "regex":
-      try {
-        return new RegExp(normalizedValue, "i").test(String(haystackRaw));
-      } catch {
-        return false;
-      }
-    default:
-      return false;
-  }
+  return matchesRuleNormalized(row, rule);
 }
 
 function sourceFromField(field: MatchField): ClassificationSource {
@@ -96,7 +60,7 @@ function sourceFromField(field: MatchField): ClassificationSource {
 }
 
 function normalizeLoose(value: string): string {
-  return value.toLowerCase().replace(/["'`׳״]/g, "").replace(/\s+/g, " ").trim();
+  return normalizeForMatch(value);
 }
 
 export async function GET(request: NextRequest) {
@@ -134,7 +98,10 @@ export async function GET(request: NextRequest) {
       ])
     );
 
-    const getRuleMatch = (row: MatchableRow, catId: string): { source: ClassificationSource; value: string | null } => {
+    const getRuleMatch = (
+      row: MatchableRow,
+      catId: string
+    ): { source: ClassificationSource; value: string | null } => {
       const catRules = allRules.filter((r) => r.category_id === catId);
       for (const rule of catRules) {
         if (matchesRule(row, rule)) {
@@ -142,6 +109,20 @@ export async function GET(request: NextRequest) {
         }
       }
       return { source: "manual_or_unknown", value: null };
+    };
+    const getBestRuleMatch = (
+      row: MatchableRow
+    ): { source: ClassificationSource; value: string | null; category_id: string | null } => {
+      for (const rule of allRules) {
+        if (matchesRule(row, rule)) {
+          return {
+            source: sourceFromField(rule.match_field),
+            value: rule.match_value,
+            category_id: rule.category_id,
+          };
+        }
+      }
+      return { source: "manual_or_unknown", value: null, category_id: null };
     };
 
     if (categoryId) {
@@ -176,9 +157,10 @@ export async function GET(request: NextRequest) {
 
       const txView = ((txRows ?? []) as TxRow[]).map((row) => {
         const amount = Number(row.debit) > 0 ? Number(row.debit) : Number(row.credit);
+        const rowCategoryId = row.category_id ?? categoryId;
         const matched = row.category_override === "manual"
           ? { source: "manual_or_unknown" as ClassificationSource, value: null }
-          : getRuleMatch(row, row.category_id);
+          : getRuleMatch(row, rowCategoryId);
         return {
           id: row.id,
           kind: "transaction",
@@ -186,19 +168,20 @@ export async function GET(request: NextRequest) {
           description: row.description ?? "",
           supplier_name: row.supplier_name ?? null,
           amount,
-          category_id: row.category_id,
-          category_name: categoryMap.get(row.category_id) ?? "",
+          category_id: rowCategoryId,
+          category_name: categoryMap.get(rowCategoryId) ?? "",
           matched_by: matched.source,
           matched_rule_value: matched.value,
         };
       });
 
       const splitView = ((splitRows ?? []) as SplitRow[]).map((row) => {
-        const splitRuleKey = `${normalizeLoose(row.description ?? "")}::${row.category_id}`;
+        const rowCategoryId = row.category_id ?? categoryId;
+        const splitRuleKey = `${normalizeLoose(row.description ?? "")}::${rowCategoryId}`;
         const splitRuleValue = splitRuleMap.get(splitRuleKey) ?? null;
         const fallback = getRuleMatch(
           { description: row.description, supplier_name: row.supplier_name },
-          row.category_id
+          rowCategoryId
         );
         return {
           id: row.id,
@@ -207,8 +190,8 @@ export async function GET(request: NextRequest) {
           description: row.description ?? "",
           supplier_name: row.supplier_name ?? null,
           amount: Number(row.amount) || 0,
-          category_id: row.category_id,
-          category_name: categoryMap.get(row.category_id) ?? "",
+          category_id: rowCategoryId,
+          category_name: categoryMap.get(rowCategoryId) ?? "",
           matched_by: splitRuleValue ? ("split_rule" as ClassificationSource) : fallback.source,
           matched_rule_value: splitRuleValue ?? fallback.value,
         };
@@ -230,7 +213,6 @@ export async function GET(request: NextRequest) {
         .from("bank_transactions")
         .select("id,date,description,supplier_name,debit,credit,details,reference,operation_code,category_id,category_override")
         .eq("company_id", companyId)
-        .not("category_id", "is", null)
         .or(`description.ilike.${like},supplier_name.ilike.${like}`)
         .order("date", { ascending: false })
         .limit(limit),
@@ -238,7 +220,6 @@ export async function GET(request: NextRequest) {
         .from("bank_transaction_splits")
         .select("id,transaction_id,description,supplier_name,amount,category_id")
         .eq("company_id", companyId)
-        .not("category_id", "is", null)
         .or(`description.ilike.${like},supplier_name.ilike.${like}`)
         .order("created_at", { ascending: false })
         .limit(limit),
@@ -255,9 +236,12 @@ export async function GET(request: NextRequest) {
     const parentDateMap = new Map((splitParents ?? []).map((p) => [p.id, p.date]));
 
     const txView = ((txRows ?? []) as TxRow[]).map((row) => {
-      const matched = row.category_override === "manual"
-        ? { source: "manual_or_unknown" as ClassificationSource, value: null }
-        : getRuleMatch(row, row.category_id);
+      const resolved = row.category_id
+        ? (row.category_override === "manual"
+          ? { source: "manual_or_unknown" as ClassificationSource, value: null, category_id: row.category_id }
+          : { ...getRuleMatch(row, row.category_id), category_id: row.category_id })
+        : getBestRuleMatch(row);
+      const resolvedCategoryId = resolved.category_id ?? row.category_id ?? null;
       return {
         id: row.id,
         kind: "transaction",
@@ -265,20 +249,22 @@ export async function GET(request: NextRequest) {
         description: row.description ?? "",
         supplier_name: row.supplier_name ?? null,
         amount: Number(row.debit) > 0 ? Number(row.debit) : Number(row.credit),
-        category_id: row.category_id,
-        category_name: categoryMap.get(row.category_id) ?? "",
-        matched_by: matched.source,
-        matched_rule_value: matched.value,
+        category_id: resolvedCategoryId,
+        category_name: resolvedCategoryId ? (categoryMap.get(resolvedCategoryId) ?? "") : "ללא סיווג",
+        matched_by: resolved.source,
+        matched_rule_value: resolved.value,
+        match_reason: resolvedCategoryId ? undefined : "לא נמצא כלל תואם לפי השדות שהוגדרו",
       };
     });
 
     const splitView = ((splitRows ?? []) as SplitRow[]).map((row) => {
       const splitRuleKey = `${normalizeLoose(row.description ?? "")}::${row.category_id}`;
       const splitRuleValue = splitRuleMap.get(splitRuleKey) ?? null;
-      const fallback = getRuleMatch(
-        { description: row.description, supplier_name: row.supplier_name },
-        row.category_id
-      );
+      const baseRow = { description: row.description, supplier_name: row.supplier_name };
+      const fallback = row.category_id
+        ? { ...getRuleMatch(baseRow, row.category_id), category_id: row.category_id }
+        : getBestRuleMatch(baseRow);
+      const resolvedCategoryId = row.category_id || fallback.category_id || null;
       return {
         id: row.id,
         kind: "split",
@@ -286,10 +272,11 @@ export async function GET(request: NextRequest) {
         description: row.description ?? "",
         supplier_name: row.supplier_name ?? null,
         amount: Number(row.amount) || 0,
-        category_id: row.category_id,
-        category_name: categoryMap.get(row.category_id) ?? "",
+        category_id: resolvedCategoryId,
+        category_name: resolvedCategoryId ? (categoryMap.get(resolvedCategoryId) ?? "") : "ללא סיווג",
         matched_by: splitRuleValue ? ("split_rule" as ClassificationSource) : fallback.source,
         matched_rule_value: splitRuleValue ?? fallback.value,
+        match_reason: resolvedCategoryId ? undefined : "לא נמצא כלל תואם לפי השדות שהוגדרו",
       };
     });
 
