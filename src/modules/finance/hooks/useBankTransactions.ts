@@ -104,7 +104,6 @@ export function useBankTransactions(): UseBankTransactionsReturn {
 
   const refresh = useCallback(() => {
     setRefreshCounter((c) => c + 1);
-    setPage(0);
   }, []);
 
   // Load bank accounts + categories (re-load when refreshCounter changes)
