@@ -29,7 +29,7 @@ export function CashRunwayCard() {
         .select("balance")
         .eq("company_id", selectedCompanyId)
         .not("balance", "is", null)
-        .order("date", { ascending: false })
+        .order("effective_date", { ascending: false })
         .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
@@ -56,7 +56,7 @@ export function CashRunwayCard() {
         .from("bank_transactions")
         .select("debit, credit")
         .eq("company_id", selectedCompanyId)
-        .gte("date", dateFrom)
+        .gte("effective_date", dateFrom)
         .in("category_id", expenseIds);
 
       const totalExpense = (txs ?? []).reduce(

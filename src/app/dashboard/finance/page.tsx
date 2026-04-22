@@ -36,16 +36,18 @@ function getMonthRange(year: number, month: number): { from: string; to: string 
 
 function buildDuplicateKey(tx: BankTransaction): string | null {
   if (tx.is_split_line) return null;
+  const txDate = tx.effective_date ?? tx.date;
   const reference = (tx.reference ?? "").trim();
   if (!reference) return null;
   const amount = Number(tx.debit) > 0 ? Number(tx.debit) : Number(tx.credit);
   if (!Number.isFinite(amount) || amount <= 0) return null;
-  return `${tx.date}\u0000${reference}\u0000${amount.toFixed(2)}`;
+  return `${txDate}\u0000${reference}\u0000${amount.toFixed(2)}`;
 }
 
 function FinancePageInner() {
   const { canAccess } = usePermissions();
-  const hook = useBankTransactions();
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+  const hook = useBankTransactions({ keepLogicalDuplicates: showDuplicatesOnly });
   const { state } = useSupabaseAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -67,7 +69,6 @@ function FinancePageInner() {
   });
   const [extraCategories, setExtraCategories] = useState<BankCategory[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
-  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
   const currentYear = new Date().getFullYear();
   const [selectedFilterYear, setSelectedFilterYear] = useState(currentYear);
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
@@ -266,16 +267,45 @@ function FinancePageInner() {
     }
   }, [hook]);
 
+  const handleShiftSelectedToPreviousDay = useCallback(async (selectedTxs: BankTransaction[]) => {
+    const ids = selectedTxs
+      .map((tx) => tx.id)
+      .filter((id) => !id.includes("::split::"));
+    if (ids.length === 0) return;
+
+    if (!window.confirm(`להזיז ${ids.length} תנועות ליום הקודם?\nהשיוך ישפיע על דוחות וספקים.`)) return;
+
+    const toastId = toast.loading("מעדכן שיוך תאריך...");
+    try {
+      const res = await fetch("/api/finance/transactions/reporting-date", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tx_ids: ids, mode: "shift_prev_day" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error((data as { error?: string }).error ?? "שגיאה בעדכון תאריך", { id: toastId });
+        return;
+      }
+      toast.success("התנועות שויכו ליום קודם", { id: toastId });
+      hook.refresh();
+    } catch {
+      toast.error("שגיאת רשת בעדכון תאריך", { id: toastId });
+    }
+  }, [hook]);
+
   // Fetch available years from bank_transactions
   useEffect(() => {
     if (!selectedCompanyId) return;
     const supabase = createClient();
     Promise.all([
-      supabase.from("bank_transactions").select("date").eq("company_id", selectedCompanyId).order("date", { ascending: true }).limit(1),
-      supabase.from("bank_transactions").select("date").eq("company_id", selectedCompanyId).order("date", { ascending: false }).limit(1),
+      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).order("effective_date", { ascending: true }).limit(1),
+      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).order("effective_date", { ascending: false }).limit(1),
     ]).then(([{ data: minData }, { data: maxData }]) => {
-      const minYear = minData?.[0] ? new Date((minData[0] as { date: string }).date).getFullYear() : currentYear;
-      const maxYear = maxData?.[0] ? new Date((maxData[0] as { date: string }).date).getFullYear() : currentYear;
+      const minRaw = (minData?.[0] as { effective_date?: string } | undefined)?.effective_date;
+      const maxRaw = (maxData?.[0] as { effective_date?: string } | undefined)?.effective_date;
+      const minYear = minRaw ? new Date(minRaw).getFullYear() : currentYear;
+      const maxYear = maxRaw ? new Date(maxRaw).getFullYear() : currentYear;
       const years: number[] = [];
       for (let y = maxYear; y >= minYear; y--) years.push(y);
       setAvailableYears(years.length > 0 ? years : [currentYear]);
@@ -290,13 +320,13 @@ function FinancePageInner() {
       const f = hook.filters;
       let query = supabase
         .from("bank_transactions")
-        .select("date,description,details,reference,debit,credit,balance,category_id,operation_code,source_bank")
+        .select("date,effective_date,description,details,reference,debit,credit,balance,category_id,operation_code,source_bank")
         .eq("company_id", selectedCompanyId)
-        .order("date", { ascending: false })
+        .order("effective_date", { ascending: false })
         .limit(5000);
 
-      if (f.dateFrom) query = query.gte("date", f.dateFrom);
-      if (f.dateTo) query = query.lte("date", f.dateTo);
+      if (f.dateFrom) query = query.gte("effective_date", f.dateFrom);
+      if (f.dateTo) query = query.lte("effective_date", f.dateTo);
       if (f.bankAccountId) query = query.eq("bank_account_id", f.bankAccountId);
       if (f.sourceBank) query = query.eq("source_bank", f.sourceBank);
       if (f.search.trim()) {
@@ -309,7 +339,8 @@ function FinancePageInner() {
 
       const catMap = Object.fromEntries(hook.categories.map((c) => [c.id, c.name]));
       const rows = data.map((tx) => ({
-        "תאריך": tx.date,
+        "תאריך": tx.effective_date ?? tx.date,
+        "תאריך מקורי": tx.date,
         "תיאור": tx.description,
         "פרטים": tx.details,
         "אסמכתא": tx.reference,
@@ -364,7 +395,7 @@ function FinancePageInner() {
             }`}
             title="זיהוי לפי תאריך + סכום + אסמכתא (בתוצאות המסוננות)"
           >
-            כפילויות ({duplicateTxIds.size})
+            {showDuplicatesOnly ? `כפילויות מוצגות (${duplicateTxIds.size})` : "כפילויות"}
           </button>
           <button
             onClick={() => setShowHistory((v) => !v)}
@@ -512,6 +543,9 @@ function FinancePageInner() {
         onApplySimilarDone={handleApplySimilarDone}
         duplicateTxIds={duplicateTxIds}
         onDeleteClick={(tx) => { void handleDeleteTransaction(tx); }}
+        emptyStateTitle={showDuplicatesOnly ? "לא נמצאו כפילויות בתוצאות הנוכחיות" : undefined}
+        emptyStateSubtitle={showDuplicatesOnly ? "הזיהוי נעשה לפי תאריך + סכום + אסמכתא." : undefined}
+        onShiftToPreviousDay={handleShiftSelectedToPreviousDay}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}

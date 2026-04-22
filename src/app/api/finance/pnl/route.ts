@@ -21,6 +21,7 @@ interface CategoryRow {
 interface TxRow {
   id: string;
   date: string;
+  effective_date: string;
   debit: number;
   credit: number;
   category_id: string | null;
@@ -96,13 +97,13 @@ function buildLines(
 
   // Build tx date map for split month-bucketing
   const txDateMap = new Map<string, string>();
-  for (const tx of transactions) txDateMap.set(tx.id, tx.date);
+  for (const tx of transactions) txDateMap.set(tx.id, tx.effective_date);
 
   // Process transactions — skip those handled via splits
   for (const tx of transactions) {
     if (splitTxIds.has(tx.id)) continue;
 
-    const ym = tx.date.slice(0, 7);
+    const ym = tx.effective_date.slice(0, 7);
     monthSet.add(ym);
     const catId = tx.category_id ?? null;
     const line = getOrCreate(catId);
@@ -186,29 +187,29 @@ export async function GET(request: NextRequest) {
         .eq("company_id", companyId),
       supabase
         .from("bank_transactions")
-        .select("id, date, debit, credit, category_id")
+        .select("id, date, effective_date, debit, credit, category_id")
         .eq("company_id", companyId)
-        .gte("date", dateFrom)
-        .lte("date", dateTo)
-        .order("date"),
+        .gte("effective_date", dateFrom)
+        .lte("effective_date", dateTo)
+        .order("effective_date"),
       supabase
         .from("bank_transactions")
         .select("debit, credit, category_id")
         .eq("company_id", companyId)
-        .gte("date", prevDateFrom)
-        .lte("date", prevDateTo),
+        .gte("effective_date", prevDateFrom)
+        .lte("effective_date", prevDateTo),
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
         .eq("company_id", companyId)
-        .gte("date", dateFrom)
-        .lte("date", dateTo),
+        .gte("effective_date", dateFrom)
+        .lte("effective_date", dateTo),
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
         .eq("company_id", companyId)
-        .gte("date", dateFrom)
-        .lte("date", dateTo)
+        .gte("effective_date", dateFrom)
+        .lte("effective_date", dateTo)
         .not("category_id", "is", null),
     ]);
 

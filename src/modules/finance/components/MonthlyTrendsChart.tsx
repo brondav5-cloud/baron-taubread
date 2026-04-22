@@ -75,9 +75,9 @@ export function MonthlyTrendsChart() {
           .eq("company_id", selectedCompanyId),
         supabase
           .from("bank_transactions")
-          .select("date, debit, credit, category_id")
+          .select("effective_date, debit, credit, category_id")
           .eq("company_id", selectedCompanyId)
-          .gte("date", dateFrom)
+          .gte("effective_date", dateFrom)
           .not("category_id", "is", null),
       ]);
 
@@ -98,7 +98,7 @@ export function MonthlyTrendsChart() {
       const buckets = new Map(months.map((m) => [m.key, { income: 0, expense: 0 }]));
 
       for (const tx of (txs ?? [])) {
-        const ym = tx.date.slice(0, 7);
+        const ym = tx.effective_date.slice(0, 7);
         if (!buckets.has(ym)) continue;
         const type = tx.category_id ? catType.get(tx.category_id) : null;
         const b = buckets.get(ym)!;

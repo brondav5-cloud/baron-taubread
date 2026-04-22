@@ -52,7 +52,8 @@ export function BankSupplierTransactionsTab({
     try {
       const XLSX = await loadXlsx();
       const rows = exportTxs.map((tx) => ({
-        "תאריך": tx.date,
+        "תאריך אפקטיבי": tx.effective_date ?? tx.date,
+        "תאריך מקורי": tx.date,
         "ספק": tx.supplier_name ?? "",
         "תיאור": tx.description ?? "",
         "פרטים": tx.details ?? "",
@@ -126,7 +127,7 @@ export function BankSupplierTransactionsTab({
                   className="border-b border-gray-50 hover:bg-gray-50/60 transition-colors"
                 >
                   <td className="py-2 px-4 tabular-nums text-gray-500">
-                    {fmtDate(tx.date)}
+                    {fmtDate(tx.effective_date ?? tx.date)}
                   </td>
                   <td className="py-2 px-4 text-gray-800 max-w-[220px]">
                     {tx.supplier_name && (

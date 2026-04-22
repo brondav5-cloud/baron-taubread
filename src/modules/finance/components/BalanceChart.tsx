@@ -65,11 +65,11 @@ export function BalanceChart({ accounts }: Props) {
       const supabase = createClient();
       const { data: rows } = await supabase
         .from("bank_transactions")
-        .select("date, balance")
+        .select("date, effective_date, balance")
         .eq("company_id", selectedCompanyId)
         .eq("bank_account_id", accountId)
         .not("balance", "is", null)
-        .order("date", { ascending: true })
+        .order("effective_date", { ascending: true })
         .order("created_at", { ascending: true })
         .limit(500);
 
@@ -78,7 +78,8 @@ export function BalanceChart({ accounts }: Props) {
       // Keep last balance per date (most recent transaction of the day)
       const byDate = new Map<string, number>();
       for (const row of rows) {
-        if (row.balance != null) byDate.set(row.date, row.balance);
+        const txDate = row.effective_date ?? row.date;
+        if (row.balance != null && txDate) byDate.set(txDate, row.balance);
       }
 
       const sorted = Array.from(byDate.keys()).sort();

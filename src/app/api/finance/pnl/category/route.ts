@@ -55,12 +55,12 @@ export async function GET(request: NextRequest) {
     // Fetch transactions in the period first (we'll apply category filter after split replacement)
     const query = supabase
       .from("bank_transactions")
-      .select("id, date, description, details, debit, credit, reference, source_bank, notes, supplier_name, category_id")
+      .select("id, date, effective_date, description, details, debit, credit, reference, source_bank, notes, supplier_name, category_id")
       .eq("company_id", companyId)
-      .gte("date", dateFrom)
-      .lte("date", dateTo)
+      .gte("effective_date", dateFrom)
+      .lte("effective_date", dateTo)
       .is("merged_into_id", null)
-      .order("date", { ascending: false });
+      .order("effective_date", { ascending: false });
 
     const { data: transactions, error: txError } = await query;
     if (txError) throw txError;
@@ -85,6 +85,7 @@ export async function GET(request: NextRequest) {
     type TxWithMeta = {
       id: string;
       date: string;
+      effective_date: string;
       description: string;
       details: string;
       debit: number;
@@ -144,7 +145,7 @@ export async function GET(request: NextRequest) {
       rows.push({
         id: tx.id,
         open_tx_id: tx.id,
-        date: tx.date,
+        date: tx.effective_date ?? tx.date,
         description: tx.supplier_name ?? tx.description ?? "",
         details: tx.details ?? "",
         amount: isExpenseOrTransfer ? Number(tx.debit) - Number(tx.credit) : Number(tx.credit) - Number(tx.debit),
@@ -167,7 +168,7 @@ export async function GET(request: NextRequest) {
       rows.push({
         id: splitKey,
         open_tx_id: parent.id,
-        date: parent.date,
+        date: parent.effective_date ?? parent.date,
         description: label,
         details: parent.details ?? "",
         amount: Number(s.amount) || 0,

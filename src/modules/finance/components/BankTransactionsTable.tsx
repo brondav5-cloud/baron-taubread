@@ -927,6 +927,11 @@ interface Props {
   duplicateTxIds?: Set<string>;
   /** Delete a transaction row */
   onDeleteClick?: (tx: BankTransaction) => void;
+  /** Custom empty-state text for special modes (e.g. duplicates view) */
+  emptyStateTitle?: string;
+  emptyStateSubtitle?: string;
+  /** Shift selected transactions to previous day (reporting date override) */
+  onShiftToPreviousDay?: (txs: BankTransaction[]) => void;
 }
 
 function SortIcon({ col, sortBy, sortDir }: { col: SortBy; sortBy?: SortBy; sortDir?: SortDir }) {
@@ -962,6 +967,9 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   onApplySimilarDone,
   duplicateTxIds,
   onDeleteClick,
+  emptyStateTitle,
+  emptyStateSubtitle,
+  onShiftToPreviousDay,
 }: Props) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
@@ -1067,6 +1075,12 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
     if (selectedTxs.length >= 2) onMergeSelected?.(selectedTxs);
   };
 
+  const handleShiftSelected = () => {
+    const selectedTxs = transactions.filter((t) => selected.has(t.id) && !t.is_split_line);
+    if (selectedTxs.length === 0) return;
+    onShiftToPreviousDay?.(selectedTxs);
+  };
+
   type DisplayRow =
     | {
       kind: "split_header";
@@ -1137,8 +1151,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   if (transactions.length === 0 && !hasActiveFilters) {
     return (
       <div className="rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 text-center py-16 text-gray-400">
-        <p className="font-medium">אין תנועות להצגה</p>
-        <p className="text-sm mt-1">העלה קובץ תנועות בנק כדי להתחיל</p>
+        <p className="font-medium">{emptyStateTitle ?? "אין תנועות להצגה"}</p>
+        <p className="text-sm mt-1">{emptyStateSubtitle ?? "העלה קובץ תנועות בנק כדי להתחיל"}</p>
       </div>
     );
   }
@@ -1152,7 +1166,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   return (
     <>
       {/* ── Sticky merge bar — fixed bottom, always visible when items selected ── */}
-      {selCount >= 2 && (
+      {selCount >= 1 && (
         <div
           className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 bg-indigo-700 text-white rounded-2xl shadow-2xl border border-indigo-500 animate-in slide-in-from-bottom-4 duration-200"
           dir="rtl"
@@ -1168,6 +1182,15 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
           >
             בטל בחירה
           </button>
+          {onShiftToPreviousDay && (
+            <button
+              onClick={handleShiftSelected}
+              className="flex items-center gap-1.5 text-xs font-bold bg-amber-300 text-amber-900 hover:bg-amber-200 px-4 py-2 rounded-xl transition-colors shadow-sm"
+            >
+              שיוך ליום קודם
+            </button>
+          )}
+          {selCount >= 2 && (
           <button
             onClick={handleMerge}
             className="flex items-center gap-1.5 text-xs font-bold bg-white text-indigo-700 hover:bg-indigo-50 px-4 py-2 rounded-xl transition-colors shadow-sm"
@@ -1175,6 +1198,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
             <MergeIcon className="w-3.5 h-3.5" />
             מזג {selCount} תנועות
           </button>
+          )}
         </div>
       )}
 
@@ -1440,6 +1464,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 const isMerged = isMergedMaster(tx);
                 const isSplitLine = Boolean(tx.is_split_line);
                 const isDuplicate = Boolean(duplicateTxIds?.has(tx.id));
+                const viewDate = tx.effective_date ?? tx.date;
+                const hasDateOverride = Boolean(tx.effective_date && tx.effective_date !== tx.date);
 
                 return (
                   <tr
@@ -1471,7 +1497,12 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     </td>
 
                     <td className="px-4 py-3 text-gray-500 whitespace-nowrap font-mono text-xs">
-                      {formatDate(tx.date)}
+                      <div className="flex flex-col items-start gap-0.5">
+                        <span>{formatDate(viewDate)}</span>
+                        {hasDateOverride && (
+                          <span className="text-[10px] text-amber-600">מקורי: {formatDate(tx.date)}</span>
+                        )}
+                      </div>
                     </td>
 
                     {/* ── שם ספק column ── */}

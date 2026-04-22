@@ -55,6 +55,8 @@ export interface BankTransaction {
   bank_account_id: string;
   uploaded_file_id: string | null;
   date: string;
+  reporting_date?: string | null;
+  effective_date?: string;
   description: string;
   details: string;
   reference: string;

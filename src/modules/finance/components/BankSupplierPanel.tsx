@@ -62,13 +62,13 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
       .select("*")
       .eq("company_id", companyId)
       .or(`supplier_name.eq.${supplierKey},description.ilike.%${supplierKey}%`)
-      .order("date", { ascending: false })
+      .order("effective_date", { ascending: false })
       .limit(2000);
 
     // Also fetch split rows that match this supplier, joined with parent tx for date/amounts
     const splitQuery = supabase
       .from("bank_transaction_splits")
-      .select("id, transaction_id, description, supplier_name, category_id, amount, notes, bank_transactions!inner(id, date, debit, credit, source_bank, bank_account_id, company_id)")
+      .select("id, transaction_id, description, supplier_name, category_id, amount, notes, bank_transactions!inner(id, date, effective_date, debit, credit, source_bank, bank_account_id, company_id)")
       .eq("company_id", companyId)
       .or(`supplier_name.eq.${supplierKey},description.ilike.%${supplierKey}%`)
       .limit(2000);
@@ -77,7 +77,11 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
       if (err1) { setError(err1.message); setLoading(false); return; }
       if (err2) { setError(err2.message); setLoading(false); return; }
 
-      const directTxs = (direct as BankTransaction[]) ?? [];
+      const directTxs = ((direct as BankTransaction[]) ?? []).map((tx) => ({
+        ...tx,
+        date: tx.effective_date ?? tx.date,
+        effective_date: tx.effective_date ?? tx.date,
+      }));
 
       // Convert split rows to BankTransaction shape so the panel can use them uniformly
       type SplitRow = {
@@ -91,6 +95,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
         bank_transactions: {
           id: string;
           date: string;
+          effective_date: string;
           debit: number;
           credit: number;
           source_bank: string;
@@ -105,6 +110,8 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
         return {
           ...parent,
           id: `${parent.id}::split::${s.id}`,
+          date: parent.effective_date ?? parent.date,
+          effective_date: parent.effective_date ?? parent.date,
           description: s.description || "",
           supplier_name: s.supplier_name ?? null,
           category_id: s.category_id ?? undefined,
@@ -126,7 +133,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
       const splitParentIds = new Set(splitTxs.map((s) => s.split_parent_id).filter(Boolean));
       const filteredDirect = directTxs.filter((t) => !splitParentIds.has(t.id));
       const merged = [...filteredDirect, ...splitTxs].sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        (a, b) => new Date((b.effective_date ?? b.date)).getTime() - new Date((a.effective_date ?? a.date)).getTime()
       );
 
       setTxs(merged);
@@ -143,8 +150,8 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
       .select("debit")
       .eq("company_id", companyId)
       .gt("debit", 0)
-      .gte("date", `${selectedYear}-01-01`)
-      .lte("date", `${selectedYear}-12-31`)
+      .gte("effective_date", `${selectedYear}-01-01`)
+      .lte("effective_date", `${selectedYear}-12-31`)
       .limit(10000)
       .then(({ data }) => {
         if (data) {
@@ -155,7 +162,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
   }, [companyId, selectedYear]);
 
   const years = useMemo(() => {
-    const set = new Set(txs.map((t) => new Date(t.date).getFullYear()));
+    const set = new Set(txs.map((t) => new Date(t.effective_date ?? t.date).getFullYear()));
     return Array.from(set).sort((a, b) => b - a);
   }, [txs]);
 
@@ -170,7 +177,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
   const yearSummary = useMemo(
     () =>
       years.map((yr) => {
-        const ytxs = expenseTxs.filter((t) => new Date(t.date).getFullYear() === yr);
+        const ytxs = expenseTxs.filter((t) => new Date(t.effective_date ?? t.date).getFullYear() === yr);
         return { year: yr, total: ytxs.reduce((s, t) => s + t.debit, 0), count: ytxs.length };
       }),
     [expenseTxs, years],
@@ -190,7 +197,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
     () =>
       MONTH_LABELS.map((_, i) => {
         const inMonth = expenseTxs.filter((t) => {
-          const d = new Date(t.date);
+          const d = new Date(t.effective_date ?? t.date);
           return d.getFullYear() === selectedYear && d.getMonth() === i;
         });
         return { total: monthlyTotals[i] ?? 0, count: inMonth.length };
@@ -213,7 +220,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
   const yearTxs = useMemo(
     () =>
       expenseTxs.filter((t) => {
-        const d = new Date(t.date);
+        const d = new Date(t.effective_date ?? t.date);
         if (d.getFullYear() !== selectedYear) return false;
         if (expandedMonth !== null && d.getMonth() !== expandedMonth) return false;
         return true;
@@ -229,7 +236,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
   const insights = useMemo(
     () =>
       computeInsights({
-        payments: expenseTxs.map((t) => ({ date: t.date, amount: t.debit })),
+        payments: expenseTxs.map((t) => ({ date: t.effective_date ?? t.date, amount: t.debit })),
         yearTotal,
         totalCompanyExpenses,
         trendPct,
@@ -376,7 +383,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
                 <BankSupplierTransactionsTab
                   yearTxs={yearTxs}
                   exportTxs={expenseTxs.filter(
-                    (t) => new Date(t.date).getFullYear() === selectedYear,
+                    (t) => new Date(t.effective_date ?? t.date).getFullYear() === selectedYear,
                   )}
                   expandedMonth={expandedMonth}
                   displayName={displayName}

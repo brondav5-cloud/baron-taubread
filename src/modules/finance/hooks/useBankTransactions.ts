@@ -37,12 +37,16 @@ const SCAN_BATCH_SIZE = 200;
  * (same account/date/ref/amount) can still exist in older data or if the index did not
  * block an insert, and will otherwise produce doubled rows (and double split children).
  */
-function dedupeFetchedParentTransactions(txs: BankTransaction[]): BankTransaction[] {
+function dedupeFetchedParentTransactions(
+  txs: BankTransaction[],
+  opts?: { keepLogicalDuplicates?: boolean }
+): BankTransaction[] {
   const byId = new Map<string, BankTransaction>();
   for (const t of txs) {
     if (!byId.has(t.id)) byId.set(t.id, t);
   }
   const list = Array.from(byId.values());
+  if (opts?.keepLogicalDuplicates) return list;
   const seen = new Set<string>();
   const out: BankTransaction[] = [];
   for (const t of list) {
@@ -88,7 +92,7 @@ export interface UseBankTransactionsReturn {
   refresh: () => void;
 }
 
-export function useBankTransactions(): UseBankTransactionsReturn {
+export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }): UseBankTransactionsReturn {
   const authState = useAuth();
   const { state } = useSupabaseAuth();
   const user = authState.status === "authed" ? authState.user : null;
@@ -215,6 +219,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         const sourceLabel = extractCardLabel(tx.description ?? "");
         for (const split of txSplits) {
           const amt = Math.abs(Number(split.amount) || 0);
+          const effectiveDate = tx.effective_date ?? tx.date;
           rows.push({
             ...tx,
             id: `${tx.id}::split::${split.id}`,
@@ -226,7 +231,8 @@ export function useBankTransactions(): UseBankTransactionsReturn {
             credit: isDebitParent ? 0 : amt,
             // Critical business rule: split lines use the charge date of the parent bank transaction.
             // This keeps P&L and bank table aligned to the real billing date (e.g. Diners 15th).
-            date: tx.date,
+            date: effectiveDate,
+            effective_date: effectiveDate,
             is_split_line: true,
             split_parent_id: tx.id,
             split_source_label: sourceLabel,
@@ -238,16 +244,17 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     };
 
     const buildBaseQuery = () => {
+      const sortColumn = sortBy === "date" ? "effective_date" : sortBy;
       let query = supabase
         .from("bank_transactions")
         .select("*", { count: "exact" })
         .eq("company_id", selectedCompanyId)
         .is("merged_into_id", null)
-        .order(sortBy, { ascending: sortDir === "asc", nullsFirst: false })
+        .order(sortColumn, { ascending: sortDir === "asc", nullsFirst: false })
         .order("created_at", { ascending: false });
 
-      if (filters.dateFrom) query = query.gte("date", filters.dateFrom);
-      if (filters.dateTo) query = query.lte("date", filters.dateTo);
+      if (filters.dateFrom) query = query.gte("effective_date", filters.dateFrom);
+      if (filters.dateTo) query = query.lte("effective_date", filters.dateTo);
       if (filters.bankAccountId) query = query.eq("bank_account_id", filters.bankAccountId);
       if (filters.sourceBank) query = query.eq("source_bank", filters.sourceBank);
       if (filters.amountType === "debit") query = query.gt("debit", 0);
@@ -274,7 +281,9 @@ export function useBankTransactions(): UseBankTransactionsReturn {
             if (cancelled) return;
             if (qErr) throw qErr;
 
-            const txs = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[]);
+            const txs = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[], {
+              keepLogicalDuplicates: opts?.keepLogicalDuplicates,
+            });
             if (txs.length === 0) break;
 
             const { rows, splitCounts: chunkCounts } = await buildVisibleRows(txs);
@@ -317,7 +326,9 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         if (cancelled) return;
         if (qErr) throw qErr;
 
-        const txs = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[]);
+        const txs = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[], {
+          keepLogicalDuplicates: opts?.keepLogicalDuplicates,
+        });
         const { rows, splitCounts: counts } = await buildVisibleRows(txs);
         if (cancelled) return;
 
@@ -336,7 +347,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
     void load();
 
     return () => { cancelled = true; };
-  }, [user, selectedCompanyId, page, filters, sortBy, sortDir, refreshCounter, applyCategoryFilter]);
+  }, [user, selectedCompanyId, page, filters, sortBy, sortDir, refreshCounter, applyCategoryFilter, opts?.keepLogicalDuplicates]);
 
   return {
     transactions,
