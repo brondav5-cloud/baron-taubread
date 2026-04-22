@@ -37,6 +37,9 @@ function detectBank(file: File): SourceBank | null {
   if (name.endsWith(".csv")) return "leumi";
   if (name.includes("excelnew") || name.includes("hapoalim")) return "hapoalim";
   if (name.includes("accountactivity") || name.includes("mizrahi")) return "mizrahi";
+  if (name.includes("תנועות בחשבון") || name.includes("דו_ח") || name.includes("דו\"ח") || name.includes("leumi")) {
+    return "leumi";
+  }
   // .xlsx → hapoalim, .xls → mizrahi (fallback by extension)
   if (name.endsWith(".xlsx")) return "hapoalim";
   if (name.endsWith(".xls")) return "mizrahi";

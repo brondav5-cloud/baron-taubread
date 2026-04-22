@@ -11,13 +11,17 @@ function readFileAsText(file: File, encoding: string): Promise<string> {
   });
 }
 
-/** DD/MM/YY → YYYY-MM-DD (2-digit year assumed 20xx) */
+/** DD/MM/YY | DD/MM/YYYY | DD.MM.YY | DD.MM.YYYY → YYYY-MM-DD */
 function parseDDMMYY(s: string): string {
   const sep = s.includes("/") ? "/" : s.includes(".") ? "." : null;
   if (!sep) return s;
-  const [dd, mm, yy] = s.split(sep);
-  if (!dd || !mm || !yy) return s;
-  const year = parseInt(yy) + (parseInt(yy) < 50 ? 2000 : 1900);
+  const [dd, mm, yearPart] = s.split(sep);
+  if (!dd || !mm || !yearPart) return s;
+  const yearNum = parseInt(yearPart, 10);
+  if (!Number.isFinite(yearNum)) return s;
+  const year = yearPart.length === 2
+    ? yearNum + (yearNum < 50 ? 2000 : 1900)
+    : yearNum;
   return `${year}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
 }
 
