@@ -4,13 +4,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Download, Loader2, Settings } from "lucide-react";
 import { loadXlsx } from "@/lib/loadXlsx";
+import { createClient } from "@/lib/supabase/client";
 import type { PnlResponse } from "@/app/api/finance/pnl/route";
 import LayoutEditorModal from "@/components/finance-pnl/LayoutEditorModal";
+import IncomeMappingModal from "@/components/finance-pnl/IncomeMappingModal";
+import ComparisonControls from "@/components/finance-pnl/ComparisonControls";
 import PnlStatementTable from "@/components/finance-pnl/PnlStatementTable";
 import PnlSummaryCards from "@/components/finance-pnl/PnlSummaryCards";
 import { buildLayoutCategoryOptions, buildStatement, buildSuggestedLayout } from "@/components/finance-pnl/layout-utils";
 import { monthLabel } from "@/components/finance-pnl/format";
 import { usePnlLayout } from "@/components/finance-pnl/usePnlLayout";
+import { TransactionDetailModal } from "@/modules/finance/components/TransactionDetailModal";
+import { BankSupplierPanel } from "@/modules/finance/components/BankSupplierPanel";
+import type { BankTransaction } from "@/modules/finance/types";
 
 export default function PnlPage() {
   const currentYear = new Date().getFullYear();
@@ -20,7 +26,11 @@ export default function PnlPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [incomeMappingOpen, setIncomeMappingOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [selectedTx, setSelectedTx] = useState<BankTransaction | null>(null);
+  const [openSupplier, setOpenSupplier] = useState<{ key: string; name: string } | null>(null);
+  const [compareMonths, setCompareMonths] = useState<string[]>([]);
 
   const layout = usePnlLayout();
 
@@ -55,6 +65,15 @@ export default function PnlPage() {
     if (!data) return null;
     return buildStatement(data.lines, data.months, effectiveLayout);
   }, [data, effectiveLayout]);
+
+  useEffect(() => {
+    if (!statement) return;
+    setCompareMonths((prev) => {
+      const valid = prev.filter((m) => statement.months.includes(m));
+      if (valid.length > 0) return valid;
+      return statement.months.slice(-Math.min(3, statement.months.length));
+    });
+  }, [statement]);
 
   const categoryOptions = useMemo(
     () => buildLayoutCategoryOptions(data?.lines ?? []),
@@ -93,6 +112,16 @@ export default function PnlPage() {
     }
   }, [statement, year, month]);
 
+  const openTransaction = useCallback(async (txId: string) => {
+    const supabase = createClient();
+    const { data } = await supabase
+      .from("bank_transactions")
+      .select("*")
+      .eq("id", txId)
+      .maybeSingle();
+    if (data) setSelectedTx(data as BankTransaction);
+  }, []);
+
   return (
     <div className="space-y-5 pb-10" dir="rtl">
       <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -107,6 +136,14 @@ export default function PnlPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setIncomeMappingOpen(true)}
+            disabled={!data}
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+          >
+            <Settings className="w-4 h-4" />
+            שיוך הכנסות
+          </button>
           <button
             onClick={() => setEditorOpen(true)}
             disabled={!data || layout.loading}
@@ -167,6 +204,14 @@ export default function PnlPage() {
         גרירה ושיוך קטגוריות מתבצעים בתוך חלון <strong>מבנה דוח וגרירה</strong>. נטען מבנה התחלתי אוטומטי מהדוח הקיים, ומשם אפשר לערוך ולהוסיף בלוקים.
       </div>
 
+      {statement && (
+        <ComparisonControls
+          months={statement.months}
+          selectedMonths={compareMonths}
+          onChange={setCompareMonths}
+        />
+      )}
+
       {(loading || layout.loading) && (
         <div className="py-10 flex items-center justify-center gap-2 text-gray-400">
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -183,7 +228,12 @@ export default function PnlPage() {
       {statement && !loading && (
         <>
           <PnlSummaryCards view={statement} />
-          <PnlStatementTable view={statement} year={year} />
+          <PnlStatementTable
+            view={statement}
+            year={year}
+            onOpenTransaction={openTransaction}
+            compareMonths={compareMonths}
+          />
         </>
       )}
 
@@ -195,6 +245,29 @@ export default function PnlPage() {
         onClose={() => setEditorOpen(false)}
         onSave={layout.saveLayout}
       />
+      <IncomeMappingModal
+        open={incomeMappingOpen}
+        lines={data?.lines ?? []}
+        onClose={() => setIncomeMappingOpen(false)}
+        onUpdated={loadReport}
+      />
+      {selectedTx && (
+        <TransactionDetailModal
+          transaction={selectedTx}
+          onClose={() => setSelectedTx(null)}
+          onSupplierClick={(key, name) => {
+            setSelectedTx(null);
+            setOpenSupplier({ key, name });
+          }}
+        />
+      )}
+      {openSupplier && (
+        <BankSupplierPanel
+          supplierKey={openSupplier.key}
+          displayName={openSupplier.name}
+          onClose={() => setOpenSupplier(null)}
+        />
+      )}
     </div>
   );
 }
