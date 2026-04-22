@@ -19,6 +19,14 @@ interface DuplicateInfo {
   row_count: number | null;
 }
 
+interface SkippedDuplicateDetail {
+  date: string;
+  reference: string;
+  debit: number;
+  credit: number;
+  description: string;
+}
+
 interface Props {
   onClose: () => void;
   onSuccess: () => void;
@@ -60,7 +68,12 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
   const [parsing, setParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [uploadResult, setUploadResult] = useState<{
-    inserted: number; skipped: number; matched: number; errors: string[];
+    inserted: number;
+    skipped: number;
+    matched: number;
+    errors: string[];
+    skippedDetails: SkippedDuplicateDetail[];
+    skippedDetailsTruncated: boolean;
   } | null>(null);
   const [fileHash, setFileHash] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
@@ -193,6 +206,8 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
         skipped: data.skipped,
         matched: data.matched ?? 0,
         errors: data.errors ?? [],
+        skippedDetails: data.skipped_details ?? [],
+        skippedDetailsTruncated: Boolean(data.skipped_details_truncated),
       });
       setStep("done");
 
@@ -443,6 +458,45 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
               </div>
               {uploadResult.errors.length > 0 && (
                 <p className="text-xs text-orange-500">{uploadResult.errors.length} שגיאות</p>
+              )}
+              {uploadResult.skippedDetails.length > 0 && (
+                <div className="mt-2 rounded-lg border border-gray-200 overflow-hidden text-right">
+                  <div className="bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600">
+                    פירוט כפילויות שדולגו
+                  </div>
+                  <div className="max-h-40 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-white text-gray-500">
+                        <tr>
+                          <th className="px-2 py-1">תאריך</th>
+                          <th className="px-2 py-1">תיאור</th>
+                          <th className="px-2 py-1">אסמכתא</th>
+                          <th className="px-2 py-1">סכום</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {uploadResult.skippedDetails.map((tx, i) => {
+                          const amount = tx.debit > 0 ? tx.debit : tx.credit;
+                          return (
+                            <tr key={`${tx.date}-${tx.reference}-${i}`}>
+                              <td className="px-2 py-1 text-gray-500">{formatDate(tx.date)}</td>
+                              <td className="px-2 py-1 text-gray-700 max-w-[180px] truncate">{tx.description}</td>
+                              <td className="px-2 py-1 text-gray-400 font-mono">{tx.reference || "-"}</td>
+                              <td className="px-2 py-1 text-gray-700 font-mono">
+                                {amount.toLocaleString("he-IL", { minimumFractionDigits: 2 })}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  {uploadResult.skippedDetailsTruncated && (
+                    <p className="px-3 py-2 text-[11px] text-gray-400 bg-gray-50">
+                      מוצגות רק 200 כפילויות ראשונות.
+                    </p>
+                  )}
+                </div>
               )}
               {uploadResult.matched > 0 && (
                 <p className="text-sm text-teal-700 font-medium bg-teal-50 rounded-lg px-3 py-2">

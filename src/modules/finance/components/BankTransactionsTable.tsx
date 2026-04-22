@@ -841,8 +841,10 @@ interface Props {
   splitCounts?: Map<string, number>;
   searchFilter?: string;
   categoryFilter?: string;
+  bankFilter?: SourceBank | "";
   onSearchChange?: (v: string) => void;
   onCategoryChange?: (v: string) => void;
+  onBankChange?: (v: SourceBank | "") => void;
   /** Inline quick-classify: when provided, table shows interactive category selector */
   onClassify?: (txId: string, catId: string | null) => Promise<void>;
   /** Called after a new category is created inline — pass the new category object */
@@ -876,8 +878,10 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   splitCounts,
   searchFilter = "",
   categoryFilter = "",
+  bankFilter = "",
   onSearchChange,
   onCategoryChange,
+  onBankChange,
   onClassify,
   onCategoryAdded,
   showClassifyCol = true,
@@ -892,7 +896,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   const [collapsedSplitGroups, setCollapsedSplitGroups] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const hasActiveFilters = searchFilter !== "" || categoryFilter !== "";
+  const hasActiveFilters = searchFilter !== "" || categoryFilter !== "" || bankFilter !== "";
   const isFiltersOpen = showFilters || hasActiveFilters;
 
   useEffect(() => {
@@ -926,6 +930,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
     setLocalSearch("");
     onSearchChange?.("");
     onCategoryChange?.("");
+    onBankChange?.("");
   };
 
   /** Immediate filter from smart menu + show filter row */
@@ -1106,7 +1111,12 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               >
                 תיאור<SortIcon col="description" sortBy={sortBy} sortDir={sortDir} />
               </th>
-              <th className="px-4 py-3 hidden md:table-cell">אסמכתא</th>
+              <th
+                className="px-4 py-3 hidden md:table-cell whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                onClick={() => onSort?.("reference")}
+              >
+                אסמכתא<SortIcon col="reference" sortBy={sortBy} sortDir={sortDir} />
+              </th>
               <th
                 className="px-4 py-3 text-left whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
                 onClick={() => onSort?.("debit")}
@@ -1128,7 +1138,14 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               {showClassifyCol && onClassify ? (
                 <th className="px-4 py-3 hidden lg:table-cell">
                   <div className="flex items-center gap-1.5">
-                    <span>סיווג</span>
+                    <button
+                      onClick={() => onSort?.("category_id")}
+                      className="inline-flex items-center whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                      title="מיון לפי סיווג"
+                    >
+                      <span>סיווג</span>
+                      <SortIcon col="category_id" sortBy={sortBy} sortDir={sortDir} />
+                    </button>
                     {onToggleClassifyCol && (
                       <button
                         onClick={onToggleClassifyCol}
@@ -1155,7 +1172,14 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
               )}
               <th className="px-4 py-3 hidden md:table-cell">
                 <div className="flex items-center justify-between gap-2">
-                  <span>בנק</span>
+                  <button
+                    onClick={() => onSort?.("source_bank")}
+                    className="inline-flex items-center whitespace-nowrap cursor-pointer hover:text-gray-700 select-none"
+                    title="מיון לפי בנק"
+                  >
+                    <span>בנק</span>
+                    <SortIcon col="source_bank" sortBy={sortBy} sortDir={sortDir} />
+                  </button>
                   <button
                     onClick={() => setShowFilters((v) => !v)}
                     title={isFiltersOpen ? "הסתר סינון" : "סנן"}
@@ -1185,7 +1209,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                       type="text"
                       value={localSearch}
                       onChange={(e) => setLocalSearch(e.target.value)}
-                      placeholder="חפש שם / תיאור / אסמכתא..."
+                      placeholder="חפש ספק / תיאור / אסמכתא / בנק / קוד..."
                       className="w-full border border-blue-200 rounded-md pr-6 pl-6 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white placeholder:text-gray-400"
                     />
                     {localSearch && (
@@ -1218,15 +1242,27 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                   )}
                 </th>
                 <th className="px-2 py-1.5 hidden md:table-cell">
-                  {hasActiveFilters && (
-                    <button
-                      onClick={clearAllFilters}
-                      className="flex items-center gap-0.5 text-xs text-red-400 hover:text-red-600 font-normal whitespace-nowrap"
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={bankFilter}
+                      onChange={(e) => onBankChange?.(e.target.value as SourceBank | "")}
+                      className="w-full border border-blue-200 rounded-md px-1.5 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
                     >
-                      <X className="w-3 h-3" />
-                      נקה
-                    </button>
-                  )}
+                      <option value="">כל הבנקים</option>
+                      {Object.entries(BANK_LABELS).map(([key, value]) => (
+                        <option key={key} value={key}>{value.label}</option>
+                      ))}
+                    </select>
+                    {hasActiveFilters && (
+                      <button
+                        onClick={clearAllFilters}
+                        className="flex items-center gap-0.5 text-xs text-red-400 hover:text-red-600 font-normal whitespace-nowrap"
+                      >
+                        <X className="w-3 h-3" />
+                        נקה
+                      </button>
+                    )}
+                  </div>
                 </th>
               </tr>
             )}

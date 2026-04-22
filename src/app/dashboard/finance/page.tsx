@@ -423,8 +423,10 @@ function FinancePageInner() {
         splitCounts={hook.splitCounts}
         searchFilter={hook.filters.search}
         categoryFilter={hook.filters.categoryId}
+        bankFilter={hook.filters.sourceBank}
         onSearchChange={handleSearchChange}
         onCategoryChange={handleCategoryChange}
+        onBankChange={(sourceBank) => hook.setFilters((f) => ({ ...f, sourceBank }))}
         onClassify={handleClassify}
         onCategoryAdded={handleCategoryAdded}
         showClassifyCol={showClassifyCol}

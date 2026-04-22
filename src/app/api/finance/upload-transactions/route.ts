@@ -7,6 +7,7 @@ import { logError } from "@/lib/api/logger";
 import type { ParsedBankTransaction, SourceBank } from "@/modules/finance/types";
 
 const MAX_TRANSACTIONS = 5_000;
+const MAX_SKIPPED_DETAILS = 200;
 
 /**
  * Extracts a supplier/payee name from the bank transaction details field.
@@ -46,6 +47,14 @@ interface UploadRequest {
   date_from?: string;
   date_to?: string;
   transactions: ParsedBankTransaction[];
+}
+
+interface SkippedDuplicateDetail {
+  date: string;
+  reference: string;
+  debit: number;
+  credit: number;
+  description: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -223,6 +232,7 @@ export async function POST(request: NextRequest) {
     let inserted = 0;
     let skipped = 0;
     const insertErrors: string[] = [];
+    const skippedDetails: SkippedDuplicateDetail[] = [];
 
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
@@ -247,6 +257,15 @@ export async function POST(request: NextRequest) {
             inserted++;
           } else if (rowError.code === "23505") {
             skipped++;
+            if (skippedDetails.length < MAX_SKIPPED_DETAILS) {
+              skippedDetails.push({
+                date: row.date,
+                reference: row.reference,
+                debit: row.debit,
+                credit: row.credit,
+                description: row.description,
+              });
+            }
           } else {
             insertErrors.push(`${row.date} / ${row.reference}: ${rowError.message}`);
           }
@@ -293,6 +312,8 @@ export async function POST(request: NextRequest) {
       bank_account_id,
       inserted,
       skipped,
+      skipped_details: skippedDetails,
+      skipped_details_truncated: skipped > skippedDetails.length,
       matched,
       errors: insertErrors,
     });
