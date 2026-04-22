@@ -8,7 +8,7 @@ import type { PnlResponse } from "@/app/api/finance/pnl/route";
 import LayoutEditorModal from "@/components/finance-pnl/LayoutEditorModal";
 import PnlStatementTable from "@/components/finance-pnl/PnlStatementTable";
 import PnlSummaryCards from "@/components/finance-pnl/PnlSummaryCards";
-import { buildLayoutCategoryOptions, buildStatement } from "@/components/finance-pnl/layout-utils";
+import { buildLayoutCategoryOptions, buildStatement, buildSuggestedLayout } from "@/components/finance-pnl/layout-utils";
 import { monthLabel } from "@/components/finance-pnl/format";
 import { usePnlLayout } from "@/components/finance-pnl/usePnlLayout";
 
@@ -46,10 +46,15 @@ export default function PnlPage() {
     void loadReport();
   }, [loadReport]);
 
+  const effectiveLayout = useMemo(
+    () => (layout.blocks.length > 0 ? layout.blocks : buildSuggestedLayout(data?.lines ?? [])),
+    [layout.blocks, data?.lines],
+  );
+
   const statement = useMemo(() => {
     if (!data) return null;
-    return buildStatement(data.lines, data.months, layout.blocks);
-  }, [data, layout.blocks]);
+    return buildStatement(data.lines, data.months, effectiveLayout);
+  }, [data, effectiveLayout]);
 
   const categoryOptions = useMemo(
     () => buildLayoutCategoryOptions(data?.lines ?? []),
@@ -159,7 +164,7 @@ export default function PnlPage() {
       </div>
 
       <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
-        גרירה ושיוך קטגוריות מתבצעים בתוך חלון <strong>מבנה דוח וגרירה</strong>. במסך הראשי אפשר לפתוח/לסגור סעיפים בלחיצה על שורת הסעיף.
+        גרירה ושיוך קטגוריות מתבצעים בתוך חלון <strong>מבנה דוח וגרירה</strong>. נטען מבנה התחלתי אוטומטי מהדוח הקיים, ומשם אפשר לערוך ולהוסיף בלוקים.
       </div>
 
       {(loading || layout.loading) && (
@@ -178,13 +183,13 @@ export default function PnlPage() {
       {statement && !loading && (
         <>
           <PnlSummaryCards view={statement} />
-          <PnlStatementTable view={statement} />
+          <PnlStatementTable view={statement} year={year} />
         </>
       )}
 
       <LayoutEditorModal
         open={editorOpen}
-        blocks={layout.blocks}
+        blocks={effectiveLayout}
         categoryOptions={categoryOptions}
         saving={layout.saving}
         onClose={() => setEditorOpen(false)}

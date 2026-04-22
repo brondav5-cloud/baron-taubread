@@ -8,6 +8,60 @@ import type {
   PnlStatementView,
 } from "./types";
 
+function expenseKindByName(name: string): PnlLayoutBlock["kind"] {
+  const n = name.toLowerCase();
+  if (
+    n.includes("עלות") ||
+    n.includes("מכר") ||
+    n.includes("קניות") ||
+    n.includes("חומר") ||
+    n.includes("סחורה")
+  ) {
+    return "cost_of_goods";
+  }
+  if (n.includes("מימון") || n.includes("ריבית") || n.includes("עמלות בנק")) {
+    return "finance";
+  }
+  if (n.includes("הנהלה") || n.includes("משרד") || n.includes("שכר הנהלה")) {
+    return "admin";
+  }
+  if (n.includes("אחר") || n.includes("שונות")) {
+    return "other";
+  }
+  return "operating";
+}
+
+export function buildSuggestedLayout(lines: PnlCategoryLine[]): PnlLayoutBlock[] {
+  const base: PnlLayoutBlock[] = [
+    { id: "seed-income", name: "הכנסות", kind: "income", sort_order: 0, categories: [] },
+    { id: "seed-cogs", name: "עלות המכר", kind: "cost_of_goods", sort_order: 1, categories: [] },
+    { id: "seed-operating", name: "הוצאות תפעול", kind: "operating", sort_order: 2, categories: [] },
+    { id: "seed-admin", name: "הוצאות הנהלה", kind: "admin", sort_order: 3, categories: [] },
+    { id: "seed-finance", name: "הוצאות מימון", kind: "finance", sort_order: 4, categories: [] },
+    { id: "seed-other", name: "אחר", kind: "other", sort_order: 5, categories: [] },
+  ];
+
+  const blockByKind = new Map(base.map((block) => [block.kind, block]));
+
+  const sorted = [...lines]
+    .filter((line) => line.category_id && (line.category_type === "income" || line.category_type === "expense"))
+    .sort((a, b) => b.total - a.total);
+
+  for (const line of sorted) {
+    const kind = line.category_type === "income" ? "income" : expenseKindByName(line.category_name);
+    const target = blockByKind.get(kind);
+    if (!target) continue;
+    target.categories.push({
+      category_id: line.category_id!,
+      sort_order: target.categories.length,
+    });
+  }
+
+  return base
+    .filter((block) => block.categories.length > 0)
+    .map((block, index) => ({ ...block, sort_order: index }));
+}
+
 function getCategoryById(lines: PnlCategoryLine[]) {
   const map = new Map<string, PnlCategoryLine>();
   for (const line of lines) {

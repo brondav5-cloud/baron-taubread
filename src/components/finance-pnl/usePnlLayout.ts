@@ -15,6 +15,17 @@ function normalizeBlocks(blocks: PnlLayoutBlock[]): PnlLayoutBlock[] {
     .sort((a, b) => a.sort_order - b.sort_order);
 }
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function ensurePersistableIds(blocks: PnlLayoutBlock[]): PnlLayoutBlock[] {
+  return blocks.map((block) => ({
+    ...block,
+    id: isUuid(block.id) ? block.id : crypto.randomUUID(),
+  }));
+}
+
 export function usePnlLayout() {
   const [blocks, setBlocks] = useState<PnlLayoutBlock[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +55,7 @@ export function usePnlLayout() {
   const saveLayout = useCallback(async (nextBlocks: PnlLayoutBlock[]) => {
     setSaving(true);
     setError(null);
-    const normalized = normalizeBlocks(nextBlocks);
+    const normalized = normalizeBlocks(ensurePersistableIds(nextBlocks));
     try {
       const res = await fetch("/api/finance/pnl/layout", {
         method: "PUT",
