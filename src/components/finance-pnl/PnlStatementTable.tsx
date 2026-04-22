@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight } from "lucide-react";
-import { Fragment, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { BLOCK_KIND_LABELS } from "./constants";
 import { fmtCurrency, fmtSignedCurrency, monthLabel, pct } from "./format";
 import type { PnlStatementBlock, PnlStatementView } from "./types";
@@ -53,6 +53,17 @@ export default function PnlStatementTable({ view }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(view.blocks.map((b) => b.id)));
   const months = view.months;
 
+  useEffect(() => {
+    // Preserve user choices but auto-open any new blocks.
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      for (const block of view.blocks) {
+        if (!next.has(block.id)) next.add(block.id);
+      }
+      return next;
+    });
+  }, [view.blocks]);
+
   const costBlocks = useMemo(
     () => view.blocks.filter((b) => b.kind === "cost_of_goods"),
     [view.blocks],
@@ -77,6 +88,9 @@ export default function PnlStatementTable({ view }: Props) {
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="px-4 py-2 border-b border-gray-100 text-xs text-gray-500 bg-gray-50">
+        לחץ על שורת סעיף כדי לפתוח/לסגור את הקטגוריות שמרכיבות אותו.
+      </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm border-collapse" dir="rtl">
           <thead>
@@ -94,9 +108,18 @@ export default function PnlStatementTable({ view }: Props) {
               const isExpanded = expanded.has(block.id);
               return (
                 <Fragment key={block.id}>
-                  <tr className="bg-gray-50 border-b border-gray-200">
+                  <tr
+                    className="bg-gray-50 border-b border-gray-200 cursor-pointer hover:bg-gray-100/70 transition-colors"
+                    onClick={() => toggle(block.id)}
+                  >
                     <td className="sticky right-0 bg-gray-50 py-2 px-4 font-semibold text-gray-800">
-                      <button onClick={() => toggle(block.id)} className="inline-flex items-center gap-1.5">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggle(block.id);
+                        }}
+                        className="inline-flex items-center gap-1.5"
+                      >
                         {isExpanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                         {block.name}
                         <span className="text-[10px] text-gray-500 bg-gray-200 rounded-full px-1.5 py-0.5">

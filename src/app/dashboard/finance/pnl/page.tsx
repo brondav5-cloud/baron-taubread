@@ -108,7 +108,7 @@ export default function PnlPage() {
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40"
           >
             <Settings className="w-4 h-4" />
-            מבנה דוח
+            מבנה דוח וגרירה
           </button>
           <button
             onClick={handleExport}
@@ -156,6 +156,10 @@ export default function PnlPage() {
             <option value={12}>דצמבר</option>
           </select>
         </div>
+      </div>
+
+      <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+        גרירה ושיוך קטגוריות מתבצעים בתוך חלון <strong>מבנה דוח וגרירה</strong>. במסך הראשי אפשר לפתוח/לסגור סעיפים בלחיצה על שורת הסעיף.
       </div>
 
       {(loading || layout.loading) && (
