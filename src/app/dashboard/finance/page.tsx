@@ -387,7 +387,10 @@ function FinancePageInner() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
-            onClick={() => setShowDuplicatesOnly((v) => !v)}
+            onClick={() => {
+              setShowDuplicatesOnly((v) => !v);
+              hook.setPage(0);
+            }}
             className={`flex items-center gap-2 px-3 py-2 border rounded-xl text-sm font-medium transition-colors ${
               showDuplicatesOnly
                 ? "bg-amber-100 border-amber-300 text-amber-800"
@@ -395,7 +398,7 @@ function FinancePageInner() {
             }`}
             title="זיהוי לפי תאריך + סכום + אסמכתא (בתוצאות המסוננות)"
           >
-            {showDuplicatesOnly ? `כפילויות מוצגות (${duplicateTxIds.size})` : "כפילויות"}
+            {showDuplicatesOnly ? `כפילויות מוצגות (${hook.totalCount})` : "כפילויות"}
           </button>
           <button
             onClick={() => setShowHistory((v) => !v)}

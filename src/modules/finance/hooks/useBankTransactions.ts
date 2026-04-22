@@ -31,6 +31,15 @@ export type SortDir = "asc" | "desc";
 const PAGE_SIZE = 50;
 const SCAN_BATCH_SIZE = 200;
 
+function buildDuplicateSignature(tx: BankTransaction): string | null {
+  const txDate = tx.effective_date ?? tx.date;
+  const reference = (tx.reference ?? "").trim();
+  if (!reference) return null;
+  const amount = Number(tx.debit) > 0 ? Number(tx.debit) : Number(tx.credit);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return `${txDate}\u0000${reference}\u0000${amount.toFixed(2)}`;
+}
+
 /**
  * Same fingerprint as uidx_bank_transactions_dedup (where reference is non-empty), plus
  * de-dupe by row id. Supabase should not return duplicate ids; duplicate logical rows
@@ -253,8 +262,9 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
         .order(sortColumn, { ascending: sortDir === "asc", nullsFirst: false })
         .order("created_at", { ascending: false });
 
-      if (filters.dateFrom) query = query.gte("effective_date", filters.dateFrom);
-      if (filters.dateTo) query = query.lte("effective_date", filters.dateTo);
+      // Duplicate mode scans all periods, not just current date range.
+      if (!opts?.keepLogicalDuplicates && filters.dateFrom) query = query.gte("effective_date", filters.dateFrom);
+      if (!opts?.keepLogicalDuplicates && filters.dateTo) query = query.lte("effective_date", filters.dateTo);
       if (filters.bankAccountId) query = query.eq("bank_account_id", filters.bankAccountId);
       if (filters.sourceBank) query = query.eq("source_bank", filters.sourceBank);
       if (filters.amountType === "debit") query = query.gt("debit", 0);
@@ -268,6 +278,50 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
 
     const load = async () => {
       try {
+        if (opts?.keepLogicalDuplicates) {
+          const allParents: BankTransaction[] = [];
+          let offset = 0;
+
+          while (true) {
+            const { data, error: qErr } = await buildBaseQuery().range(offset, offset + SCAN_BATCH_SIZE - 1);
+            if (cancelled) return;
+            if (qErr) throw qErr;
+
+            const chunk = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[], {
+              keepLogicalDuplicates: true,
+            });
+            if (chunk.length === 0) break;
+            allParents.push(...chunk);
+            if (chunk.length < SCAN_BATCH_SIZE) break;
+            offset += SCAN_BATCH_SIZE;
+          }
+
+          const duplicateCounts = new Map<string, number>();
+          for (const tx of allParents) {
+            const signature = buildDuplicateSignature(tx);
+            if (!signature) continue;
+            duplicateCounts.set(signature, (duplicateCounts.get(signature) ?? 0) + 1);
+          }
+
+          const duplicateParents = allParents.filter((tx) => {
+            const signature = buildDuplicateSignature(tx);
+            if (!signature) return false;
+            return (duplicateCounts.get(signature) ?? 0) > 1;
+          });
+
+          const from = page * PAGE_SIZE;
+          const toExclusive = from + PAGE_SIZE;
+          const pageParents = duplicateParents.slice(from, toExclusive);
+          const { rows, splitCounts: counts } = await buildVisibleRows(pageParents);
+          if (cancelled) return;
+
+          setTotalCount(duplicateParents.length);
+          setTransactions(rows);
+          setSplitCounts(counts);
+          setIsLoading(false);
+          return;
+        }
+
         if (filters.categoryId) {
           const pageStart = page * PAGE_SIZE;
           const pageEndExclusive = pageStart + PAGE_SIZE;
