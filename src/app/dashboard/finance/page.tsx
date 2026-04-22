@@ -167,6 +167,18 @@ function FinancePageInner() {
     setExtraCategories((prev) => [...prev, cat]);
   }, []);
 
+  const handleApplySimilarDone = useCallback(() => {
+    const currentY = typeof window !== "undefined" ? window.scrollY : 0;
+    hook.refresh();
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => {
+        window.requestAnimationFrame(() => {
+          window.scrollTo({ top: currentY });
+        });
+      });
+    }
+  }, [hook]);
+
   const handleToggleClassifyCol = useCallback(() => {
     setShowClassifyCol((prev) => {
       const next = !prev;
@@ -432,7 +444,7 @@ function FinancePageInner() {
         showClassifyCol={showClassifyCol}
         onToggleClassifyCol={handleToggleClassifyCol}
         onOpenSupplierInsights={(key, name) => setOpenSupplier({ key, name })}
-        onApplySimilarDone={hook.refresh}
+        onApplySimilarDone={handleApplySimilarDone}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}
