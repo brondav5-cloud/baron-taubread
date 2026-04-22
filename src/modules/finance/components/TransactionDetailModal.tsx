@@ -177,6 +177,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
   const [savingLock, setSavingLock] = useState(false);
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<"description" | "details" | "operation_code" | "supplier_name">("description");
+  const [applyOnClassified, setApplyOnClassified] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
   const [notes, setNotes] = useState(tx.notes ?? "");
   const [savingNotes, setSavingNotes] = useState(false);
@@ -252,7 +253,10 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
       }
       setSelectedCatId(catId);
       if (!catId) setManualLocked(false);
-      if (catId) setShowRulePrompt(true);
+      if (catId) {
+        setApplyOnClassified(false);
+        setShowRulePrompt(true);
+      }
       else setShowRulePrompt(false);
     } catch {
       toast.error("שגיאה בשמירת סיווג");
@@ -333,7 +337,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
     }
   }, [tx.id, notes]);
 
-  const handleCreateRule = useCallback(async () => {
+  const handleCreateRule = useCallback(async (applyNow = false) => {
     if (!selectedCatId) return;
     const value = ruleField === "description" ? tx.description
       : ruleField === "details" ? tx.details
@@ -357,14 +361,39 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
         toast.error(err.error ?? "שגיאה ביצירת כלל");
         return;
       }
-      toast.success("כלל נוצר בהצלחה");
+      if (applyNow) {
+        const applyRes = await fetch("/api/finance/classify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: "apply_single_rule",
+            include_classified: applyOnClassified,
+            rule: {
+              category_id: selectedCatId,
+              match_field: ruleField,
+              match_type: "contains",
+              match_value: value,
+            },
+          }),
+        });
+        if (!applyRes.ok) {
+          const applyErr = await applyRes.json().catch(() => ({}));
+          toast.error(applyErr.error ?? "הכלל נשמר אבל ההחלה נכשלה");
+          setShowRulePrompt(false);
+          return;
+        }
+        const data = await applyRes.json().catch(() => ({} as { total?: number }));
+        toast.success(`הכלל נוצר והוחל על ${data.total ?? 0} תנועות`);
+      } else {
+        toast.success("כלל נוצר בהצלחה");
+      }
       setShowRulePrompt(false);
     } catch {
       toast.error("שגיאה ביצירת כלל");
     } finally {
       setSavingRule(false);
     }
-  }, [selectedCatId, ruleField, tx]);
+  }, [selectedCatId, ruleField, tx, applyOnClassified]);
 
   // Auto-detect doc type: first by file content (HTML-in-XLS), then by name
   const onFileChosen = useCallback(async (file: File) => {
@@ -562,6 +591,9 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                   ? "לתנועה זו יש פיצול פעיל — הסיווג הראשי נעול כדי למנוע התנגשות."
                   : "שינוי קטגוריה כאן לא מדליק מנעול. לחץ \"נעל סיווג ידני\" רק על תנועות שתרצה לסמן במנעול."}
               </p>
+              <p className="text-[10px] text-indigo-500 leading-snug">
+                הסיווג נשמר ל־DB ונכנס לדוח רווח והפסד לפי סוג הקטגוריה (הכנסה/הוצאה/העברה/התעלם).
+              </p>
               <div className="flex flex-wrap gap-2">
                 {selectedCatId && !manualLocked && !hasActiveSplits && (
                   <button
@@ -616,6 +648,15 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
               {ruleField === "supplier_name" && (
                 <p className="text-[10px] text-amber-600">שים לב: כלל על שם ספק יתאים רק לתנועות שנערכו ידנית עם אותו שם. לסיווג תנועות דומות השתמש ב&quot;תיאור&quot;.</p>
               )}
+              <label className="flex items-center gap-2 text-[11px] text-purple-700">
+                <input
+                  type="checkbox"
+                  checked={applyOnClassified}
+                  onChange={(e) => setApplyOnClassified(e.target.checked)}
+                  className="rounded border-purple-300"
+                />
+                לכלול גם תנועות שכבר מסווגות (רק לפי כלל זה)
+              </label>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowRulePrompt(false)}
@@ -624,12 +665,20 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                   דלג
                 </button>
                 <button
-                  onClick={handleCreateRule}
+                  onClick={() => { void handleCreateRule(false); }}
                   disabled={savingRule}
                   className="flex items-center gap-1 text-xs bg-purple-600 text-white px-3 py-1 rounded-lg hover:bg-purple-700 disabled:opacity-50"
                 >
                   {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
                   צור כלל
+                </button>
+                <button
+                  onClick={() => { void handleCreateRule(true); }}
+                  disabled={savingRule}
+                  className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                  צור כלל + החל עכשיו
                 </button>
               </div>
             </div>
