@@ -1562,7 +1562,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                           )}
                         </div>
                         {/* Action buttons — visible on row hover */}
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                        <div className={`flex gap-0.5 transition-all shrink-0 ${isDuplicate ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
                           {onEditClick && (
                             <button
                               onClick={(e) => { e.stopPropagation(); onEditClick(tx); }}
