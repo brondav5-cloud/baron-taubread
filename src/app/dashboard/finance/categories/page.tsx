@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Plus, Trash2, Zap, ChevronRight, Loader2, Pencil, Check, X } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { BankCategory, CategoryType } from "@/modules/finance/types";
+import { SupplierRuleConflictsPanel } from "@/modules/finance/categories/components/SupplierRuleConflictsPanel";
+import { CategoryInsightsPanel } from "@/modules/finance/categories/components/CategoryInsightsPanel";
+import { ClassificationSearchPanel } from "@/modules/finance/categories/components/ClassificationSearchPanel";
+import { buildSupplierRuleConflicts } from "@/modules/finance/categories/utils";
+import type { CategoryRuleView, ClassifiedTransactionRow } from "@/modules/finance/categories/types";
 
 interface CategoryRule {
   id: string;
@@ -173,6 +178,14 @@ export default function CategoriesPage() {
   const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
   const [backfillingSuppliers, setBackfillingSuppliers] = useState(false);
+  const [classifyReviewRows, setClassifyReviewRows] = useState<Array<{
+    id: string;
+    kind: "transaction" | "split";
+    description: string;
+    supplier_name: string | null;
+    category_id: string;
+    reason: string;
+  }>>([]);
 
   // New category form
   const [newName, setNewName] = useState("");
@@ -193,6 +206,17 @@ export default function CategoriesPage() {
   const [addRuleField, setAddRuleField] = useState("description");
   const [addRuleValue, setAddRuleValue] = useState("");
   const [savingAddRule, setSavingAddRule] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<ClassifiedTransactionRow[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [openCategoryInsightsId, setOpenCategoryInsightsId] = useState<string | null>(null);
+  const [insightsLoadingByCategory, setInsightsLoadingByCategory] = useState<Record<string, boolean>>({});
+  const [insightsRowsByCategory, setInsightsRowsByCategory] = useState<Record<string, ClassifiedTransactionRow[]>>({});
+
+  const supplierConflicts = useMemo(
+    () => buildSupplierRuleConflicts(rules as CategoryRuleView[], categories),
+    [rules, categories]
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -210,6 +234,52 @@ export default function CategoriesPage() {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await fetch(`/api/finance/categories/insights?q=${encodeURIComponent(q)}&limit=30`);
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled) {
+          setSearchResults((data.rows ?? []) as ClassifiedTransactionRow[]);
+        }
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 320);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const loadCategoryInsights = useCallback(async (categoryId: string) => {
+    setInsightsLoadingByCategory((prev) => ({ ...prev, [categoryId]: true }));
+    try {
+      const res = await fetch(`/api/finance/categories/insights?category_id=${categoryId}&limit=25`);
+      const data = await res.json().catch(() => ({}));
+      setInsightsRowsByCategory((prev) => ({
+        ...prev,
+        [categoryId]: (data.rows ?? []) as ClassifiedTransactionRow[],
+      }));
+    } finally {
+      setInsightsLoadingByCategory((prev) => ({ ...prev, [categoryId]: false }));
+    }
+  }, []);
+
+  const toggleCategoryInsights = useCallback((categoryId: string) => {
+    setOpenCategoryInsightsId((prev) => (prev === categoryId ? null : categoryId));
+    if (!insightsRowsByCategory[categoryId]) {
+      void loadCategoryInsights(categoryId);
+    }
+  }, [insightsRowsByCategory, loadCategoryInsights]);
 
   const handleDeleteSplitRule = useCallback(async (id: string) => {
     await fetch(`/api/finance/splits/rules?id=${id}`, { method: "DELETE" });
@@ -315,6 +385,7 @@ export default function CategoriesPage() {
   const handleAutoClassify = useCallback(async () => {
     setClassifying(true);
     setClassifyResult(null);
+    setClassifyReviewRows([]);
     try {
       const res = await fetch("/api/finance/classify", {
         method: "POST",
@@ -322,6 +393,7 @@ export default function CategoriesPage() {
         body: JSON.stringify({ mode: "auto" }),
       });
       const data = await res.json();
+      setClassifyReviewRows((data.review ?? []) as typeof classifyReviewRows);
       setClassifyResult(
         data.classified !== undefined
           ? `סווגו ${data.classified} תנועות מתוך ${data.total}`
@@ -336,6 +408,7 @@ export default function CategoriesPage() {
     if (!confirm("לסווג מחדש את כל התנועות לפי הכללים הנוכחיים?\n(תנועות נעולות ידנית לא ישתנו)")) return;
     setForceClassifying(true);
     setClassifyResult(null);
+    setClassifyReviewRows([]);
     try {
       const res = await fetch("/api/finance/classify", {
         method: "POST",
@@ -343,6 +416,7 @@ export default function CategoriesPage() {
         body: JSON.stringify({ mode: "force_auto" }),
       });
       const data = await res.json();
+      setClassifyReviewRows((data.review ?? []) as typeof classifyReviewRows);
       setClassifyResult(
         data.classified !== undefined
           ? `סווגו מחדש ${data.classified} תנועות מתוך ${data.total}`
@@ -480,6 +554,31 @@ export default function CategoriesPage() {
           {classifyResult}
         </div>
       )}
+      {classifyReviewRows.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-900 space-y-2">
+          <p className="font-semibold">תנועות שסומנו לבדיקה אחרי סיווג אוטומטי:</p>
+          <div className="max-h-56 overflow-y-auto space-y-1">
+            {classifyReviewRows.map((row) => (
+              <div key={`${row.kind}:${row.id}`} className="bg-white border border-amber-100 rounded px-2 py-1.5">
+                <p className="text-gray-800">
+                  {row.kind === "split" ? "פיצול" : "תנועה"} · {row.description}
+                </p>
+                {row.supplier_name && <p className="text-blue-600">ספק: {row.supplier_name}</p>}
+                <p className="text-amber-800">{row.reason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <SupplierRuleConflictsPanel conflicts={supplierConflicts} />
+
+      <ClassificationSearchPanel
+        query={searchQuery}
+        onQueryChange={setSearchQuery}
+        isLoading={searching}
+        results={searchResults}
+      />
 
       {/* Add category form */}
       <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
@@ -673,6 +772,13 @@ export default function CategoriesPage() {
                     <Plus className="w-3 h-3" /> הוסף כלל
                   </button>
                 )}
+
+                <CategoryInsightsPanel
+                  rows={insightsRowsByCategory[cat.id]}
+                  isLoading={Boolean(insightsLoadingByCategory[cat.id])}
+                  isOpen={openCategoryInsightsId === cat.id}
+                  onToggle={() => toggleCategoryInsights(cat.id)}
+                />
               </div>
             );
           })}

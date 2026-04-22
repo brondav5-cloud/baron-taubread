@@ -39,6 +39,15 @@ interface BankTx {
   supplier_name: string | null;
 }
 
+interface ReviewCandidate {
+  id: string;
+  kind: "transaction" | "split";
+  description: string;
+  supplier_name: string | null;
+  category_id: string;
+  reason: string;
+}
+
 function normalizeRuleValue(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
@@ -106,6 +115,40 @@ function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
     if (matched) return true;
   }
   return false;
+}
+
+function isGenericDescription(text: string): boolean {
+  const v = text.trim().toLowerCase();
+  if (!v) return true;
+  const generic = [
+    "העברה",
+    "העברה דיגיטל",
+    "העברה בנקאית",
+    "תשלום",
+    "חיוב",
+    "זיכוי",
+    "הפקדה",
+    "פקודת חיוב",
+    "פקודת זיכוי",
+  ];
+  return generic.some((g) => v === g || v.startsWith(`${g} `));
+}
+
+function isReviewCandidate(tx: BankTx, rule: CategoryRule): string | null {
+  const normalizedRuleValue = normalizeRuleValue(rule.match_value);
+  if (rule.match_field === "description" && isGenericDescription(tx.description ?? "")) {
+    return "תיאור תנועה כללי — מומלץ לבדוק שהסיווג מדויק";
+  }
+  if (rule.match_field === "description" && normalizedRuleValue.length <= 4) {
+    return "כלל תיאור קצר במיוחד — ייתכנו התאמות רחבות";
+  }
+  if (rule.match_field === "description" && !(tx.supplier_name ?? "").trim()) {
+    return "סיווג לפי תיאור בלי שם ספק — דורש בדיקה ידנית";
+  }
+  if (rule.match_field === "supplier_name" && !(tx.supplier_name ?? "").trim()) {
+    return "כלל ספק הופעל ללא שם ספק — דורש בדיקה";
+  }
+  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -271,12 +314,24 @@ export async function POST(request: NextRequest) {
 
     // ── Apply rules to bank_transactions ─────────────────────────────────────
     const byCategory = new Map<string, string[]>(); // category_id → [tx_id, ...]
+    const reviewCandidates: ReviewCandidate[] = [];
     for (const tx of allTransactions) {
       for (const rule of rules as CategoryRule[]) {
         if (matchesRule(tx, rule)) {
           const arr = byCategory.get(rule.category_id) ?? [];
           arr.push(tx.id);
           byCategory.set(rule.category_id, arr);
+          const reason = isReviewCandidate(tx, rule);
+          if (reason && reviewCandidates.length < 50) {
+            reviewCandidates.push({
+              id: tx.id,
+              kind: "transaction",
+              description: tx.description,
+              supplier_name: tx.supplier_name ?? null,
+              category_id: rule.category_id,
+              reason,
+            });
+          }
           break;
         }
       }
@@ -333,6 +388,17 @@ export async function POST(request: NextRequest) {
           const arr = splitsByCategory.get(rule.category_id) ?? [];
           arr.push(split.id);
           splitsByCategory.set(rule.category_id, arr);
+          const reason = isReviewCandidate(asTx, rule);
+          if (reason && reviewCandidates.length < 50) {
+            reviewCandidates.push({
+              id: split.id,
+              kind: "split",
+              description: split.description ?? "",
+              supplier_name: split.supplier_name ?? null,
+              category_id: rule.category_id,
+              reason,
+            });
+          }
           break;
         }
       }
@@ -356,6 +422,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       classified: classified + classifiedSplits,
       total: allTransactions.length + allSplits.length,
+      review: reviewCandidates,
     });
   } catch (err) {
     logError("finance/classify: unhandled", err);

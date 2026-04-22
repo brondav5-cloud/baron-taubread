@@ -166,8 +166,35 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (fileError || !fileRow) {
-      logError("finance/upload-transactions: insert file record", fileError);
-      return NextResponse.json({ error: "שגיאה ברישום הקובץ" }, { status: 500 });
+      const dbError = fileError as {
+        message?: string;
+        code?: string;
+        details?: string;
+        hint?: string;
+      } | null;
+
+      logError("finance/upload-transactions: insert file record", fileError, {
+        code: dbError?.code,
+        details: dbError?.details,
+        hint: dbError?.hint,
+      });
+
+      return NextResponse.json(
+        {
+          error: "שגיאה ברישום הקובץ",
+          ...(process.env.NODE_ENV !== "production"
+            ? {
+                debug: {
+                  message: dbError?.message ?? null,
+                  code: dbError?.code ?? null,
+                  details: dbError?.details ?? null,
+                  hint: dbError?.hint ?? null,
+                },
+              }
+            : {}),
+        },
+        { status: 500 }
+      );
     }
 
     const uploaded_file_id: string = fileRow.id;
