@@ -227,7 +227,7 @@ export default function PnlPage() {
 
       {statement && !loading && (
         <>
-          <PnlSummaryCards view={statement} />
+          <PnlSummaryCards view={statement} compareMonths={compareMonths} />
           <PnlStatementTable
             view={statement}
             year={year}

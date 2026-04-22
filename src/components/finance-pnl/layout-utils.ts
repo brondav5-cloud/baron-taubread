@@ -186,6 +186,72 @@ export function buildStatement(lines: PnlCategoryLine[], months: string[], layou
   };
 }
 
+export function pnlDisplayMonths(compareMonths: string[], allMonths: string[]): string[] {
+  return compareMonths.length > 0 ? compareMonths : allMonths;
+}
+
+export function sumCategoryInMonths(
+  monthly: Record<string, number>,
+  months: string[],
+): number {
+  return months.reduce((s, m) => s + (monthly[m] ?? 0), 0);
+}
+
+export function sumBlockInMonths(block: PnlStatementBlock, months: string[]): number {
+  return block.categories.reduce(
+    (sum, row) => sum + sumCategoryInMonths(row.monthly, months),
+    0,
+  );
+}
+
+export function subtotalBlocksInMonth(blocks: PnlStatementBlock[], month: string): number {
+  let sum = 0;
+  for (const block of blocks) {
+    for (const row of block.categories) {
+      sum += row.monthly[month] ?? 0;
+    }
+  }
+  return sum;
+}
+
+export function computePnlPeriodKpis(
+  view: PnlStatementView,
+  months: string[],
+): {
+  revenueTotal: number;
+  costOfGoodsTotal: number;
+  operatingExpensesTotal: number;
+  financeAndOtherTotal: number;
+  grossProfit: number;
+  operatingProfit: number;
+  netProfit: number;
+} {
+  const revenueTotal = view.blocks
+    .filter((b) => b.kind === "income")
+    .reduce((sum, b) => sum + sumBlockInMonths(b, months), 0);
+  const costOfGoodsTotal = view.blocks
+    .filter((b) => b.kind === "cost_of_goods")
+    .reduce((sum, b) => sum + sumBlockInMonths(b, months), 0);
+  const operatingExpensesTotal = view.blocks
+    .filter((b) => b.kind === "operating" || b.kind === "admin")
+    .reduce((sum, b) => sum + sumBlockInMonths(b, months), 0);
+  const financeAndOtherTotal = view.blocks
+    .filter((b) => b.kind === "finance" || b.kind === "other")
+    .reduce((sum, b) => sum + sumBlockInMonths(b, months), 0);
+  const grossProfit = revenueTotal - costOfGoodsTotal;
+  const operatingProfit = grossProfit - operatingExpensesTotal;
+  const netProfit = operatingProfit - financeAndOtherTotal;
+  return {
+    revenueTotal,
+    costOfGoodsTotal,
+    operatingExpensesTotal,
+    financeAndOtherTotal,
+    grossProfit,
+    operatingProfit,
+    netProfit,
+  };
+}
+
 export function buildLayoutCategoryOptions(lines: PnlCategoryLine[]): PnlLayoutCategoryOption[] {
   return lines
     .filter((line) => line.category_id && (line.category_type === "income" || line.category_type === "expense"))

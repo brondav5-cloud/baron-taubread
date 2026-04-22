@@ -32,6 +32,8 @@ const VIEWPORT_MARGIN = 8;
 const FLOAT_GAP = 4;
 /** Above extension bars / table UI */
 const FLOAT_Z_INDEX = 100_050;
+/** After user pauses typing, apply search; longer delay feels better for Hebrew. */
+const SEARCH_FILTER_DEBOUNCE_MS = 550;
 
 /**
  * Fixed panel aligned to trigger (RTL: `right`). Flips above when not enough space below.
@@ -962,14 +964,37 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsedSplitGroups, setCollapsedSplitGroups] = useState<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onSearchChangeRef = useRef(onSearchChange);
+  onSearchChangeRef.current = onSearchChange;
+
+  const clearSearchDebounce = useCallback(() => {
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
+    }
+  }, []);
 
   const hasActiveFilters = searchFilter !== "" || categoryFilter !== "" || bankFilter !== "";
   const isFiltersOpen = showFilters || hasActiveFilters;
 
+  const flushSearchToParent = useCallback(() => {
+    clearSearchDebounce();
+    if (localSearch !== searchFilter) {
+      onSearchChangeRef.current?.(localSearch);
+    }
+  }, [clearSearchDebounce, localSearch, searchFilter]);
+
   useEffect(() => {
-    const t = setTimeout(() => { onSearchChange?.(localSearch); }, 400);
-    return () => clearTimeout(t);
-  }, [localSearch, onSearchChange]);
+    clearSearchDebounce();
+    searchDebounceTimerRef.current = setTimeout(() => {
+      searchDebounceTimerRef.current = null;
+      onSearchChangeRef.current?.(localSearch);
+    }, SEARCH_FILTER_DEBOUNCE_MS);
+    return () => {
+      clearSearchDebounce();
+    };
+  }, [localSearch, clearSearchDebounce]);
 
   useEffect(() => {
     if (searchFilter === "" && localSearch !== "") setLocalSearch("");
@@ -994,8 +1019,9 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   }, [transactions]);
 
   const clearAllFilters = () => {
+    clearSearchDebounce();
     setLocalSearch("");
-    onSearchChange?.("");
+    onSearchChangeRef.current?.("");
     onCategoryChange?.("");
     onBankChange?.("");
   };
@@ -1003,11 +1029,12 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   /** Immediate filter from smart menu + show filter row */
   const applySearchFilter = useCallback(
     (v: string) => {
+      clearSearchDebounce();
       setLocalSearch(v);
-      onSearchChange?.(v);
+      onSearchChangeRef.current?.(v);
       setShowFilters(true);
     },
-    [onSearchChange]
+    [clearSearchDebounce]
   );
 
   const toggleSelect = useCallback((id: string, e: React.MouseEvent) => {
@@ -1276,13 +1303,27 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                       type="text"
                       value={localSearch}
                       onChange={(e) => setLocalSearch(e.target.value)}
+                      onBlur={flushSearchToParent}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          flushSearchToParent();
+                        }
+                      }}
                       placeholder="חפש ספק / תיאור / אסמכתא / בנק / קוד..."
                       className="w-full border border-blue-200 rounded-md pr-6 pl-6 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white placeholder:text-gray-400"
                     />
                     {localSearch && (
                       <button
-                        onClick={() => setLocalSearch("")}
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => {
+                          clearSearchDebounce();
+                          setLocalSearch("");
+                          onSearchChangeRef.current?.("");
+                        }}
                         className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        aria-label="נקה חיפוש"
                       >
                         <X className="w-3 h-3" />
                       </button>

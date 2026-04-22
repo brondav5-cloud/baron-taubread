@@ -31,6 +31,34 @@ export type SortDir = "asc" | "desc";
 const PAGE_SIZE = 50;
 const SCAN_BATCH_SIZE = 200;
 
+/**
+ * Same fingerprint as uidx_bank_transactions_dedup (where reference is non-empty), plus
+ * de-dupe by row id. Supabase should not return duplicate ids; duplicate logical rows
+ * (same account/date/ref/amount) can still exist in older data or if the index did not
+ * block an insert, and will otherwise produce doubled rows (and double split children).
+ */
+function dedupeFetchedParentTransactions(txs: BankTransaction[]): BankTransaction[] {
+  const byId = new Map<string, BankTransaction>();
+  for (const t of txs) {
+    if (!byId.has(t.id)) byId.set(t.id, t);
+  }
+  const list = Array.from(byId.values());
+  const seen = new Set<string>();
+  const out: BankTransaction[] = [];
+  for (const t of list) {
+    const ref = (t.reference ?? "").trim();
+    if (ref === "") {
+      out.push(t);
+      continue;
+    }
+    const fp = `${t.bank_account_id}\0${t.date}\0${ref}\0${String(t.debit)}\0${String(t.credit)}`;
+    if (seen.has(fp)) continue;
+    seen.add(fp);
+    out.push(t);
+  }
+  return out;
+}
+
 function emptyFilters(): BankTransactionFilters {
   return { dateFrom: "", dateTo: "", bankAccountId: "", sourceBank: "", search: "", categoryId: "", amountType: "all" };
 }
@@ -157,6 +185,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         notes: string | null;
       }[]>();
 
+      const seenSplitIds = new Set<string>();
       for (const s of (splitsData ?? []) as {
         id: string;
         transaction_id: string;
@@ -166,6 +195,8 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         amount: number;
         notes: string | null;
       }[]) {
+        if (seenSplitIds.has(s.id)) continue;
+        seenSplitIds.add(s.id);
         counts.set(s.transaction_id, (counts.get(s.transaction_id) ?? 0) + 1);
         const arr = splitsByTx.get(s.transaction_id) ?? [];
         arr.push(s);
@@ -243,7 +274,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
             if (cancelled) return;
             if (qErr) throw qErr;
 
-            const txs = (data ?? []) as BankTransaction[];
+            const txs = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[]);
             if (txs.length === 0) break;
 
             const { rows, splitCounts: chunkCounts } = await buildVisibleRows(txs);
@@ -286,7 +317,7 @@ export function useBankTransactions(): UseBankTransactionsReturn {
         if (cancelled) return;
         if (qErr) throw qErr;
 
-        const txs = (data ?? []) as BankTransaction[];
+        const txs = dedupeFetchedParentTransactions((data ?? []) as BankTransaction[]);
         const { rows, splitCounts: counts } = await buildVisibleRows(txs);
         if (cancelled) return;
 
