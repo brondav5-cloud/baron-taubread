@@ -304,6 +304,7 @@ function InlineCategorySelect({
   const [showRulePrompt, setShowRulePrompt] = useState(false);
   const [ruleField, setRuleField] = useState<RuleField>(tx.supplier_name ? "supplier_name" : "description");
   const [ruleMatchValue, setRuleMatchValue] = useState("");
+  const [applyOnClassified, setApplyOnClassified] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
   const isSplitLine = Boolean(tx.is_split_line);
   const isParentWithSplits = hasSplits && !isSplitLine;
@@ -395,6 +396,7 @@ function InlineCategorySelect({
     }
     setRuleField(defaultField);
     setRuleMatchValue(ruleValueForField(defaultField));
+    setApplyOnClassified(false);
     if (buttonRef.current) {
       setRuleStyle(calcFloatingPanelStyle(buttonRef.current, 292, { estimatedMinHeight: 260, maxHeightCap: 420 }));
     }
@@ -439,7 +441,16 @@ function InlineCategorySelect({
         await fetch("/api/finance/classify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "auto" }),
+          body: JSON.stringify({
+            mode: "apply_single_rule",
+            include_classified: applyOnClassified,
+            rule: {
+              category_id: localCatId,
+              match_field: ruleField,
+              match_type: "contains",
+              match_value: ruleMatchValue.trim(),
+            },
+          }),
         });
         onApplySimilarDone?.();
       }
@@ -787,6 +798,15 @@ function InlineCategorySelect({
             className="w-full border border-purple-200 rounded-lg px-2 py-1 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-purple-400 bg-white"
           />
           <p className="text-[9px] text-purple-400">ניתן לקצר את הערך — החיפוש הוא &quot;מכיל&quot;</p>
+          <label className="flex items-center gap-2 text-[11px] text-purple-700">
+            <input
+              type="checkbox"
+              checked={applyOnClassified}
+              onChange={(e) => setApplyOnClassified(e.target.checked)}
+              className="rounded border-purple-300"
+            />
+            לכלול גם תנועות שכבר מסווגות (רק לפי כלל זה)
+          </label>
 
           <div className="flex items-center gap-2">
             <button

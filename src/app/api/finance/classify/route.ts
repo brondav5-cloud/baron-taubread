@@ -17,12 +17,14 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
+import { applySingleRuleNow } from "@/modules/finance/classification/applySingleRule";
 import {
   matchesRuleNormalized,
   normalizeForMatch,
   type MatchField,
   type MatchType,
 } from "@/modules/finance/classification/match";
+import { getReviewReason } from "@/modules/finance/classification/review";
 
 interface CategoryRule {
   id: string;
@@ -74,40 +76,6 @@ function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
     return false;
   }
   return matchesRuleNormalized(tx, rule);
-}
-
-function isGenericDescription(text: string): boolean {
-  const v = text.trim().toLowerCase();
-  if (!v) return true;
-  const generic = [
-    "העברה",
-    "העברה דיגיטל",
-    "העברה בנקאית",
-    "תשלום",
-    "חיוב",
-    "זיכוי",
-    "הפקדה",
-    "פקודת חיוב",
-    "פקודת זיכוי",
-  ];
-  return generic.some((g) => v === g || v.startsWith(`${g} `));
-}
-
-function isReviewCandidate(tx: BankTx, rule: CategoryRule): string | null {
-  const normalizedRuleValue = normalizeForMatch(rule.match_value);
-  if (rule.match_field === "description" && isGenericDescription(tx.description ?? "")) {
-    return "תיאור תנועה כללי — מומלץ לבדוק שהסיווג מדויק";
-  }
-  if (rule.match_field === "description" && normalizedRuleValue.length <= 4) {
-    return "כלל תיאור קצר במיוחד — ייתכנו התאמות רחבות";
-  }
-  if (rule.match_field === "description" && !(tx.supplier_name ?? "").trim()) {
-    return "סיווג לפי תיאור בלי שם ספק — דורש בדיקה ידנית";
-  }
-  if (rule.match_field === "supplier_name" && !(tx.supplier_name ?? "").trim()) {
-    return "כלל ספק הופעל ללא שם ספק — דורש בדיקה";
-  }
-  return null;
 }
 
 export async function POST(request: NextRequest) {
@@ -181,6 +149,27 @@ export async function POST(request: NextRequest) {
         .eq("company_id", companyId);
 
       return NextResponse.json({ ok: true });
+    }
+
+    // ── Apply one rule now (optionally on already-classified rows) ──────────
+    if (body.mode === "apply_single_rule") {
+      const payload = body as {
+        include_classified?: boolean;
+        rule?: { category_id?: string; match_field?: MatchField; match_type?: MatchType; match_value?: string };
+      };
+      const rule = payload.rule;
+      if (!rule?.category_id || !rule.match_field || !rule.match_type || !rule.match_value) {
+        return NextResponse.json({ error: "פרטי כלל חסרים" }, { status: 400 });
+      }
+      const result = await applySingleRuleNow({
+        companyId,
+        categoryId: rule.category_id,
+        matchField: rule.match_field,
+        matchType: rule.match_type,
+        matchValue: rule.match_value,
+        includeClassified: Boolean(payload.include_classified),
+      });
+      return NextResponse.json({ ok: true, ...result, total: result.classified + result.classifiedSplits });
     }
 
     // ── Clear all non-locked classifications (no reclassify) ──────────────────
@@ -277,10 +266,11 @@ export async function POST(request: NextRequest) {
     for (const tx of allTransactions) {
       for (const rule of rules as CategoryRule[]) {
         if (matchesRule(tx, rule)) {
+          const normalizedValue = normalizeForMatch(rule.match_value);
           const arr = byCategory.get(rule.category_id) ?? [];
           arr.push(tx.id);
           byCategory.set(rule.category_id, arr);
-          const reason = isReviewCandidate(tx, rule);
+          const reason = getReviewReason(tx, rule, normalizedValue);
           if (reason && reviewCandidates.length < 50) {
             reviewCandidates.push({
               id: tx.id,
@@ -344,10 +334,11 @@ export async function POST(request: NextRequest) {
       };
       for (const rule of rules as CategoryRule[]) {
         if (matchesRule(asTx, rule)) {
+          const normalizedValue = normalizeForMatch(rule.match_value);
           const arr = splitsByCategory.get(rule.category_id) ?? [];
           arr.push(split.id);
           splitsByCategory.set(rule.category_id, arr);
-          const reason = isReviewCandidate(asTx, rule);
+          const reason = getReviewReason(asTx, rule, normalizedValue);
           if (reason && reviewCandidates.length < 50) {
             reviewCandidates.push({
               id: split.id,
