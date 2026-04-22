@@ -174,7 +174,16 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
       const data = await res.json();
 
       if (!res.ok) {
-        setParseError(data.error ?? "שגיאה בהעלאה");
+        const debugText = data?.debug
+          ? [data.debug.message, data.debug.code, data.debug.details, data.debug.hint]
+              .filter(Boolean)
+              .join(" | ")
+          : "";
+        setParseError(
+          data.error
+            ? `${data.error}${debugText ? ` — ${debugText}` : ""}`
+            : "שגיאה בהעלאה"
+        );
         setStep("preview");
         return;
       }

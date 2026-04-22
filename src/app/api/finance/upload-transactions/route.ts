@@ -182,16 +182,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "שגיאה ברישום הקובץ",
-          ...(process.env.NODE_ENV !== "production"
-            ? {
-                debug: {
-                  message: dbError?.message ?? null,
-                  code: dbError?.code ?? null,
-                  details: dbError?.details ?? null,
-                  hint: dbError?.hint ?? null,
-                },
-              }
-            : {}),
+          debug: {
+            message: dbError?.message ?? null,
+            code: dbError?.code ?? null,
+            details: dbError?.details ?? null,
+            hint: dbError?.hint ?? null,
+          },
         },
         { status: 500 }
       );
