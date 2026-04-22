@@ -390,6 +390,7 @@ function InlineCategorySelect({
   const openRulePrompt = () => {
     // Smart default field: if description is generic, prefer details or supplier_name
     let defaultField: RuleField = tx.supplier_name ? "supplier_name" : "description";
+    if (isSplitLine) defaultField = "description";
     if (isGenericDesc) {
       if (tx.supplier_name) defaultField = "supplier_name";
       else if (tx.details) defaultField = "details";
@@ -414,7 +415,7 @@ function InlineCategorySelect({
     try {
       await onClassify?.(tx.id, catId);
       if (!catId) setManualLock(false);
-      if (catId && !isSplitLine) openRulePrompt();
+      if (catId) openRulePrompt();
     } catch {
       setLocalCatId(prevId);
     } finally {
@@ -426,32 +427,51 @@ function InlineCategorySelect({
     if (!localCatId || !ruleMatchValue.trim()) return;
     setSavingRule(true);
     try {
-      const ruleRes = await fetch("/api/finance/categories/rules", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category_id: localCatId,
-          match_field: ruleField,
-          match_type: "contains",
-          match_value: ruleMatchValue.trim(),
-        }),
-      });
-      if (!ruleRes.ok) return;
-      if (applyNow) {
-        await fetch("/api/finance/classify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            mode: "apply_single_rule",
-            include_classified: applyOnClassified,
-            rule: {
+      const ruleRes = isSplitLine
+        ? await fetch("/api/finance/splits/rules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              rules: [{ match_value: ruleMatchValue.trim(), category_id: localCatId }],
+            }),
+          })
+        : await fetch("/api/finance/categories/rules", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
               category_id: localCatId,
               match_field: ruleField,
               match_type: "contains",
               match_value: ruleMatchValue.trim(),
-            },
-          }),
-        });
+            }),
+          });
+      if (!ruleRes.ok) return;
+      if (applyNow) {
+        if (isSplitLine) {
+          await fetch("/api/finance/splits/bulk-classify", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              include_classified: applyOnClassified,
+              rules: [{ description: ruleMatchValue.trim(), category_id: localCatId }],
+            }),
+          });
+        } else {
+          await fetch("/api/finance/classify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              mode: "apply_single_rule",
+              include_classified: applyOnClassified,
+              rule: {
+                category_id: localCatId,
+                match_field: ruleField,
+                match_type: "contains",
+                match_value: ruleMatchValue.trim(),
+              },
+            }),
+          });
+        }
         onApplySimilarDone?.();
       }
     } finally {
@@ -479,7 +499,7 @@ function InlineCategorySelect({
         setAddMode(false);
         setNewName("");
         setSearch("");
-        if (!isSplitLine) openRulePrompt();
+        openRulePrompt();
       }
     } finally {
       setSaving(false);
@@ -751,7 +771,7 @@ function InlineCategorySelect({
       )}
 
       {/* ── Rule prompt — also via portal ── */}
-      {showRulePrompt && localCatId && !isParentWithSplits && !isSplitLine && typeof document !== "undefined" && createPortal(
+      {showRulePrompt && localCatId && !isParentWithSplits && typeof document !== "undefined" && createPortal(
         <div
           ref={ruleRef}
           style={ruleStyle}
@@ -773,20 +793,26 @@ function InlineCategorySelect({
           )}
 
           {/* Field selector */}
-          <select
-            value={ruleField}
-            onChange={(e) => {
-              const f = e.target.value as RuleField;
-              setRuleField(f);
-              setRuleMatchValue(ruleValueForField(f));
-            }}
-            className="w-full border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
-          >
-            {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
-            <option value="description">תיאור</option>
-            {tx.details && <option value="details">פרטים</option>}
-            {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
-          </select>
+          {!isSplitLine ? (
+            <select
+              value={ruleField}
+              onChange={(e) => {
+                const f = e.target.value as RuleField;
+                setRuleField(f);
+                setRuleMatchValue(ruleValueForField(f));
+              }}
+              className="w-full border border-purple-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-400"
+            >
+              {tx.supplier_name && <option value="supplier_name">שם ספק</option>}
+              <option value="description">תיאור</option>
+              {tx.details && <option value="details">פרטים</option>}
+              {tx.operation_code && <option value="operation_code">קוד פעולה</option>}
+            </select>
+          ) : (
+            <p className="text-[10px] text-purple-700 bg-purple-100/60 border border-purple-200 rounded-md px-2 py-1">
+              שורת פיצול: הכלל נשמר לפי תיאור השורה.
+            </p>
+          )}
 
           {/* Editable match value */}
           <input

@@ -1,9 +1,9 @@
 /**
  * PATCH /api/finance/splits/bulk-classify
- * body: { rules: [{ description: string, category_id: string }] }
+ * body: { rules: [{ description: string, category_id: string }], include_classified?: boolean }
  *
  * For each rule, updates every bank_transaction_split that has the same
- * description AND no category yet (category_id IS NULL).
+ * description, and optionally only rows without category.
  * Returns { updated: number } — total rows changed across all rules.
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -27,7 +27,9 @@ export async function PATCH(request: NextRequest) {
 
     const { rules } = body as {
       rules?: { description: string; category_id: string }[];
+      include_classified?: boolean;
     };
+    const includeClassified = Boolean((body as { include_classified?: boolean }).include_classified);
     if (!Array.isArray(rules) || rules.length === 0) {
       return NextResponse.json({ error: "rules חסר" }, { status: 400 });
     }
@@ -38,13 +40,13 @@ export async function PATCH(request: NextRequest) {
     for (const rule of rules) {
       if (!rule.description?.trim() || !rule.category_id) continue;
 
-      const { data, error: updErr } = await supabase
+      let updQuery = supabase
         .from("bank_transaction_splits")
         .update({ category_id: rule.category_id })
         .eq("company_id", companyId)
-        .eq("description", rule.description.trim())
-        .is("category_id", null)
-        .select("id");
+        .eq("description", rule.description.trim());
+      if (!includeClassified) updQuery = updQuery.is("category_id", null);
+      const { data, error: updErr } = await updQuery.select("id");
 
       if (updErr) {
         logError("bulk-classify PATCH rule", updErr);
