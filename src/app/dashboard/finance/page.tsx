@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, Suspense } from "react";
+import { useState, useCallback, useEffect, useMemo, Suspense } from "react";
 import { Upload, ChevronRight, ChevronLeft, Settings, BarChart3, Download, Clock, Receipt } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -34,6 +34,15 @@ function getMonthRange(year: number, month: number): { from: string; to: string 
   return { from, to };
 }
 
+function buildDuplicateKey(tx: BankTransaction): string | null {
+  if (tx.is_split_line) return null;
+  const reference = (tx.reference ?? "").trim();
+  if (!reference) return null;
+  const amount = Number(tx.debit) > 0 ? Number(tx.debit) : Number(tx.credit);
+  if (!Number.isFinite(amount) || amount <= 0) return null;
+  return `${tx.date}\u0000${reference}\u0000${amount.toFixed(2)}`;
+}
+
 function FinancePageInner() {
   const { canAccess } = usePermissions();
   const hook = useBankTransactions();
@@ -58,6 +67,7 @@ function FinancePageInner() {
   });
   const [extraCategories, setExtraCategories] = useState<BankCategory[]>([]);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
   const currentYear = new Date().getFullYear();
   const [selectedFilterYear, setSelectedFilterYear] = useState(currentYear);
   const [availableYears, setAvailableYears] = useState<number[]>([currentYear]);
@@ -65,6 +75,28 @@ function FinancePageInner() {
   const totalPages = Math.ceil(hook.totalCount / hook.pageSize);
 
   const { setFilters } = hook;
+
+  const duplicateTxIds = useMemo(() => {
+    const byKey = new Map<string, string[]>();
+    for (const tx of hook.transactions) {
+      const key = buildDuplicateKey(tx);
+      if (!key) continue;
+      const list = byKey.get(key) ?? [];
+      list.push(tx.id);
+      byKey.set(key, list);
+    }
+    const ids = new Set<string>();
+    byKey.forEach((list) => {
+      if (list.length < 2) return;
+      list.forEach((id) => ids.add(id));
+    });
+    return ids;
+  }, [hook.transactions]);
+
+  const visibleTransactions = useMemo(() => {
+    if (!showDuplicatesOnly) return hook.transactions;
+    return hook.transactions.filter((tx) => duplicateTxIds.has(tx.id));
+  }, [hook.transactions, showDuplicatesOnly, duplicateTxIds]);
 
   const handleSearchChange = useCallback((search: string) => {
     setFilters((f) => ({ ...f, search }));
@@ -210,6 +242,28 @@ function FinancePageInner() {
     } catch {
       toast.error("שגיאת רשת — לא ניתן לבטל מיזוג", { id: toastId });
     }
+  }, [hook, router]);
+
+  const handleDeleteTransaction = useCallback(async (tx: BankTransaction) => {
+    const label = tx.supplier_name ?? tx.description;
+    if (!window.confirm(`למחוק את התנועה "${label}"?\nפעולה זו בלתי הפיכה.`)) return;
+    const toastId = toast.loading("מוחק תנועה...");
+    try {
+      const res = await fetch("/api/finance/transactions/edit", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tx_id: tx.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error((data as { error?: string }).error ?? "שגיאה במחיקה", { id: toastId });
+        return;
+      }
+      toast.success("התנועה נמחקה", { id: toastId });
+      hook.refresh();
+    } catch {
+      toast.error("שגיאת רשת במחיקה", { id: toastId });
+    }
   }, [hook]);
 
   // Fetch available years from bank_transactions
@@ -301,6 +355,17 @@ function FinancePageInner() {
           )}
         </div>
         <div className="flex gap-2 flex-wrap">
+          <button
+            onClick={() => setShowDuplicatesOnly((v) => !v)}
+            className={`flex items-center gap-2 px-3 py-2 border rounded-xl text-sm font-medium transition-colors ${
+              showDuplicatesOnly
+                ? "bg-amber-100 border-amber-300 text-amber-800"
+                : "border-amber-200 text-amber-700 hover:bg-amber-50"
+            }`}
+            title="זיהוי לפי תאריך + סכום + אסמכתא (בתוצאות המסוננות)"
+          >
+            כפילויות ({duplicateTxIds.size})
+          </button>
           <button
             onClick={() => setShowHistory((v) => !v)}
             className={`flex items-center gap-2 px-3 py-2 border rounded-xl text-sm font-medium transition-colors ${showHistory ? "bg-gray-100 border-gray-300 text-gray-700" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
@@ -422,7 +487,7 @@ function FinancePageInner() {
 
       {/* ── Table ──────────────────────────────────────────────────────────── */}
       <BankTransactionsTable
-        transactions={hook.transactions}
+        transactions={visibleTransactions}
         categories={[...hook.categories, ...extraCategories.filter((e) => !hook.categories.some((c) => c.id === e.id))]}
         isLoading={hook.isLoading}
         sortBy={hook.sortBy}
@@ -445,6 +510,8 @@ function FinancePageInner() {
         onToggleClassifyCol={handleToggleClassifyCol}
         onOpenSupplierInsights={(key, name) => setOpenSupplier({ key, name })}
         onApplySimilarDone={handleApplySimilarDone}
+        duplicateTxIds={duplicateTxIds}
+        onDeleteClick={(tx) => { void handleDeleteTransaction(tx); }}
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}

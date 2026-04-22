@@ -46,3 +46,35 @@ export async function PATCH(request: NextRequest) {
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(request: NextRequest) {
+  const supabaseAuth = createServerSupabaseClient();
+  const { data: { user }, error } = await supabaseAuth.auth.getUser();
+  if (error || !user) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+
+  const { companyId } = await resolveSelectedCompanyId(supabaseAuth, user.id);
+  if (!companyId) return NextResponse.json({ error: "לא נבחרה חברה" }, { status: 400 });
+
+  let body: Record<string, unknown>;
+  try { body = await request.json(); } catch {
+    return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 });
+  }
+
+  const { tx_id } = body as { tx_id?: string };
+  if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+
+  // Split pseudo-ids are client-side only (parent::split::id) and must not be deleted from this endpoint.
+  if (tx_id.includes("::split::")) {
+    return NextResponse.json({ error: "לא ניתן למחוק שורת פיצול ממסך זה" }, { status: 400 });
+  }
+
+  const supabase = getSupabaseAdmin();
+  const { error: deleteErr } = await supabase
+    .from("bank_transactions")
+    .delete()
+    .eq("id", tx_id)
+    .eq("company_id", companyId);
+
+  if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

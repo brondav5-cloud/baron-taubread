@@ -4,7 +4,7 @@ import { memo, useState, useEffect, useLayoutEffect, useRef, useCallback, type R
 import { createPortal } from "react-dom";
 import {
   ChevronUp, ChevronDown, ChevronsUpDown,
-  Search, X, Filter, Pencil, Eye, EyeOff, Copy, LayoutList, Lock,
+  Search, X, Filter, Pencil, Eye, EyeOff, Copy, LayoutList, Lock, Trash2,
 } from "lucide-react";
 import type { CategoryType } from "../types";
 
@@ -923,6 +923,10 @@ interface Props {
   onOpenSupplierInsights?: (key: string, displayName: string) => void;
   /** Called after inline rule is created and auto-applied */
   onApplySimilarDone?: () => void;
+  /** Optional set of transaction IDs identified as duplicates */
+  duplicateTxIds?: Set<string>;
+  /** Delete a transaction row */
+  onDeleteClick?: (tx: BankTransaction) => void;
 }
 
 function SortIcon({ col, sortBy, sortDir }: { col: SortBy; sortBy?: SortBy; sortDir?: SortDir }) {
@@ -956,6 +960,8 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   onToggleClassifyCol,
   onOpenSupplierInsights,
   onApplySimilarDone,
+  duplicateTxIds,
+  onDeleteClick,
 }: Props) {
   const catMap = new Map(categories.map((c) => [c.id, c]));
 
@@ -1433,6 +1439,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                 const isSelected = selected.has(tx.id);
                 const isMerged = isMergedMaster(tx);
                 const isSplitLine = Boolean(tx.is_split_line);
+                const isDuplicate = Boolean(duplicateTxIds?.has(tx.id));
 
                 return (
                   <tr
@@ -1440,6 +1447,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                     onClick={() => onRowClick?.(tx)}
                     className={`group transition-colors ${onRowClick ? "cursor-pointer" : ""} ${
                       isSelected ? "bg-indigo-50/60" :
+                      isDuplicate ? "bg-amber-50/70 hover:bg-amber-50" :
                       isDebit ? "bg-red-50/30 hover:bg-red-50" :
                       isCredit ? "bg-green-50/30 hover:bg-green-50" :
                       "bg-white hover:bg-gray-50"
@@ -1516,6 +1524,11 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                               <MergeIcon className="w-2.5 h-2.5" /> ממוזג
                             </span>
                           )}
+                          {isDuplicate && (
+                            <span className="inline-flex items-center gap-1 mt-0.5 mr-1 text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                              כפילות
+                            </span>
+                          )}
                         </div>
                         {/* Action buttons — visible on row hover */}
                         <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all shrink-0">
@@ -1535,6 +1548,15 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
                               className="p-1 rounded-lg hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
                             >
                               <X className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                          {!isSplitLine && onDeleteClick && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onDeleteClick(tx); }}
+                              title="מחק תנועה"
+                              className="p-1 rounded-lg hover:bg-red-100 text-gray-400 hover:text-red-600 transition-colors"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>
