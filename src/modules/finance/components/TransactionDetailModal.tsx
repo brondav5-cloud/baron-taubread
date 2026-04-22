@@ -657,6 +657,9 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                 />
                 לכלול גם תנועות שכבר מסווגות (רק לפי כלל זה)
               </label>
+              <p className="text-[10px] text-purple-500 leading-snug">
+                תהליך מומלץ: שמור קודם <strong>כלל בלבד</strong>, ואז לחץ במסך על <strong>סווג אוטומטית (לא מסווגות)</strong>.
+              </p>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowRulePrompt(false)}
@@ -670,7 +673,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                   className="flex items-center gap-1 text-xs bg-purple-600 text-white px-3 py-1 rounded-lg hover:bg-purple-700 disabled:opacity-50"
                 >
                   {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  צור כלל
+                  צור כלל בלבד
                 </button>
                 <button
                   onClick={() => { void handleCreateRule(true); }}
@@ -678,7 +681,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
                   className="flex items-center gap-1 text-xs bg-indigo-600 text-white px-3 py-1 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                 >
                   {savingRule ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                  צור כלל + החל עכשיו
+                  צור כלל + סווג דומות עכשיו
                 </button>
               </div>
             </div>

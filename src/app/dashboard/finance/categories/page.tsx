@@ -174,7 +174,6 @@ export default function CategoriesPage() {
   const [loading, setLoading] = useState(true);
   const [classifying, setClassifying] = useState(false);
   const [forceClassifying, setForceClassifying] = useState(false);
-  const [clearingUnlocked, setClearingUnlocked] = useState(false);
   const [unlockingAllLocks, setUnlockingAllLocks] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
   const [backfillingSuppliers, setBackfillingSuppliers] = useState(false);
@@ -431,27 +430,6 @@ export default function CategoriesPage() {
     }
   }, []);
 
-  const handleClearUnlockedClassifications = useCallback(async () => {
-    if (!confirm("לאפס את כל הסיווגים הלא-נעולים ל\"ללא סיווג\"?\n(תנועות נעולות ידנית לא ישתנו)")) return;
-    setClearingUnlocked(true);
-    setClassifyResult(null);
-    try {
-      const res = await fetch("/api/finance/classify", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "clear_unlocked" }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setClassifyResult((data as { error?: string }).error ?? "שגיאה באיפוס סיווגים");
-        return;
-      }
-      setClassifyResult(`אופסו ${(data as { cleared?: number }).cleared ?? 0} סיווגים לא-נעולים`);
-    } finally {
-      setClearingUnlocked(false);
-    }
-  }, []);
-
   const handleBackfillSuppliers = useCallback(async () => {
     if (!confirm('למלא אוטומטית שמות ספק מתוך שדה "פרטים" לכל התנועות שאין להן שם ספק?\n(לדוגמה: "העברה אל: הפניקס פנסיה..." → שם ספק: הפניקס פנסיה)')) return;
     setBackfillingSuppliers(true);
@@ -526,29 +504,21 @@ export default function CategoriesPage() {
           </button>
           <button
             onClick={handleAutoClassify}
-            disabled={classifying || forceClassifying || clearingUnlocked}
+            disabled={classifying || forceClassifying}
             className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+            title="מסווג תנועות ללא סיווג לפי הכללים הפעילים"
           >
             {classifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            סווג אוטומטית
+            סווג אוטומטית (לא מסווגות)
           </button>
           <button
             onClick={() => { void handleForceClassify(); }}
-            disabled={classifying || forceClassifying || clearingUnlocked}
-            title="מסווג מחדש את כל התנועות (כולל מסווגות) — נעולות ידנית לא ישתנו"
+            disabled={classifying || forceClassifying}
+            title="מסווג מחדש את כל התנועות (כולל מסווגות) ומחליף סיווגים קיימים לפי הכללים"
             className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-xl text-sm font-medium hover:bg-orange-700 disabled:opacity-50 transition-colors"
           >
             {forceClassifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-            סווג מחדש הכל
-          </button>
-          <button
-            onClick={() => { void handleClearUnlockedClassifications(); }}
-            disabled={classifying || forceClassifying || clearingUnlocked}
-            title="מאפס סיווגים לכל התנועות הלא-נעולות, בלי להחיל כללים"
-            className="flex items-center gap-2 px-4 py-2 bg-gray-700 text-white rounded-xl text-sm font-medium hover:bg-gray-800 disabled:opacity-50 transition-colors"
-          >
-            {clearingUnlocked ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-            אפס לא מסווג
+            סווג מחדש הכל (מחליף קיימים)
           </button>
         </div>
       </div>
