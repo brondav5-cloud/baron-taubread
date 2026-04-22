@@ -14,6 +14,12 @@ export interface SupplierRuleConflict {
   rules: CategoryRuleView[];
 }
 
+export interface SupplierSimilarityWarning {
+  base_key: string;
+  variants: string[];
+  categories: Array<{ id: string; name: string }>;
+}
+
 export type ClassificationSource =
   | "supplier_rule"
   | "description_rule"

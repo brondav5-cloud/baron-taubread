@@ -1,10 +1,25 @@
 import type { BankCategory } from "@/modules/finance/types";
-import type { CategoryRuleView, ClassificationSource, SupplierRuleConflict } from "./types";
+import type {
+  CategoryRuleView,
+  ClassificationSource,
+  SupplierRuleConflict,
+  SupplierSimilarityWarning,
+} from "./types";
 
 function normalizeSupplierValue(value: string): string {
   return value
     .toLowerCase()
     .replace(/["'`׳״]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function baseSupplierValue(value: string): string {
+  return normalizeSupplierValue(value)
+    .replace(/\bבעמ\b/g, "")
+    .replace(/\bבע\s?מ\b/g, "")
+    .replace(/\b(בע"מ|בע''מ|בע׳׳מ)\b/g, "")
+    .replace(/\bחברה\b/g, "")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -43,6 +58,50 @@ export function buildSupplierRuleConflicts(
   }
 
   return conflicts.sort((a, b) => a.supplier_display.localeCompare(b.supplier_display, "he"));
+}
+
+export function buildSupplierSimilarityWarnings(
+  rules: CategoryRuleView[],
+  categories: BankCategory[]
+): SupplierSimilarityWarning[] {
+  const supplierRules = rules.filter((r) => r.match_field === "supplier_name");
+  const categoryById = new Map(categories.map((c) => [c.id, c]));
+  const byBase = new Map<
+    string,
+    { variants: Set<string>; categoryIds: Set<string>; normalizedVariants: Set<string> }
+  >();
+
+  for (const rule of supplierRules) {
+    const normalized = normalizeSupplierValue(rule.match_value);
+    const base = baseSupplierValue(rule.match_value);
+    if (!normalized || !base) continue;
+    const group = byBase.get(base) ?? {
+      variants: new Set<string>(),
+      categoryIds: new Set<string>(),
+      normalizedVariants: new Set<string>(),
+    };
+    group.variants.add(rule.match_value.trim());
+    group.categoryIds.add(rule.category_id);
+    group.normalizedVariants.add(normalized);
+    byBase.set(base, group);
+  }
+
+  const warnings: SupplierSimilarityWarning[] = [];
+  for (const [baseKey, group] of Array.from(byBase.entries())) {
+    if (group.normalizedVariants.size <= 1) continue;
+    const variants = Array.from(group.variants).sort((a, b) => a.localeCompare(b, "he"));
+    const catList = Array.from(group.categoryIds)
+      .map((id) => categoryById.get(id))
+      .filter(Boolean)
+      .map((cat) => ({ id: cat!.id, name: cat!.name }));
+    warnings.push({
+      base_key: baseKey,
+      variants,
+      categories: catList,
+    });
+  }
+
+  return warnings.sort((a, b) => a.variants[0]!.localeCompare(b.variants[0]!, "he"));
 }
 
 export function classificationSourceLabel(source: ClassificationSource): string {

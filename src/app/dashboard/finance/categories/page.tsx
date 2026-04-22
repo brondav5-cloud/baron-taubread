@@ -9,7 +9,7 @@ import type { BankCategory, CategoryType } from "@/modules/finance/types";
 import { SupplierRuleConflictsPanel } from "@/modules/finance/categories/components/SupplierRuleConflictsPanel";
 import { CategoryInsightsPanel } from "@/modules/finance/categories/components/CategoryInsightsPanel";
 import { ClassificationSearchPanel } from "@/modules/finance/categories/components/ClassificationSearchPanel";
-import { buildSupplierRuleConflicts } from "@/modules/finance/categories/utils";
+import { buildSupplierRuleConflicts, buildSupplierSimilarityWarnings } from "@/modules/finance/categories/utils";
 import type { CategoryRuleView, ClassifiedTransactionRow } from "@/modules/finance/categories/types";
 
 interface CategoryRule {
@@ -215,6 +215,10 @@ export default function CategoriesPage() {
 
   const supplierConflicts = useMemo(
     () => buildSupplierRuleConflicts(rules as CategoryRuleView[], categories),
+    [rules, categories]
+  );
+  const supplierSimilarities = useMemo(
+    () => buildSupplierSimilarityWarnings(rules as CategoryRuleView[], categories),
     [rules, categories]
   );
 
@@ -571,7 +575,10 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <SupplierRuleConflictsPanel conflicts={supplierConflicts} />
+      <SupplierRuleConflictsPanel
+        conflicts={supplierConflicts}
+        similarities={supplierSimilarities}
+      />
 
       <ClassificationSearchPanel
         query={searchQuery}
