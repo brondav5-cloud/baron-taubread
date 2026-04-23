@@ -99,7 +99,8 @@ export function MonthlyTrendsChart() {
       const buckets = new Map(months.map((m) => [m.key, { income: 0, expense: 0 }]));
 
       for (const tx of (txs ?? [])) {
-        const ym = tx.effective_date.slice(0, 7);
+        const ym = (tx.effective_date ?? "").slice(0, 7);
+        if (!ym) continue;
         if (!buckets.has(ym)) continue;
         const type = tx.category_id ? catType.get(tx.category_id) : null;
         const b = buckets.get(ym)!;

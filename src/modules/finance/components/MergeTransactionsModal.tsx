@@ -36,6 +36,7 @@ export function MergeTransactionsModal({ transactions, onClose, onMerged }: Prop
 
   const totalDebit = transactions.reduce((s, t) => s + t.debit, 0);
   const totalCredit = transactions.reduce((s, t) => s + t.credit, 0);
+  const hasMixedSigns = transactions.some((t) => t.debit > 0) && transactions.some((t) => t.credit > 0);
 
   const handleMerge = async () => {
     if (!newName.trim()) { toast.error("יש להזין שם לתנועה הממוזגת"); return; }
@@ -86,6 +87,16 @@ export function MergeTransactionsModal({ transactions, onClose, onMerged }: Prop
             התנועות יאוחדו לשורה אחת. מיד אחרי המיזוג ייפתח חלון התנועה הראשית, שם אפשר להעלות קובץ פירוט ולסווג שורות כמו בכרטיס אשראי.
           </p>
         </div>
+
+        {/* Mixed-sign warning */}
+        {hasMixedSigns && (
+          <div className="px-5 pt-3 flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+            <p className="text-xs text-amber-700">
+              שים לב: הבחירה כוללת גם תנועות חובה וגם תנועות זכות. המיזוג יחשב את הסכום הנטו — ודא שזו הכוונה שלך.
+            </p>
+          </div>
+        )}
 
         <div className="px-5 py-4 space-y-4">
           {/* Name input */}

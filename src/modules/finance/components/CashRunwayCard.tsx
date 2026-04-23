@@ -23,19 +23,33 @@ export function CashRunwayCard() {
     try {
       const supabase = createClient();
 
-      // Latest known balance
-      const { data: latest } = await supabase
-        .from("bank_transactions")
-        .select("balance")
+      // Latest known balance per account, then sum across active accounts
+      const { data: accountRows } = await supabase
+        .from("bank_accounts")
+        .select("id")
         .eq("company_id", selectedCompanyId)
-        .not("balance", "is", null)
-        .order("effective_date", { ascending: false })
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .eq("is_active", true);
 
-      const balance = latest?.balance ?? null;
-      if (balance === null || balance <= 0) return;
+      const accountIds = (accountRows ?? []).map((a) => a.id);
+
+      const balancePerAccount = await Promise.all(
+        accountIds.map((accId) =>
+          supabase
+            .from("bank_transactions")
+            .select("balance")
+            .eq("company_id", selectedCompanyId)
+            .eq("bank_account_id", accId)
+            .not("balance", "is", null)
+            .order("effective_date", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle()
+            .then(({ data }) => data?.balance ?? 0)
+        )
+      );
+
+      const balance = balancePerAccount.reduce((s, b) => s + b, 0);
+      if (balance <= 0) return;
 
       // Expense category IDs
       const { data: expCats } = await supabase

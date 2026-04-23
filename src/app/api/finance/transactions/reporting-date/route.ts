@@ -62,14 +62,11 @@ export async function PATCH(request: NextRequest) {
     return { id: row.id, company_id: companyId, reporting_date: nextDate };
   });
 
-  for (const row of updates) {
-    const { error: updateErr } = await supabase
-      .from("bank_transactions")
-      .update({ reporting_date: row.reporting_date })
-      .eq("id", row.id)
-      .eq("company_id", companyId);
-    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
-  }
+  const { error: upsertErr } = await supabase
+    .from("bank_transactions")
+    .upsert(updates, { onConflict: "id" });
+
+  if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, updated: updates.length });
 }

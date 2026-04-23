@@ -277,7 +277,7 @@ function FinancePageInner() {
   const handleShiftSelectedToPreviousDay = useCallback(async (selectedTxs: BankTransaction[]) => {
     const ids = selectedTxs
       .map((tx) => tx.id)
-      .filter((id) => !id.includes("::split::"));
+      .filter((id) => typeof id === "string" && id && !id.includes("::"));
     if (ids.length === 0) return;
 
     if (!window.confirm(`להזיז ${ids.length} תנועות ליום הקודם?\nהשיוך ישפיע על דוחות וספקים.`)) return;

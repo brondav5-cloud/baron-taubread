@@ -43,11 +43,13 @@ export async function PUT(request: NextRequest) {
   if (display_name !== undefined) updates.display_name = display_name;
   if (is_active !== undefined) updates.is_active = is_active;
 
-  await supabase
+  const { error: updateErr } = await supabase
     .from("bank_accounts")
     .update(updates)
     .eq("id", id)
     .eq("company_id", auth.companyId);
+
+  if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

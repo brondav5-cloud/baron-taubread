@@ -111,12 +111,13 @@ export async function POST(request: NextRequest) {
         ? { category_id: cid }
         : { category_id: null };
 
-      await supabase
+      const { error: manualErr } = await supabase
         .from("bank_transactions")
         .update(payload)
         .eq("id", tx_id)
         .eq("company_id", companyId);
 
+      if (manualErr) return NextResponse.json({ error: manualErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 
@@ -147,12 +148,13 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      await supabase
+      const { error: clearErr } = await supabase
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("id", body.tx_id)
         .eq("company_id", companyId);
 
+      if (clearErr) return NextResponse.json({ error: clearErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
 

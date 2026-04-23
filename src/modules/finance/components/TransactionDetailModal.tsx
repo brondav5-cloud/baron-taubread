@@ -196,7 +196,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
     try {
       const { createClient } = await import("@/lib/supabase/client");
       const supabase = createClient();
-      const [{ data: links }, { data: cats }, { data: splitRows }] = await Promise.all([
+      const [{ data: links, error: linksErr }, { data: cats }, { data: splitRows }] = await Promise.all([
         supabase
           .from("transaction_document_links")
           .select(`id, match_method, document:transaction_detail_documents(id, file_name, doc_type, doc_date, total_amount, reference, raw_data, uploaded_at)`)
@@ -212,7 +212,7 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
           .eq("transaction_id", tx.id)
           .limit(1),
       ]);
-      setLinkedDocs((links as unknown as LinkedDoc[]) ?? []);
+      if (!linksErr) setLinkedDocs((links as unknown as LinkedDoc[]) ?? []);
       setCategories(cats ?? []);
       setHasActiveSplits((splitRows?.length ?? 0) > 0);
     } finally {

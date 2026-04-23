@@ -85,6 +85,29 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
+    // Validate split total matches parent amount (when splits are non-empty)
+    if (splits.length > 0) {
+      const { data: parentTx, error: parentErr } = await supabase
+        .from("bank_transactions")
+        .select("debit, credit")
+        .eq("id", tx_id)
+        .eq("company_id", companyId)
+        .maybeSingle();
+
+      if (parentErr) return NextResponse.json({ error: parentErr.message }, { status: 500 });
+      if (!parentTx) return NextResponse.json({ error: "תנועת ההורה לא נמצאה" }, { status: 404 });
+
+      const parentAmount = Math.max(parentTx.debit, parentTx.credit);
+      const splitTotal = splits.reduce((s, sp) => s + Math.abs(Number(sp.amount) || 0), 0);
+      const diff = Math.abs(splitTotal - parentAmount);
+      if (diff > 0.01) {
+        return NextResponse.json(
+          { error: `סכום הפיצולים (₪${splitTotal.toFixed(2)}) אינו תואם לסכום התנועה (₪${parentAmount.toFixed(2)})` },
+          { status: 400 }
+        );
+      }
+    }
+
     // Delete all existing splits for this transaction (replace-all approach)
     const { error: delErr } = await supabase
       .from("bank_transaction_splits")
