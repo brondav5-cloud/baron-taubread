@@ -30,6 +30,7 @@ export type SortDir = "asc" | "desc";
 
 const DEFAULT_PAGE_SIZE = 50;
 const SCAN_BATCH_SIZE = 200;
+const SPLIT_FETCH_CHUNK_SIZE = 500;
 
 function buildDuplicateSignature(tx: BankTransaction): string | null {
   const txDate = tx.effective_date ?? tx.date;
@@ -184,18 +185,18 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
     setError(null);
 
     const supabase = createClient();
-    const buildVisibleRows = async (txs: BankTransaction[]) => {
-      if (txs.length === 0) return { rows: [] as BankTransaction[], splitCounts: new Map<string, number>() };
-      const ids = txs.map((t) => t.id);
-      const { data: splitsData, error: splitErr } = await supabase
-        .from("bank_transaction_splits")
-        .select("id, transaction_id, description, supplier_name, category_id, amount, notes, sort_order")
-        .in("transaction_id", ids)
-        .eq("company_id", selectedCompanyId)
-        .order("sort_order");
-
-      if (splitErr) throw splitErr;
-
+    const buildVisibleRowsFromSplits = (
+      txs: BankTransaction[],
+      splitsData: {
+        id: string;
+        transaction_id: string;
+        description: string;
+        supplier_name: string | null;
+        category_id: string | null;
+        amount: number;
+        notes: string | null;
+      }[]
+    ) => {
       const counts = new Map<string, number>();
       const splitsByTx = new Map<string, {
         id: string;
@@ -259,6 +260,37 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
       }
 
       return { rows, splitCounts: counts };
+    };
+
+    const fetchSplitsByParentIds = async (parentIds: string[]) => {
+      if (parentIds.length === 0) return [];
+      const allSplits: Array<{
+        id: string;
+        transaction_id: string;
+        description: string;
+        supplier_name: string | null;
+        category_id: string | null;
+        amount: number;
+        notes: string | null;
+      }> = [];
+      for (let i = 0; i < parentIds.length; i += SPLIT_FETCH_CHUNK_SIZE) {
+        const chunk = parentIds.slice(i, i + SPLIT_FETCH_CHUNK_SIZE);
+        const { data, error: splitErr } = await supabase
+          .from("bank_transaction_splits")
+          .select("id, transaction_id, description, supplier_name, category_id, amount, notes, sort_order")
+          .in("transaction_id", chunk)
+          .eq("company_id", selectedCompanyId)
+          .order("sort_order");
+        if (splitErr) throw splitErr;
+        allSplits.push(...((data ?? []) as typeof allSplits));
+      }
+      return allSplits;
+    };
+
+    const buildVisibleRows = async (txs: BankTransaction[]) => {
+      if (txs.length === 0) return { rows: [] as BankTransaction[], splitCounts: new Map<string, number>() };
+      const splitsData = await fetchSplitsByParentIds(txs.map((t) => t.id));
+      return buildVisibleRowsFromSplits(txs, splitsData);
     };
 
     const buildBaseQuery = () => {
@@ -332,12 +364,8 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
         }
 
         if (filters.categoryId) {
-          const pageStart = page * pageSize;
-          const pageEndExclusive = pageStart + pageSize;
-          let matchedSeen = 0;
+          const allParents: BankTransaction[] = [];
           let offset = 0;
-          const pageRows: BankTransaction[] = [];
-          const allCounts = new Map<string, number>();
 
           while (true) {
             const { data, error: qErr } = await buildBaseQuery().range(offset, offset + SCAN_BATCH_SIZE - 1);
@@ -348,28 +376,20 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
               keepLogicalDuplicates: opts?.keepLogicalDuplicates,
             });
             if (txs.length === 0) break;
-
-            const { rows, splitCounts: chunkCounts } = await buildVisibleRows(txs);
-            const matchedRows = applyCategoryFilter(rows, filters.categoryId);
-            const batchStart = matchedSeen;
-            const batchEnd = batchStart + matchedRows.length;
-
-            if (batchStart < pageEndExclusive && batchEnd > pageStart) {
-              const fromInBatch = Math.max(0, pageStart - batchStart);
-              const toInBatch = Math.min(matchedRows.length, pageEndExclusive - batchStart);
-              pageRows.push(...matchedRows.slice(fromInBatch, toInBatch));
-            }
-
-            chunkCounts.forEach((count, id) => {
-              allCounts.set(id, count);
-            });
-            matchedSeen = batchEnd;
+            allParents.push(...txs);
 
             if (txs.length < SCAN_BATCH_SIZE) break;
             offset += SCAN_BATCH_SIZE;
           }
 
           if (cancelled) return;
+          const { rows, splitCounts: allCounts } = await buildVisibleRows(allParents);
+          if (cancelled) return;
+          const matchedRows = applyCategoryFilter(rows, filters.categoryId);
+          const pageStart = page * pageSize;
+          const pageEndExclusive = pageStart + pageSize;
+          const pageRows = matchedRows.slice(pageStart, pageEndExclusive);
+          const matchedSeen = matchedRows.length;
           setTotalCount(matchedSeen);
           setTransactions(pageRows);
 

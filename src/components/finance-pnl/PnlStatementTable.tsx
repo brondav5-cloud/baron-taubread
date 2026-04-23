@@ -30,6 +30,7 @@ interface SupplierRollupRow {
   latestDate: string;
   openTxId: string;
   monthlyTotals: Record<string, number>;
+  groups: CategoryTransactionGroup[];
 }
 
 function SubtotalRow({
@@ -66,6 +67,7 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [loadingCategoryIds, setLoadingCategoryIds] = useState<Set<string>>(new Set());
   const [groupsByCategory, setGroupsByCategory] = useState<Record<string, CategoryTransactionGroup[]>>({});
+  const [expandedSuppliers, setExpandedSuppliers] = useState<Set<string>>(new Set());
   const months = view.months;
   const displayMonths = pnlDisplayMonths(compareMonths, months);
 
@@ -154,12 +156,14 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
           latestDate: row.date,
           openTxId: row.open_tx_id,
           monthlyTotals: { [monthKey]: row.amount },
+          groups: [row],
         });
         continue;
       }
 
       current.total += row.amount;
       current.txCount += row.count;
+      current.groups.push(row);
       current.monthlyTotals[monthKey] = (current.monthlyTotals[monthKey] ?? 0) + row.amount;
       if (row.date > current.latestDate) {
         current.latestDate = row.date;
@@ -170,6 +174,16 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
     return Array.from(bySupplier.values()).sort(
       (a, b) => Math.abs(b.total) - Math.abs(a.total),
     );
+  }
+
+  function toggleSupplierDetails(categoryId: string, supplierKey: string) {
+    const key = `${categoryId}::${supplierKey}`;
+    setExpandedSuppliers((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
   }
 
   const periodKpis = useMemo(
@@ -288,36 +302,55 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
                                       <span className="text-center">סה״כ</span>
                                       <span className="text-center">תנועות</span>
                                     </div>
-                                    {supplierRows.map((supplier) => (
-                                      <button
-                                        type="button"
-                                        key={supplier.key}
-                                        onClick={() => onOpenTransaction(supplier.openTxId)}
-                                        className="w-full grid gap-2 px-3 py-2 border-b last:border-b-0 border-gray-50 hover:bg-blue-50/60 transition-colors group text-right"
-                                        style={{ gridTemplateColumns: `minmax(180px,2fr) repeat(${innerMonths.length}, minmax(84px,1fr)) minmax(96px,1fr) minmax(70px,auto)` }}
-                                      >
-                                        <div className="min-w-0">
-                                          <p className="text-sm text-gray-700 truncate group-hover:text-blue-700">
-                                            {supplier.supplierName}
-                                          </p>
-                                          <p className="text-[11px] text-gray-400 truncate">
-                                            עדכון אחרון: {supplier.latestDate.slice(5).split("-").reverse().join("/")}
-                                          </p>
+                                    {supplierRows.map((supplier) => {
+                                      const supplierExpandKey = `${row.id}::${supplier.key}`;
+                                      const isSupplierExpanded = expandedSuppliers.has(supplierExpandKey);
+                                      return (
+                                        <div key={supplier.key} className="border-b last:border-b-0 border-gray-50">
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleSupplierDetails(row.id, supplier.key)}
+                                            className="w-full grid gap-2 px-3 py-2 hover:bg-blue-50/60 transition-colors group text-right"
+                                            style={{ gridTemplateColumns: `minmax(180px,2fr) repeat(${innerMonths.length}, minmax(84px,1fr)) minmax(96px,1fr) minmax(70px,auto)` }}
+                                          >
+                                            <div className="min-w-0">
+                                              <p className="text-sm text-gray-700 truncate group-hover:text-blue-700">{supplier.supplierName}</p>
+                                              <p className="text-[11px] text-gray-400 truncate">עדכון אחרון: {supplier.latestDate.slice(5).split("-").reverse().join("/")}</p>
+                                            </div>
+                                            {innerMonths.map((m) => (
+                                              <span key={`${supplier.key}-${m}`} className="text-center font-mono text-xs text-gray-600">{fmtCurrency(supplier.monthlyTotals[m] ?? 0)}</span>
+                                            ))}
+                                            <span className="font-mono text-sm font-semibold text-gray-700 text-center">{fmtCurrency(supplier.total)}</span>
+                                            <span className="text-center text-[11px] text-gray-500 inline-flex items-center justify-center gap-1">
+                                              {supplier.txCount}
+                                              {isSupplierExpanded ? <ChevronDown className="w-3.5 h-3.5 text-blue-400" /> : <ChevronRight className="w-3.5 h-3.5 text-blue-400" />}
+                                            </span>
+                                          </button>
+                                          {isSupplierExpanded && (
+                                            <div className="px-3 pb-2 space-y-1.5 bg-blue-50/30">
+                                              {supplier.groups
+                                                .slice()
+                                                .sort((a, b) => b.date.localeCompare(a.date))
+                                                .map((group) => (
+                                                  <button
+                                                    key={group.representative_id}
+                                                    type="button"
+                                                    onClick={() => onOpenTransaction(group.open_tx_id)}
+                                                    className="w-full flex items-center justify-between rounded-md border border-blue-100 bg-white px-2.5 py-1.5 text-xs hover:bg-blue-50"
+                                                  >
+                                                    <span className="text-gray-700 truncate">{group.date} · {group.description || supplier.supplierName}</span>
+                                                    <span className="inline-flex items-center gap-2 shrink-0">
+                                                      <span className="text-gray-500">{group.count} תנועות</span>
+                                                      <span className="font-mono font-semibold text-gray-700">{fmtCurrency(group.amount)}</span>
+                                                      <ExternalLink className="w-3.5 h-3.5 text-blue-400" />
+                                                    </span>
+                                                  </button>
+                                                ))}
+                                            </div>
+                                          )}
                                         </div>
-                                        {innerMonths.map((m) => (
-                                          <span key={`${supplier.key}-${m}`} className="text-center font-mono text-xs text-gray-600">
-                                            {fmtCurrency(supplier.monthlyTotals[m] ?? 0)}
-                                          </span>
-                                        ))}
-                                        <span className="font-mono text-sm font-semibold text-gray-700 text-center">
-                                          {fmtCurrency(supplier.total)}
-                                        </span>
-                                        <span className="text-center text-[11px] text-gray-500 inline-flex items-center justify-center gap-1">
-                                          {supplier.txCount}
-                                          <ExternalLink className="w-3.5 h-3.5 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                        </span>
-                                      </button>
-                                    ))}
+                                      );
+                                    })}
                                   </div>
                                 )}
                                     </>

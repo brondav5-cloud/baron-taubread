@@ -71,6 +71,10 @@ async function transactionHasSplits(
   return (count ?? 0) > 0;
 }
 
+function unlockedFilter<T extends { or: (filters: string) => T }>(query: T): T {
+  return query.or("category_override.is.null,category_override.neq.manual");
+}
+
 function matchesRule(tx: BankTx, rule: CategoryRule): boolean {
   const normalizedValue = normalizeForMatch(rule.match_value);
   if (!normalizedValue) return false;
@@ -123,19 +127,66 @@ export async function POST(request: NextRequest) {
 
     // ── Lock current category (manual persist) ────────────────────────────────
     if (body.mode === "lock") {
-      // Schema compatibility: category_override may not exist.
-      // Keep endpoint successful without failing classification flows.
-      return NextResponse.json({ ok: true, message: "manual lock not supported in current schema" });
+      const { tx_id } = body as { tx_id?: string };
+      if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+      if (await transactionHasSplits(supabase, companyId, tx_id)) {
+        return NextResponse.json(
+          { error: "לא ניתן לנעול סיווג ראשי כשיש פיצול פעיל." },
+          { status: 409 }
+        );
+      }
+
+      const { data: targetRow, error: loadErr } = await supabase
+        .from("bank_transactions")
+        .select("id, category_id")
+        .eq("id", tx_id)
+        .eq("company_id", companyId)
+        .maybeSingle();
+      if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 });
+      if (!targetRow) return NextResponse.json({ error: "התנועה לא נמצאה" }, { status: 404 });
+      if (!targetRow.category_id) {
+        return NextResponse.json({ error: "יש לבחור קטגוריה לפני נעילה" }, { status: 409 });
+      }
+
+      const { error: lockErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_override: "manual" })
+        .eq("id", tx_id)
+        .eq("company_id", companyId);
+      if (lockErr) return NextResponse.json({ error: lockErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true });
     }
 
     // ── Clear manual lock only (keep category) ───────────────────────────────
     if (body.mode === "unlock_manual") {
-      return NextResponse.json({ ok: true });
+      const { tx_id } = body as { tx_id?: string };
+      if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
+      const { data: unlockedRows, error: unlockErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_override: null })
+        .eq("id", tx_id)
+        .eq("company_id", companyId)
+        .select("id");
+      if (unlockErr) return NextResponse.json({ error: unlockErr.message }, { status: 500 });
+      if (!unlockedRows || unlockedRows.length === 0) {
+        return NextResponse.json({ error: "התנועה לא נמצאה" }, { status: 404 });
+      }
+      return NextResponse.json({ ok: true, updated: unlockedRows.length });
     }
 
     // ── Clear lock flags company-wide (categories unchanged) ─────────────────
     if (body.mode === "unlock_all_manual_flags") {
-      return NextResponse.json({ ok: true });
+      if (!body.confirm) {
+        return NextResponse.json({ error: "נדרש confirm=true" }, { status: 400 });
+      }
+      const { data: unlockedRows, error: unlockAllErr } = await supabase
+        .from("bank_transactions")
+        .update({ category_override: null })
+        .eq("company_id", companyId)
+        .eq("category_override", "manual")
+        .select("id");
+      if (unlockAllErr) return NextResponse.json({ error: unlockAllErr.message }, { status: 500 });
+      return NextResponse.json({ ok: true, updated: unlockedRows?.length ?? 0 });
     }
 
     // ── Clear ─────────────────────────────────────────────────────────────────
@@ -181,12 +232,13 @@ export async function POST(request: NextRequest) {
 
     // ── Clear all non-locked classifications (no reclassify) ──────────────────
     if (body.mode === "clear_unlocked") {
-      const { data: txRows, error: txErr } = await supabase
+      let clearUnlockedTxQuery = supabase
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId)
-        .not("category_id", "is", null)
-        .select("id");
+        .not("category_id", "is", null);
+      clearUnlockedTxQuery = unlockedFilter(clearUnlockedTxQuery);
+      const { data: txRows, error: txErr } = await clearUnlockedTxQuery.select("id");
       if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 });
 
       const { data: splitRows, error: splitErr } = await supabase
@@ -219,16 +271,20 @@ export async function POST(request: NextRequest) {
     // In force_auto mode: first wipe all non-locked category assignments so that
     // transactions which no longer match any rule end up uncategorized (null).
     if (forceAll) {
-      await supabase
+      let clearForceTxQuery = supabase
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId)
         .is("merged_into_id", null);
+      clearForceTxQuery = unlockedFilter(clearForceTxQuery);
+      const { error: forceTxErr } = await clearForceTxQuery;
+      if (forceTxErr) return NextResponse.json({ error: forceTxErr.message }, { status: 500 });
 
-      await supabase
+      const { error: forceSplitErr } = await supabase
         .from("bank_transaction_splits")
         .update({ category_id: null })
         .eq("company_id", companyId);
+      if (forceSplitErr) return NextResponse.json({ error: forceSplitErr.message }, { status: 500 });
     }
 
     if (!rules || rules.length === 0) {
@@ -254,6 +310,7 @@ export async function POST(request: NextRequest) {
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
       if (!forceAll) txQuery = txQuery.is("category_id", null);
+      else txQuery = unlockedFilter(txQuery);
       const { data: batch } = await txQuery;
 
       if (!batch || batch.length === 0) break;
