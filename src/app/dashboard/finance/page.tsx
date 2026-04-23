@@ -179,11 +179,15 @@ function FinancePageInner() {
     if (txId.includes(splitMarker)) {
       const splitId = txId.split(splitMarker)[1];
       if (!splitId) return;
-      await fetch("/api/finance/transactions/splits", {
+      const splitRes = await fetch("/api/finance/transactions/splits", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ split_id: splitId, category_id: categoryId }),
       });
+      if (!splitRes.ok) {
+        const data = await splitRes.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error ?? "שגיאה בשמירת סיווג פיצול");
+      }
       hook.refresh();
       return;
     }
@@ -191,12 +195,18 @@ function FinancePageInner() {
     const body = categoryId
       ? { mode: "manual", tx_id: txId, category_id: categoryId }
       : { mode: "clear", tx_id: txId };
-    await fetch("/api/finance/classify", {
+    const res = await fetch("/api/finance/classify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    hook.refresh();
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error((data as { error?: string }).error ?? "שגיאה בשמירת סיווג");
+    }
+    // Keep inline UX stable: the row-level prompt ("דלג / כלל בלבד / כלל + החלה")
+    // is shown right after choosing category. Refreshing here can remount rows
+    // before the prompt opens, so we refresh only after explicit follow-up actions.
   }, [hook]);
 
   const handleCategoryAdded = useCallback((cat: BankCategory) => {

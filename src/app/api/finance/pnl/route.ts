@@ -25,6 +25,7 @@ interface TxRow {
   debit: number;
   credit: number;
   category_id: string | null;
+  merged_into_id: string | null;
 }
 
 interface SplitRow {
@@ -32,6 +33,8 @@ interface SplitRow {
   category_id: string | null;
   amount: number;
 }
+
+const FETCH_BATCH_SIZE = 1000;
 
 export interface PnlCategoryLine {
   category_id: string | null;
@@ -143,6 +146,23 @@ function buildLines(
   return { lines, monthSet, incomeTotal, expenseTotal };
 }
 
+function filterMovementsUsingMergedChildren<T extends { id: string; merged_into_id: string | null }>(rows: T[]): T[] {
+  const mergedParentIds = new Set(
+    rows
+      .map((r) => r.merged_into_id)
+      .filter((id): id is string => typeof id === "string" && id.length > 0),
+  );
+
+  // Keep merged children + standalone rows; drop synthetic merge masters.
+  return rows.filter((row) => row.merged_into_id !== null || !mergedParentIds.has(row.id));
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const supabaseAuth = createServerSupabaseClient();
@@ -174,81 +194,94 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    const [
-      { data: categories },
-      { data: transactions },
-      { data: prevTransactions },
-      { count: totalCount },
-      { count: classifiedCount },
-    ] = await Promise.all([
+    const [{ data: categories }] = await Promise.all([
       supabase
         .from("bank_categories")
         .select("id, name, type, color")
         .eq("company_id", companyId),
-      supabase
-        .from("bank_transactions")
-        .select("id, date, effective_date, debit, credit, category_id")
-        .eq("company_id", companyId)
-        .is("merged_into_id", null)
-        .gte("effective_date", dateFrom)
-        .lte("effective_date", dateTo)
-        .order("effective_date"),
-      supabase
-        .from("bank_transactions")
-        .select("debit, credit, category_id")
-        .eq("company_id", companyId)
-        .is("merged_into_id", null)
-        .gte("effective_date", prevDateFrom)
-        .lte("effective_date", prevDateTo),
-      supabase
-        .from("bank_transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", companyId)
-        .is("merged_into_id", null)
-        .gte("effective_date", dateFrom)
-        .lte("effective_date", dateTo),
-      supabase
-        .from("bank_transactions")
-        .select("id", { count: "exact", head: true })
-        .eq("company_id", companyId)
-        .is("merged_into_id", null)
-        .gte("effective_date", dateFrom)
-        .lte("effective_date", dateTo)
-        .not("category_id", "is", null),
     ]);
 
     const catMap = new Map<string, CategoryRow>(
       (categories ?? []).map((c: CategoryRow) => [c.id, c])
     );
 
+    // Fetch all current-period transactions in pages (avoid server row caps)
+    const currentAll: TxRow[] = [];
+    let currentOffset = 0;
+    while (true) {
+      const { data: batch, error: batchErr } = await supabase
+        .from("bank_transactions")
+        .select("id, date, effective_date, debit, credit, category_id, merged_into_id")
+        .eq("company_id", companyId)
+        .gte("effective_date", dateFrom)
+        .lte("effective_date", dateTo)
+        .order("effective_date")
+        .range(currentOffset, currentOffset + FETCH_BATCH_SIZE - 1);
+      if (batchErr) throw batchErr;
+      const rows = (batch ?? []) as TxRow[];
+      if (rows.length === 0) break;
+      currentAll.push(...rows);
+      if (rows.length < FETCH_BATCH_SIZE) break;
+      currentOffset += FETCH_BATCH_SIZE;
+    }
+
+    // Fetch all previous-period transactions in pages
+    const previousAll: Array<Pick<TxRow, "id" | "debit" | "credit" | "category_id" | "merged_into_id">> = [];
+    let previousOffset = 0;
+    while (true) {
+      const { data: batch, error: batchErr } = await supabase
+        .from("bank_transactions")
+        .select("id, debit, credit, category_id, merged_into_id")
+        .eq("company_id", companyId)
+        .gte("effective_date", prevDateFrom)
+        .lte("effective_date", prevDateTo)
+        .order("id")
+        .range(previousOffset, previousOffset + FETCH_BATCH_SIZE - 1);
+      if (batchErr) throw batchErr;
+      const rows = (batch ?? []) as typeof previousAll;
+      if (rows.length === 0) break;
+      previousAll.push(...rows);
+      if (rows.length < FETCH_BATCH_SIZE) break;
+      previousOffset += FETCH_BATCH_SIZE;
+    }
+
+    const currentTxRows = filterMovementsUsingMergedChildren(currentAll);
+
     // Fetch splits for the current-period transactions
-    const txIds = (transactions ?? []).map((t) => (t as TxRow).id);
+    const txIds = currentTxRows.map((t) => t.id);
     let splits: SplitRow[] = [];
     if (txIds.length > 0) {
-      const { data: splitsData } = await supabase
-        .from("bank_transaction_splits")
-        .select("transaction_id, category_id, amount")
-        .in("transaction_id", txIds)
-        .eq("company_id", companyId);
-      splits = (splitsData ?? []) as SplitRow[];
+      const idChunks = chunkArray(txIds, FETCH_BATCH_SIZE);
+      for (const chunk of idChunks) {
+        const { data: splitsData, error: splitsErr } = await supabase
+          .from("bank_transaction_splits")
+          .select("transaction_id, category_id, amount")
+          .in("transaction_id", chunk)
+          .eq("company_id", companyId);
+        if (splitsErr) throw splitsErr;
+        splits.push(...((splitsData ?? []) as SplitRow[]));
+      }
     }
 
     // Build current year lines (splits replace their parent transactions)
     const { lines, monthSet, incomeTotal, expenseTotal } =
-      buildLines((transactions ?? []) as TxRow[], catMap, splits);
+      buildLines(currentTxRows, catMap, splits);
 
     // Compute YoY totals
     let prev_income_total = 0;
     let prev_expense_total = 0;
-    for (const tx of (prevTransactions ?? []) as Pick<TxRow, "debit" | "credit" | "category_id">[]) {
+    const previousTxRows = filterMovementsUsingMergedChildren(previousAll);
+    for (const tx of previousTxRows) {
       const cat = tx.category_id ? catMap.get(tx.category_id) : null;
       if (cat?.type === "income")  prev_income_total += tx.credit - tx.debit;
       if (cat?.type === "expense") prev_expense_total += tx.debit - tx.credit;
     }
 
     // Classification coverage
-    const classified_pct = (totalCount ?? 0) > 0
-      ? Math.round(((classifiedCount ?? 0) / totalCount!) * 100)
+    const totalCount = currentTxRows.length;
+    const classifiedCount = currentTxRows.filter((tx) => tx.category_id !== null).length;
+    const classified_pct = totalCount > 0
+      ? Math.round((classifiedCount / totalCount) * 100)
       : 100;
 
     const response: PnlResponse = {

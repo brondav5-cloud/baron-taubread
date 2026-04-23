@@ -859,7 +859,7 @@ function InlineCategorySelect({
           />
           <p className="text-[9px] text-purple-400">ניתן לקצר את הערך — החיפוש הוא &quot;מכיל&quot;</p>
           <p className="text-[10px] text-purple-500 leading-snug">
-            תהליך מומלץ: שמור קודם <strong>כלל בלבד</strong>, ואז לחץ במסך על <strong>סווג אוטומטית (לא מסווגות)</strong>.
+            תהליך מומלץ: בחר <strong>סווג בלבד</strong>, ואז לחץ במסך על <strong>סווג אוטומטית (לא מסווגות)</strong>.
           </p>
           <label className="flex items-center gap-2 text-[11px] text-purple-700">
             <input
@@ -881,14 +881,14 @@ function InlineCategorySelect({
               className="flex items-center gap-1.5 text-xs bg-purple-600 text-white px-3 py-1.5 rounded-lg hover:bg-purple-700 disabled:opacity-50 transition-colors font-medium"
             >
               {savingRule && <span className="inline-block w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />}
-              צור כלל בלבד
+              סווג בלבד
             </button>
             <button
               onClick={() => { void handleCreateRule(true); }}
               disabled={savingRule || !ruleMatchValue.trim()}
               className="flex items-center gap-1.5 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors font-medium"
             >
-              צור כלל + סווג דומות עכשיו
+              סווג ולהחיל
             </button>
             <button
               onClick={() => setShowRulePrompt(false)}

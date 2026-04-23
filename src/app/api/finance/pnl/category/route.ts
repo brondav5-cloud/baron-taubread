@@ -2,13 +2,16 @@
  * GET /api/finance/pnl/category?categoryId=xxx&year=2025&month=3
  *
  * Returns rows for a category (or uncategorized) within the selected period.
- * Excludes merged-into children; each underlying movement is returned separately.
+ * Uses merged children as the source of truth (children + standalone rows,
+ * excluding synthetic merge masters).
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
+
+const FETCH_BATCH_SIZE = 1000;
 
 /** One movement row returned to the UI */
 export interface CategoryTransactionGroup {
@@ -59,18 +62,54 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Fetch transactions in the period first (we'll apply category filter after split replacement)
-    const query = supabase
-      .from("bank_transactions")
-      .select("id, date, effective_date, description, details, debit, credit, reference, source_bank, notes, supplier_name, category_id")
-      .eq("company_id", companyId)
-      .gte("effective_date", dateFrom)
-      .lte("effective_date", dateTo)
-      .is("merged_into_id", null)
-      .order("effective_date", { ascending: false });
+    function filterMovementsUsingMergedChildren<T extends { id: string; merged_into_id: string | null }>(rows: T[]): T[] {
+      const mergedParentIds = new Set(
+        rows
+          .map((r) => r.merged_into_id)
+          .filter((id): id is string => typeof id === "string" && id.length > 0),
+      );
+      return rows.filter((row) => row.merged_into_id !== null || !mergedParentIds.has(row.id));
+    }
 
-    const { data: transactions, error: txError } = await query;
-    if (txError) throw txError;
+    function chunkArray<T>(items: T[], size: number): T[][] {
+      const out: T[][] = [];
+      for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+      return out;
+    }
+
+    // Fetch transactions in the period first (we'll apply category filter after split replacement)
+    const allTransactions: Array<{
+      id: string;
+      date: string;
+      effective_date: string;
+      description: string;
+      details: string;
+      debit: number;
+      credit: number;
+      reference: string;
+      source_bank: string;
+      notes: string | null;
+      supplier_name: string | null;
+      category_id: string | null;
+      merged_into_id: string | null;
+    }> = [];
+    let txOffset = 0;
+    while (true) {
+      const { data: txBatch, error: txError } = await supabase
+        .from("bank_transactions")
+        .select("id, date, effective_date, description, details, debit, credit, reference, source_bank, notes, supplier_name, category_id, merged_into_id")
+        .eq("company_id", companyId)
+        .gte("effective_date", dateFrom)
+        .lte("effective_date", dateTo)
+        .order("effective_date", { ascending: false })
+        .range(txOffset, txOffset + FETCH_BATCH_SIZE - 1);
+      if (txError) throw txError;
+      const rows = (txBatch ?? []) as typeof allTransactions;
+      if (rows.length === 0) break;
+      allTransactions.push(...rows);
+      if (rows.length < FETCH_BATCH_SIZE) break;
+      txOffset += FETCH_BATCH_SIZE;
+    }
 
     // Get category info
     let categoryName = "לא מסווג";
@@ -102,9 +141,10 @@ export async function GET(request: NextRequest) {
       notes: string | null;
       supplier_name: string | null;
       category_id: string | null;
+      merged_into_id: string | null;
     };
 
-    const txRows = (transactions ?? []) as TxWithMeta[];
+    const txRows = filterMovementsUsingMergedChildren(allTransactions as TxWithMeta[]);
     const txMap = new Map<string, TxWithMeta>(txRows.map((t) => [t.id, t]));
 
     // Load splits for all transactions in the period
@@ -119,12 +159,16 @@ export async function GET(request: NextRequest) {
     };
     let splitRows: SplitRow[] = [];
     if (txIds.length > 0) {
-      const { data: splitsData } = await supabase
-        .from("bank_transaction_splits")
-        .select("transaction_id, category_id, amount, description, supplier_name, notes")
-        .in("transaction_id", txIds)
-        .eq("company_id", companyId);
-      splitRows = (splitsData ?? []) as SplitRow[];
+      const idChunks = chunkArray(txIds, FETCH_BATCH_SIZE);
+      for (const chunk of idChunks) {
+        const { data: splitsData, error: splitsErr } = await supabase
+          .from("bank_transaction_splits")
+          .select("transaction_id, category_id, amount, description, supplier_name, notes")
+          .in("transaction_id", chunk)
+          .eq("company_id", companyId);
+        if (splitsErr) throw splitsErr;
+        splitRows.push(...((splitsData ?? []) as SplitRow[]));
+      }
     }
     const splitTxIds = new Set(splitRows.map((s) => s.transaction_id));
 
