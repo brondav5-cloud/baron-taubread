@@ -502,7 +502,7 @@ function FinancePageInner() {
       )}
 
       {/* ── Unclassified alert ─────────────────────────────────────────────── */}
-      <UnclassifiedAlert />
+      <UnclassifiedAlert onClassified={hook.refresh} />
 
       {/* ── KPI row: balance chart + cash runway ───────────────────────────── */}
       {hook.accounts.length > 0 && (

@@ -87,6 +87,8 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
   const [hasSplits, setHasSplits] = useState(false);
   const [filter, setFilter] = useState("");
   const [batchCatId, setBatchCatId] = useState("");
+  const [supplierSuggestions, setSupplierSuggestions] = useState<Array<{ id: string; master_name: string }>>([]);
+  const [supplierSearch, setSupplierSearch] = useState("");
 
   // After-save: show how many unclassified were retroactively updated
   const [appliedCount, setAppliedCount] = useState<number | null>(null);
@@ -116,6 +118,28 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
   }, [txId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      const q = supplierSearch.trim();
+      const params = new URLSearchParams();
+      params.set("limit", "200");
+      if (q) params.set("q", q);
+      try {
+        const res = await fetch(`/api/finance/suppliers?${params.toString()}`, { signal: controller.signal });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) return;
+        setSupplierSuggestions((data as { suppliers?: Array<{ id: string; master_name: string }> }).suppliers ?? []);
+      } catch {
+        if (!controller.signal.aborted) setSupplierSuggestions([]);
+      }
+    }, 280);
+    return () => {
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [supplierSearch]);
 
   // ── Auto-classify rows using saved rules ─────────────────────────────────
   const applyAutoClassify = useCallback(async (importedRows: EditRow[]): Promise<EditRow[]> => {
@@ -438,7 +462,7 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
       >
         {rows.length > 3 && (
           <div className="grid grid-cols-[1fr_auto_auto_auto] gap-1.5 px-1 pb-1 border-b border-gray-100">
-            <span className="text-xs text-gray-400">תיאור</span>
+            <span className="text-xs text-gray-400">תיאור / ספק</span>
             <span className="text-xs text-gray-400 min-w-[100px]">קטגוריה</span>
             <span className="text-xs text-gray-400 w-20 text-left">סכום</span>
             <span />
@@ -463,6 +487,18 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
                   onChange={(e) => updateRow(row._key, "description", e.target.value)}
                   placeholder="תיאור"
                   className="w-full border border-gray-200 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300"
+                />
+                <input
+                  type="text"
+                  value={row.supplier_name}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateRow(row._key, "supplier_name", value);
+                    setSupplierSearch(value);
+                  }}
+                  placeholder="שם ספק (אופציונלי)"
+                  list="split-supplier-master-suggestions"
+                  className="w-full mt-1 border border-gray-200 rounded-md px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-300"
                 />
                 {row.transaction_date && (
                   <span className="text-[10px] text-gray-400 px-1 select-none">
@@ -505,6 +541,11 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
           ))
         )}
       </div>
+      <datalist id="split-supplier-master-suggestions">
+        {supplierSuggestions.map((s) => (
+          <option key={s.id} value={s.master_name} />
+        ))}
+      </datalist>
 
       {/* ── Status bar ── */}
       <div className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs ${

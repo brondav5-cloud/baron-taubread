@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
@@ -7,6 +7,15 @@ interface SupplierRow {
   id: string;
   master_name: string;
   normalized_name: string;
+}
+
+interface RejectedPairRow {
+  supplier_a_id: string;
+  supplier_b_id: string;
+}
+
+function sortPair(a: string, b: string): [string, string] {
+  return a < b ? [a, b] : [b, a];
 }
 
 function normalizedTokens(value: string): string[] {
@@ -76,7 +85,16 @@ export async function GET() {
     .order("master_name");
   if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 });
 
+  const { data: rejectedPairs, error: rejectedErr } = await supabase
+    .from("finance_supplier_merge_rejections")
+    .select("supplier_a_id, supplier_b_id")
+    .eq("company_id", companyId);
+  if (rejectedErr) return NextResponse.json({ error: rejectedErr.message }, { status: 500 });
+
   const suppliers = (data ?? []) as SupplierRow[];
+  const rejectedSet = new Set(
+    ((rejectedPairs ?? []) as RejectedPairRow[]).map((p) => `${p.supplier_a_id}::${p.supplier_b_id}`)
+  );
   const candidates: Array<{
     a: { id: string; name: string };
     b: { id: string; name: string };
@@ -87,6 +105,8 @@ export async function GET() {
     for (let j = i + 1; j < suppliers.length; j++) {
       const a = suppliers[i]!;
       const b = suppliers[j]!;
+      const [left, right] = sortPair(a.id, b.id);
+      if (rejectedSet.has(`${left}::${right}`)) continue;
       const score = pairScore(a, b);
       if (score < 0.58) continue;
       candidates.push({
@@ -99,4 +119,45 @@ export async function GET() {
 
   candidates.sort((x, y) => y.score - x.score);
   return NextResponse.json({ candidates: candidates.slice(0, 40) });
+}
+
+export async function POST(request: NextRequest) {
+  const supabaseAuth = createServerSupabaseClient();
+  const { data: { user }, error } = await supabaseAuth.auth.getUser();
+  if (error || !user) return NextResponse.json({ error: "לא מורשה" }, { status: 401 });
+  const { companyId } = await resolveSelectedCompanyId(supabaseAuth, user.id);
+  if (!companyId) return NextResponse.json({ error: "לא נבחרה חברה" }, { status: 400 });
+
+  let body: { action?: string; supplier_a_id?: string; supplier_b_id?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 });
+  }
+
+  const action = body.action ?? "";
+  if (action !== "reject") {
+    return NextResponse.json({ error: "action לא נתמך" }, { status: 400 });
+  }
+
+  const supplierAId = body.supplier_a_id ?? "";
+  const supplierBId = body.supplier_b_id ?? "";
+  if (!supplierAId || !supplierBId) {
+    return NextResponse.json({ error: "supplier ids חסרים" }, { status: 400 });
+  }
+  if (supplierAId === supplierBId) {
+    return NextResponse.json({ error: "לא ניתן לסרב מיזוג עבור אותו ספק" }, { status: 400 });
+  }
+
+  const [a, b] = sortPair(supplierAId, supplierBId);
+  const supabase = getSupabaseAdmin();
+  const { error: upsertErr } = await supabase
+    .from("finance_supplier_merge_rejections")
+    .upsert(
+      { company_id: companyId, supplier_a_id: a, supplier_b_id: b },
+      { onConflict: "company_id,supplier_a_id,supplier_b_id" }
+    );
+  if (upsertErr) return NextResponse.json({ error: upsertErr.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
