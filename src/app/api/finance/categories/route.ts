@@ -103,12 +103,16 @@ export async function PUT(request: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
-  await supabase
+  const { error } = await supabase
     .from("bank_categories")
     .update(fields)
     .eq("id", id)
     .eq("company_id", auth.companyId);
 
+  if (error) {
+    logError("finance/categories PUT", error);
+    return NextResponse.json({ error: "שגיאה בעדכון קטגוריה" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }
 
@@ -122,11 +126,15 @@ export async function DELETE(request: NextRequest) {
   if (!id) return NextResponse.json({ error: "id חסר" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
-  await supabase
+  const { error } = await supabase
     .from("bank_categories")
     .delete()
     .eq("id", id)
     .eq("company_id", auth.companyId);
 
+  if (error) {
+    logError("finance/categories DELETE", error);
+    return NextResponse.json({ error: "שגיאה במחיקת קטגוריה" }, { status: 500 });
+  }
   return NextResponse.json({ ok: true });
 }

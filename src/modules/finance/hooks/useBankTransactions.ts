@@ -64,7 +64,7 @@ function dedupeFetchedParentTransactions(
       out.push(t);
       continue;
     }
-    const fp = `${t.bank_account_id}\0${t.date}\0${ref}\0${String(t.debit)}\0${String(t.credit)}`;
+    const fp = `${t.bank_account_id}\0${t.effective_date ?? t.date}\0${ref}\0${String(t.debit)}\0${String(t.credit)}`;
     if (seen.has(fp)) continue;
     seen.add(fp);
     out.push(t);
@@ -163,9 +163,9 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
     Promise.all([
       supabase.from("bank_accounts").select("*").eq("company_id", selectedCompanyId).eq("is_active", true).order("display_name"),
       supabase.from("bank_categories").select("*").eq("company_id", selectedCompanyId).order("sort_order").order("name"),
-    ]).then(([{ data: accts }, { data: cats }]) => {
-      if (accts) setAccounts(accts as BankAccount[]);
-      if (cats) setCategories(cats as BankCategory[]);
+    ]).then(([{ data: accts, error: acctErr }, { data: cats, error: catErr }]) => {
+      if (!acctErr && accts) setAccounts(accts as BankAccount[]);
+      if (!catErr && cats) setCategories(cats as BankCategory[]);
     });
   }, [selectedCompanyId, refreshCounter]);
 

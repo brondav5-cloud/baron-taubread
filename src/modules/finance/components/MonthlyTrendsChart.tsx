@@ -77,6 +77,7 @@ export function MonthlyTrendsChart() {
           .from("bank_transactions")
           .select("effective_date, debit, credit, category_id")
           .eq("company_id", selectedCompanyId)
+          .is("merged_into_id", null)
           .gte("effective_date", dateFrom)
           .not("category_id", "is", null),
       ]);

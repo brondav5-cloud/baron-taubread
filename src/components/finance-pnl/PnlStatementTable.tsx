@@ -17,6 +17,7 @@ import type { PnlStatementView } from "./types";
 interface Props {
   view: PnlStatementView;
   year: number;
+  month: number;
   onOpenTransaction: (txId: string) => void;
   compareMonths: string[];
 }
@@ -60,7 +61,7 @@ function SubtotalRow({
   );
 }
 
-export default function PnlStatementTable({ view, year, onOpenTransaction, compareMonths }: Props) {
+export default function PnlStatementTable({ view, year, month, onOpenTransaction, compareMonths }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set(view.blocks.map((b) => b.id)));
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [loadingCategoryIds, setLoadingCategoryIds] = useState<Set<string>>(new Set());
@@ -112,7 +113,8 @@ export default function PnlStatementTable({ view, year, onOpenTransaction, compa
     if (groupsByCategory[categoryId]) return;
     setLoadingCategoryIds((prev) => new Set(prev).add(categoryId));
     try {
-      const res = await fetch(`/api/finance/pnl/category?year=${year}&categoryId=${categoryId}`);
+      const periodParam = month > 0 ? `&month=${month}` : "";
+      const res = await fetch(`/api/finance/pnl/category?year=${year}&categoryId=${categoryId}${periodParam}`);
       if (!res.ok) throw new Error("failed loading category groups");
       const data = await res.json() as { groups?: CategoryTransactionGroup[] };
       setGroupsByCategory((prev) => ({ ...prev, [categoryId]: data.groups ?? [] }));

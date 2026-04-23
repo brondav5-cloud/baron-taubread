@@ -24,6 +24,7 @@ export function UnclassifiedAlert({ onClassified }: UnclassifiedAlertProps) {
       .from("bank_transactions")
       .select("id", { count: "exact", head: true })
       .eq("company_id", selectedCompanyId)
+      .is("merged_into_id", null)
       .is("category_id", null);
     setCount(c ?? 0);
   }, [selectedCompanyId]);

@@ -14,7 +14,7 @@ export function BankSupplierCalendarTab({ txs, selectedYear }: Props) {
     () =>
       txs
         .filter((t) => t.debit > 0)
-        .map((t) => ({ date: t.date, amount: t.debit })),
+        .map((t) => ({ date: t.effective_date ?? t.date, amount: t.debit })),
     [txs],
   );
 

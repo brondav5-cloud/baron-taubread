@@ -47,6 +47,7 @@ export async function applySingleRuleNow(input: ApplyRuleInput): Promise<{
       .from("bank_transactions")
       .select("id, description, details, reference, operation_code, supplier_name")
       .eq("company_id", input.companyId)
+      .is("merged_into_id", null)
       .order("date", { ascending: false })
       .range(offset, offset + FETCH_BATCH - 1);
     if (!input.includeClassified) q = q.is("category_id", null);

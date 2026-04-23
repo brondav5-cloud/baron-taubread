@@ -56,6 +56,7 @@ export function CashRunwayCard() {
         .from("bank_transactions")
         .select("debit, credit")
         .eq("company_id", selectedCompanyId)
+        .is("merged_into_id", null)
         .gte("effective_date", dateFrom)
         .in("category_id", expenseIds);
 

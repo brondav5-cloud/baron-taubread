@@ -68,6 +68,7 @@ export function BalanceChart({ accounts }: Props) {
         .select("date, effective_date, balance")
         .eq("company_id", selectedCompanyId)
         .eq("bank_account_id", accountId)
+        .is("merged_into_id", null)
         .not("balance", "is", null)
         .order("effective_date", { ascending: true })
         .order("created_at", { ascending: true })

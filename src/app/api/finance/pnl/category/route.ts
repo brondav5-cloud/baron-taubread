@@ -1,7 +1,7 @@
 /**
- * GET /api/finance/pnl/category?categoryId=xxx&year=2025
+ * GET /api/finance/pnl/category?categoryId=xxx&year=2025&month=3
  *
- * Returns grouped rows for a category (or uncategorized) within the year.
+ * Returns grouped rows for a category (or uncategorized) within the selected period.
  * Excludes merged-into children; collapses identical bank lines (same date, supplier, description, reference).
  */
 import { NextRequest, NextResponse } from "next/server";
@@ -46,9 +46,16 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const year = parseInt(searchParams.get("year") ?? String(new Date().getFullYear()));
     const categoryId = searchParams.get("categoryId"); // null/"" = uncategorized
+    const monthParam = searchParams.get("month");
+    const monthNum = monthParam ? Number.parseInt(monthParam, 10) : null;
+    const useMonthRange = Number.isFinite(monthNum) && monthNum! >= 1 && monthNum! <= 12;
 
-    const dateFrom = `${year}-01-01`;
-    const dateTo = `${year}-12-31`;
+    const dateFrom = useMonthRange
+      ? `${year}-${String(monthNum!).padStart(2, "0")}-01`
+      : `${year}-01-01`;
+    const dateTo = useMonthRange
+      ? new Date(year, monthNum!, 0).toISOString().slice(0, 10)
+      : `${year}-12-31`;
 
     const supabase = getSupabaseAdmin();
 

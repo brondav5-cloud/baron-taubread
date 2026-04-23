@@ -48,8 +48,7 @@ function detectBank(file: File): SourceBank | null {
   if (name.includes("תנועות בחשבון") || name.includes("דו_ח") || name.includes("דו\"ח") || name.includes("leumi")) {
     return "leumi";
   }
-  // .xlsx → hapoalim, .xls → mizrahi (fallback by extension)
-  if (name.endsWith(".xlsx")) return "hapoalim";
+  // .xls → mizrahi fallback by extension; .xlsx is ambiguous — require manual selection
   if (name.endsWith(".xls")) return "mizrahi";
   return null;
 }

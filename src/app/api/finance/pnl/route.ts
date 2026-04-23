@@ -189,6 +189,7 @@ export async function GET(request: NextRequest) {
         .from("bank_transactions")
         .select("id, date, effective_date, debit, credit, category_id")
         .eq("company_id", companyId)
+        .is("merged_into_id", null)
         .gte("effective_date", dateFrom)
         .lte("effective_date", dateTo)
         .order("effective_date"),
@@ -196,18 +197,21 @@ export async function GET(request: NextRequest) {
         .from("bank_transactions")
         .select("debit, credit, category_id")
         .eq("company_id", companyId)
+        .is("merged_into_id", null)
         .gte("effective_date", prevDateFrom)
         .lte("effective_date", prevDateTo),
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
         .eq("company_id", companyId)
+        .is("merged_into_id", null)
         .gte("effective_date", dateFrom)
         .lte("effective_date", dateTo),
       supabase
         .from("bank_transactions")
         .select("id", { count: "exact", head: true })
         .eq("company_id", companyId)
+        .is("merged_into_id", null)
         .gte("effective_date", dateFrom)
         .lte("effective_date", dateTo)
         .not("category_id", "is", null),

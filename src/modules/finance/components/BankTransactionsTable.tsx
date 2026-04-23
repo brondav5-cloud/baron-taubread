@@ -311,6 +311,7 @@ function InlineCategorySelect({
   const [ruleMatchValue, setRuleMatchValue] = useState("");
   const [applyOnClassified, setApplyOnClassified] = useState(false);
   const [savingRule, setSavingRule] = useState(false);
+  const [ruleError, setRuleError] = useState<string | null>(null);
   const isSplitLine = Boolean(tx.is_split_line);
   const isParentWithSplits = hasSplits && !isSplitLine;
 
@@ -442,6 +443,7 @@ function InlineCategorySelect({
   const handleCreateRule = async (applyNow = false) => {
     if (!localCatId || !ruleMatchValue.trim()) return;
     setSavingRule(true);
+    setRuleError(null);
     try {
       const ruleRes = isSplitLine
         ? await fetch("/api/finance/splits/rules", {
@@ -461,7 +463,11 @@ function InlineCategorySelect({
               match_value: ruleMatchValue.trim(),
             }),
           });
-      if (!ruleRes.ok) return;
+      if (!ruleRes.ok) {
+        const err = await ruleRes.json().catch(() => ({})) as Record<string, string>;
+        setRuleError(err.error ?? "שגיאה בשמירת הכלל");
+        return;
+      }
       if (applyNow) {
         if (isSplitLine) {
           await fetch("/api/finance/splits/bulk-classify", {
@@ -490,9 +496,9 @@ function InlineCategorySelect({
         }
         onApplySimilarDone?.();
       }
+      setShowRulePrompt(false);
     } finally {
       setSavingRule(false);
-      setShowRulePrompt(false);
     }
   };
 
@@ -865,6 +871,9 @@ function InlineCategorySelect({
             לכלול גם תנועות שכבר מסווגות (רק לפי כלל זה)
           </label>
 
+          {ruleError && (
+            <p className="text-[10px] text-red-600 bg-red-50 rounded px-2 py-1">{ruleError}</p>
+          )}
           <div className="flex items-center gap-2">
             <button
               onClick={() => { void handleCreateRule(false); }}

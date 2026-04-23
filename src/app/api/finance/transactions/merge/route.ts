@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   // Fetch all selected transactions and verify ownership
   const { data: txs, error: fetchErr } = await supabase
     .from("bank_transactions")
-    .select("id, debit, credit, merged_into_id")
+    .select("id, debit, credit, merged_into_id, notes")
     .in("id", tx_ids)
     .eq("company_id", ctx.companyId);
 
@@ -56,13 +56,26 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "חלק מהתנועות לא נמצאו" }, { status: 404 });
   }
 
-  const rows = txs as { id: string; debit: number; credit: number; merged_into_id: string | null }[];
+  const rows = txs as { id: string; debit: number; credit: number; merged_into_id: string | null; notes: string | null }[];
+
+  // Reject if any row is already a child in another merge group
+  const alreadyMerged = rows.filter((r) => r.merged_into_id !== null);
+  if (alreadyMerged.length > 0) {
+    return NextResponse.json(
+      { error: `${alreadyMerged.length} מהתנועות כבר שייכות למיזוג אחר. יש לבטל את המיזוג הקיים תחילה.` },
+      { status: 400 }
+    );
+  }
+
   const totalDebit = rows.reduce((s, r) => s + r.debit, 0);
   const totalCredit = rows.reduce((s, r) => s + r.credit, 0);
   const masterId = tx_ids[0]!;
   const childIds = tx_ids.slice(1);
 
-  // Update master: set new name, summed amounts, clear balance
+  // Update master: set new name, summed amounts, clear balance; preserve existing user notes
+  const masterRow = rows.find((r) => r.id === masterId);
+  const existingNotes = (masterRow as unknown as { notes?: string | null } | undefined)?.notes ?? null;
+  const mergeNote = `[מיוזג מ-${tx_ids.length} תנועות]`;
   const { error: masterErr } = await supabase
     .from("bank_transactions")
     .update({
@@ -71,7 +84,7 @@ export async function POST(request: NextRequest) {
       credit: totalCredit,
       balance: null,
       merged_into_id: null,
-      notes: `[מיוזג מ-${tx_ids.length} תנועות]`,
+      notes: existingNotes ? `${existingNotes} ${mergeNote}` : mergeNote,
     })
     .eq("id", masterId)
     .eq("company_id", ctx.companyId);
@@ -106,31 +119,29 @@ export async function DELETE(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Step 1: release children — no company_id filter, admin client is safe
+    // Step 1: release children — scoped to company for defense-in-depth
     const r1 = await supabase
       .from("bank_transactions")
       .update({ merged_into_id: null })
       .eq("merged_into_id", master_id)
+      .eq("company_id", ctx.companyId)
       .select("id");
 
     if (r1.error) {
-      console.error("[unmerge] release children:", r1.error);
       return NextResponse.json({ error: r1.error.message }, { status: 500 });
     }
-    console.log(`[unmerge] released ${r1.data?.length ?? 0} children`);
 
-    // Step 2: clear master merge marker — no company_id filter
+    // Step 2: clear only the merge marker note on master (preserve supplier_name the user may have set)
     const r2 = await supabase
       .from("bank_transactions")
-      .update({ notes: null, supplier_name: null })
+      .update({ notes: null })
       .eq("id", master_id)
+      .eq("company_id", ctx.companyId)
       .select("id");
 
     if (r2.error) {
-      console.error("[unmerge] clear master:", r2.error);
       return NextResponse.json({ error: r2.error.message }, { status: 500 });
     }
-    console.log(`[unmerge] cleared master, rows affected: ${r2.data?.length ?? 0}`);
 
     return NextResponse.json({ ok: true, children_released: r1.data?.length ?? 0 });
   } catch (err) {

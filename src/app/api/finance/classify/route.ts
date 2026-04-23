@@ -220,7 +220,8 @@ export async function POST(request: NextRequest) {
       await supabase
         .from("bank_transactions")
         .update({ category_id: null })
-        .eq("company_id", companyId);
+        .eq("company_id", companyId)
+        .is("merged_into_id", null);
 
       await supabase
         .from("bank_transaction_splits")
@@ -247,6 +248,7 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
+        .is("merged_into_id", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
       if (!forceAll) txQuery = txQuery.is("category_id", null);

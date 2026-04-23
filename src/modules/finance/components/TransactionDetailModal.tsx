@@ -482,11 +482,16 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
   // ── Delete link ───────────────────────────────────────────────────────────
   const handleDeleteLink = useCallback(async (linkId: string) => {
     if (!confirm("להסיר את הקישור למסמך זה?")) return;
-    await fetch("/api/finance/link-document", {
+    const res = await fetch("/api/finance/link-document", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ link_id: linkId }),
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as Record<string, string>;
+      alert(err.error ?? "שגיאה בהסרת הקישור");
+      return;
+    }
     await loadDocs();
   }, [loadDocs]);
 

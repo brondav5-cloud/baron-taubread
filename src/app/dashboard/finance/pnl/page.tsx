@@ -231,6 +231,7 @@ export default function PnlPage() {
           <PnlStatementTable
             view={statement}
             year={year}
+            month={month}
             onOpenTransaction={openTransaction}
             compareMonths={compareMonths}
           />

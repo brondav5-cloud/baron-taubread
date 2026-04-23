@@ -321,11 +321,16 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
     if (!confirm("למחוק את כל הפיצולים? התנועה תחזור לסיווג יחיד.")) return;
     setSaving(true);
     try {
-      await fetch("/api/finance/transactions/splits", {
+      const res = await fetch("/api/finance/transactions/splits", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tx_id: txId, splits: [] }),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as Record<string, string>;
+        toast.error(err.error ?? "שגיאה במחיקת הפיצולים");
+        return;
+      }
       setHasSplits(false);
       setRows([makeEmpty()]);
       setFilter("");

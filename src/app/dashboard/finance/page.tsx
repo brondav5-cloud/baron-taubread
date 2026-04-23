@@ -184,6 +184,7 @@ function FinancePageInner() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ split_id: splitId, category_id: categoryId }),
       });
+      hook.refresh();
       return;
     }
 
@@ -195,7 +196,8 @@ function FinancePageInner() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  }, []);
+    hook.refresh();
+  }, [hook]);
 
   const handleCategoryAdded = useCallback((cat: BankCategory) => {
     setExtraCategories((prev) => [...prev, cat]);
@@ -304,8 +306,8 @@ function FinancePageInner() {
     if (!selectedCompanyId) return;
     const supabase = createClient();
     Promise.all([
-      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).order("effective_date", { ascending: true }).limit(1),
-      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).order("effective_date", { ascending: false }).limit(1),
+      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).is("merged_into_id", null).order("effective_date", { ascending: true }).limit(1),
+      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).is("merged_into_id", null).order("effective_date", { ascending: false }).limit(1),
     ]).then(([{ data: minData }, { data: maxData }]) => {
       const minRaw = (minData?.[0] as { effective_date?: string } | undefined)?.effective_date;
       const maxRaw = (maxData?.[0] as { effective_date?: string } | undefined)?.effective_date;
@@ -327,6 +329,7 @@ function FinancePageInner() {
         .from("bank_transactions")
         .select("date,effective_date,description,details,reference,debit,credit,balance,category_id,operation_code,source_bank")
         .eq("company_id", selectedCompanyId)
+        .is("merged_into_id", null)
         .order("effective_date", { ascending: false })
         .limit(5000);
 

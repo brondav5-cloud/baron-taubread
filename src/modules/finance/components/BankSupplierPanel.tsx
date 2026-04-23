@@ -57,11 +57,13 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
     setError(null);
     const supabase = createClient();
 
+    const safeKey = supplierKey.replace(/[%_\\]/g, "\\$&");
     const directQuery = supabase
       .from("bank_transactions")
       .select("*")
       .eq("company_id", companyId)
-      .or(`supplier_name.eq.${supplierKey},description.ilike.%${supplierKey}%`)
+      .is("merged_into_id", null)
+      .or(`supplier_name.eq."${supplierKey}",description.ilike.%${safeKey}%`)
       .order("effective_date", { ascending: false })
       .limit(2000);
 
@@ -70,7 +72,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
       .from("bank_transaction_splits")
       .select("id, transaction_id, description, supplier_name, category_id, amount, notes, bank_transactions!inner(id, date, effective_date, debit, credit, source_bank, bank_account_id, company_id)")
       .eq("company_id", companyId)
-      .or(`supplier_name.eq.${supplierKey},description.ilike.%${supplierKey}%`)
+      .or(`supplier_name.eq."${supplierKey}",description.ilike.%${safeKey}%`)
       .limit(2000);
 
     Promise.all([directQuery, splitQuery]).then(([{ data: direct, error: err1 }, { data: splits, error: err2 }]) => {
@@ -142,22 +144,34 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
   }, [companyId, supplierKey]);
 
   // Fetch total company expenses for the selected year (for % KPI)
+  // Uses only expense-category transactions, excluding merged children
   useEffect(() => {
     if (!companyId) return;
     const supabase = createClient();
     supabase
-      .from("bank_transactions")
-      .select("debit")
+      .from("bank_categories")
+      .select("id")
       .eq("company_id", companyId)
-      .gt("debit", 0)
-      .gte("effective_date", `${selectedYear}-01-01`)
-      .lte("effective_date", `${selectedYear}-12-31`)
-      .limit(10000)
-      .then(({ data }) => {
-        if (data) {
-          const total = (data as { debit: number }[]).reduce((s, r) => s + r.debit, 0);
-          setTotalCompanyExpenses(total);
-        }
+      .eq("type", "expense")
+      .then(({ data: cats }) => {
+        const expenseIds = (cats ?? []).map((c: { id: string }) => c.id);
+        if (expenseIds.length === 0) { setTotalCompanyExpenses(0); return; }
+        supabase
+          .from("bank_transactions")
+          .select("debit")
+          .eq("company_id", companyId)
+          .is("merged_into_id", null)
+          .in("category_id", expenseIds)
+          .gt("debit", 0)
+          .gte("effective_date", `${selectedYear}-01-01`)
+          .lte("effective_date", `${selectedYear}-12-31`)
+          .limit(10000)
+          .then(({ data }) => {
+            if (data) {
+              const total = (data as { debit: number }[]).reduce((s, r) => s + r.debit, 0);
+              setTotalCompanyExpenses(total);
+            }
+          });
       });
   }, [companyId, selectedYear]);
 
@@ -186,7 +200,7 @@ export function BankSupplierPanel({ supplierKey, displayName, onClose }: Props) 
   const monthlyTotals = useMemo(() => {
     const months = Array.from({ length: 12 }, () => 0);
     for (const tx of expenseTxs) {
-      const d = new Date(tx.date);
+      const d = new Date(tx.effective_date ?? tx.date);
       if (d.getFullYear() !== selectedYear) continue;
       months[d.getMonth()] = (months[d.getMonth()] ?? 0) + tx.debit;
     }

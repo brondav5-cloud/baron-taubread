@@ -95,7 +95,7 @@ export function MergeTransactionsModal({ transactions, onClose, onMerged }: Prop
               autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleMerge(); }}
+              onKeyDown={(e) => { if (e.key === "Enter" && newName.trim()) setConfirming(true); }}
               placeholder="למשל: שכר עובדים פברואר"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-300 focus:outline-none"
             />

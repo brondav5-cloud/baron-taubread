@@ -21,11 +21,12 @@ export async function PATCH(request: NextRequest) {
   if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
-  await supabase
+  const { error: updateError } = await supabase
     .from("bank_transactions")
     .update({ notes: notes ?? null })
     .eq("id", tx_id)
     .eq("company_id", companyId);
 
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
