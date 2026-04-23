@@ -103,3 +103,51 @@ export async function resolveOrCreateSupplierMaster(opts: {
 
   return { supplierId: created.id, masterName: created.master_name };
 }
+
+export async function bootstrapSupplierMastersFromExistingNames(opts: {
+  supabase: SupabaseClient;
+  companyId: string;
+  maxRowsPerSource?: number;
+}): Promise<number> {
+  const limit = Math.min(Math.max(opts.maxRowsPerSource ?? 2500, 200), 5000);
+  const [txRowsRes, splitRowsRes] = await Promise.all([
+    opts.supabase
+      .from("bank_transactions")
+      .select("supplier_name")
+      .eq("company_id", opts.companyId)
+      .not("supplier_name", "is", null)
+      .neq("supplier_name", "")
+      .limit(limit),
+    opts.supabase
+      .from("bank_transaction_splits")
+      .select("supplier_name")
+      .eq("company_id", opts.companyId)
+      .not("supplier_name", "is", null)
+      .neq("supplier_name", "")
+      .limit(limit),
+  ]);
+
+  const txRows = (txRowsRes.data ?? []) as Array<{ supplier_name: string | null }>;
+  const splitRows = (splitRowsRes.data ?? []) as Array<{ supplier_name: string | null }>;
+  const allNames = [...txRows, ...splitRows]
+    .map((r) => cleanSupplierDisplayName(String(r.supplier_name ?? "")))
+    .filter(Boolean);
+
+  const byNormalized = new Map<string, string>();
+  for (const name of allNames) {
+    const normalized = normalizeSupplierName(name);
+    if (!normalized) continue;
+    if (!byNormalized.has(normalized)) byNormalized.set(normalized, name);
+  }
+
+  let createdOrMatched = 0;
+  for (const sampleName of Array.from(byNormalized.values())) {
+    const resolved = await resolveOrCreateSupplierMaster({
+      supabase: opts.supabase,
+      companyId: opts.companyId,
+      inputName: sampleName,
+    });
+    if (resolved) createdOrMatched += 1;
+  }
+  return createdOrMatched;
+}

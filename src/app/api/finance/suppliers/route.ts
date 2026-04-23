@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
-import { resolveOrCreateSupplierMaster } from "@/modules/finance/suppliers/master";
+import {
+  bootstrapSupplierMastersFromExistingNames,
+  resolveOrCreateSupplierMaster,
+} from "@/modules/finance/suppliers/master";
 
 async function getCompanyId() {
   const supabaseAuth = createServerSupabaseClient();
@@ -30,7 +33,26 @@ export async function GET(request: NextRequest) {
   if (q.length >= 2) query = query.ilike("master_name", `%${q}%`);
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ suppliers: data ?? [] });
+  let suppliers = data ?? [];
+
+  // First-time bootstrap: if the master table is still empty, build it from
+  // existing transaction/split supplier_name values so the picker is usable.
+  if (suppliers.length === 0 && !q) {
+    await bootstrapSupplierMastersFromExistingNames({
+      supabase,
+      companyId,
+      maxRowsPerSource: 3000,
+    });
+    const { data: afterBootstrap } = await supabase
+      .from("finance_suppliers")
+      .select("id, master_name")
+      .eq("company_id", companyId)
+      .order("master_name")
+      .limit(limit);
+    suppliers = afterBootstrap ?? [];
+  }
+
+  return NextResponse.json({ suppliers });
 }
 
 export async function POST(request: NextRequest) {
