@@ -6,10 +6,7 @@ import type { CategoryTransactionGroup } from "@/app/api/finance/pnl/category/ro
 import { BLOCK_KIND_LABELS } from "./constants";
 import { fmtCurrency, fmtSignedCurrency, monthLabel, pct } from "./format";
 import {
-  computePnlPeriodKpis,
   pnlDisplayMonths,
-  subtotalBlocksInMonth,
-  sumBlockInMonths,
 } from "./layout-utils";
 import type { PnlStatementView } from "./types";
 
@@ -80,6 +77,16 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
       return next;
     });
   }, [view.blocks]);
+
+  // Category drill-down data depends on the selected period/layout.
+  // Clear cached rows when period/layout changes so totals are never mixed
+  // between different month/year selections.
+  useEffect(() => {
+    setExpandedCategories(new Set());
+    setLoadingCategoryIds(new Set());
+    setExpandedSuppliers(new Set());
+    setGroupsByCategory({});
+  }, [year, month, view]);
 
   const costBlocks = useMemo(
     () => view.blocks.filter((b) => b.kind === "cost_of_goods"),
@@ -188,6 +195,18 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
     return totals;
   }
 
+  function monthlyForCategory(category: PnlStatementView["blocks"][number]["categories"][number]): Record<string, number> {
+    return categoryMonthlyTotalsFromGroups(category.id) ?? category.monthly;
+  }
+
+  function blockMonthTotal(block: PnlStatementView["blocks"][number], monthKey: string): number {
+    return block.categories.reduce((sum, category) => sum + (monthlyForCategory(category)[monthKey] ?? 0), 0);
+  }
+
+  function blockPeriodTotal(block: PnlStatementView["blocks"][number]): number {
+    return displayMonths.reduce((sum, monthKey) => sum + blockMonthTotal(block, monthKey), 0);
+  }
+
   function toggleSupplierDetails(categoryId: string, supplierKey: string) {
     const key = `${categoryId}::${supplierKey}`;
     setExpandedSuppliers((prev) => {
@@ -198,11 +217,12 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
     });
   }
 
-  const periodKpis = useMemo(
-    () => computePnlPeriodKpis(view, displayMonths),
-    [view, displayMonths],
+  const revenueTotalForPeriod = useMemo(
+    () => view.blocks
+      .filter((block) => block.kind === "income")
+      .reduce((sum, block) => sum + blockPeriodTotal(block), 0),
+    [view.blocks, displayMonths, groupsByCategory],
   );
-  const revenueTotalForPeriod = periodKpis.revenueTotal;
 
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
@@ -247,11 +267,11 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
                     </td>
                     {displayMonths.map((month) => (
                       <td key={month} className="text-center px-2 py-2 tabular-nums text-gray-700">
-                        {fmtCurrency(subtotalBlocksInMonth([block], month))}
+                        {fmtCurrency(blockMonthTotal(block, month))}
                       </td>
                     ))}
-                    <td className="text-center px-3 py-2 font-bold tabular-nums text-gray-900">{fmtCurrency(sumBlockInMonths(block, displayMonths))}</td>
-                    <td className="text-center px-2 py-2 text-xs text-gray-600">{pct(sumBlockInMonths(block, displayMonths), revenueTotalForPeriod)}</td>
+                    <td className="text-center px-3 py-2 font-bold tabular-nums text-gray-900">{fmtCurrency(blockPeriodTotal(block))}</td>
+                    <td className="text-center px-2 py-2 text-xs text-gray-600">{pct(blockPeriodTotal(block), revenueTotalForPeriod)}</td>
                   </tr>
 
                   {isExpanded && block.categories.map((row) => (
@@ -392,15 +412,19 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
             <SubtotalRow
               title="= רווח גולמי"
               value={displayMonths.reduce((sum, month) => {
-                const revenue = subtotalBlocksInMonth(view.blocks.filter((b) => b.kind === "income"), month);
-                const cogs = subtotalBlocksInMonth(costBlocks, month);
+                const revenue = view.blocks
+                  .filter((b) => b.kind === "income")
+                  .reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const cogs = costBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
                 return sum + (revenue - cogs);
               }, 0)}
               months={displayMonths}
               revenueTotal={revenueTotalForPeriod}
               calcByMonth={(month) => {
-                const revenue = subtotalBlocksInMonth(view.blocks.filter((b) => b.kind === "income"), month);
-                const cogs = subtotalBlocksInMonth(costBlocks, month);
+                const revenue = view.blocks
+                  .filter((b) => b.kind === "income")
+                  .reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const cogs = costBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
                 return revenue - cogs;
               }}
               className="bg-emerald-50 border-y border-emerald-200 text-emerald-800"
@@ -408,30 +432,42 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
             <SubtotalRow
               title="= רווח תפעולי"
               value={displayMonths.reduce((sum, month) => {
-                const gross = subtotalBlocksInMonth(view.blocks.filter((b) => b.kind === "income"), month) - subtotalBlocksInMonth(costBlocks, month);
-                return sum + (gross - subtotalBlocksInMonth(operatingBlocks, month));
+                const revenue = view.blocks
+                  .filter((b) => b.kind === "income")
+                  .reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const gross = revenue - costBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                return sum + (gross - operatingBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0));
               }, 0)}
               months={displayMonths}
               revenueTotal={revenueTotalForPeriod}
               calcByMonth={(month) => {
-                const gross = subtotalBlocksInMonth(view.blocks.filter((b) => b.kind === "income"), month) - subtotalBlocksInMonth(costBlocks, month);
-                return gross - subtotalBlocksInMonth(operatingBlocks, month);
+                const revenue = view.blocks
+                  .filter((b) => b.kind === "income")
+                  .reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const gross = revenue - costBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                return gross - operatingBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
               }}
               className="bg-blue-50 border-y border-blue-200 text-blue-800"
             />
             <SubtotalRow
               title="= רווח נקי"
               value={displayMonths.reduce((sum, month) => {
-                const gross = subtotalBlocksInMonth(view.blocks.filter((b) => b.kind === "income"), month) - subtotalBlocksInMonth(costBlocks, month);
-                const operating = gross - subtotalBlocksInMonth(operatingBlocks, month);
-                return sum + (operating - subtotalBlocksInMonth(financeOtherBlocks, month));
+                const revenue = view.blocks
+                  .filter((b) => b.kind === "income")
+                  .reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const gross = revenue - costBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const operating = gross - operatingBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                return sum + (operating - financeOtherBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0));
               }, 0)}
               months={displayMonths}
               revenueTotal={revenueTotalForPeriod}
               calcByMonth={(month) => {
-                const gross = subtotalBlocksInMonth(view.blocks.filter((b) => b.kind === "income"), month) - subtotalBlocksInMonth(costBlocks, month);
-                const operating = gross - subtotalBlocksInMonth(operatingBlocks, month);
-                return operating - subtotalBlocksInMonth(financeOtherBlocks, month);
+                const revenue = view.blocks
+                  .filter((b) => b.kind === "income")
+                  .reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const gross = revenue - costBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                const operating = gross - operatingBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
+                return operating - financeOtherBlocks.reduce((s, b) => s + blockMonthTotal(b, month), 0);
               }}
               className="bg-slate-900 text-white border-t-2 border-slate-700"
             />
