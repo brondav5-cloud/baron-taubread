@@ -45,6 +45,7 @@ function buildDuplicateKey(tx: BankTransaction): string | null {
 }
 
 function FinancePageInner() {
+  const PAGE_SIZE_OPTIONS = [50, 100, 200, 500] as const;
   const { canAccess } = usePermissions();
   const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
   const hook = useBankTransactions({ keepLogicalDuplicates: showDuplicatesOnly });
@@ -200,7 +201,7 @@ function FinancePageInner() {
     setExtraCategories((prev) => [...prev, cat]);
   }, []);
 
-  const handleApplySimilarDone = useCallback(() => {
+  const refreshKeepingViewport = useCallback(() => {
     const currentY = typeof window !== "undefined" ? window.scrollY : 0;
     hook.refresh();
     if (typeof window !== "undefined") {
@@ -211,6 +212,10 @@ function FinancePageInner() {
       });
     }
   }, [hook]);
+
+  const handleApplySimilarDone = useCallback(() => {
+    refreshKeepingViewport();
+  }, [refreshKeepingViewport]);
 
   const handleToggleClassifyCol = useCallback(() => {
     setShowClassifyCol((prev) => {
@@ -552,13 +557,27 @@ function FinancePageInner() {
       />
 
       {/* ── Pagination ─────────────────────────────────────────────────────── */}
-      {totalPages > 1 && (
+      {hook.totalCount > 0 && (
         <div className="flex items-center justify-between text-sm text-gray-600">
-          <span>
-            עמוד {hook.page + 1} מתוך {totalPages.toLocaleString()}
-            {" "}·{" "}
-            {hook.totalCount.toLocaleString()} תנועות
-          </span>
+          <div className="flex items-center gap-3">
+            <span>
+              עמוד {hook.page + 1} מתוך {Math.max(1, totalPages).toLocaleString()}
+              {" "}·{" "}
+              {hook.totalCount.toLocaleString()} תנועות
+            </span>
+            <label className="flex items-center gap-1.5 text-xs text-gray-500">
+              תנועות בעמוד
+              <select
+                value={hook.pageSize}
+                onChange={(e) => hook.setPageSize(Number(e.target.value))}
+                className="border border-gray-200 rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </label>
+          </div>
           <div className="flex gap-1">
             <button
               onClick={() => hook.setPage(hook.page - 1)}
@@ -569,7 +588,7 @@ function FinancePageInner() {
             </button>
             <button
               onClick={() => hook.setPage(hook.page + 1)}
-              disabled={hook.page >= totalPages - 1}
+              disabled={hook.page >= Math.max(1, totalPages) - 1}
               className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
@@ -631,7 +650,7 @@ function FinancePageInner() {
         <TransactionEditModal
           transaction={editTx}
           onClose={() => setEditTx(null)}
-          onSaved={() => hook.refresh()}
+          onSaved={() => refreshKeepingViewport()}
         />
       )}
 

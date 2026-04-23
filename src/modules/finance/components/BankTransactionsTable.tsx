@@ -34,6 +34,8 @@ const FLOAT_GAP = 4;
 const FLOAT_Z_INDEX = 100_050;
 /** After user pauses typing, apply search; longer delay feels better for Hebrew. */
 const SEARCH_FILTER_DEBOUNCE_MS = 550;
+/** In category picker, avoid filtering on every keystroke. */
+const CATEGORY_PICKER_SEARCH_DEBOUNCE_MS = 500;
 
 /**
  * Fixed panel aligned to trigger (RTL: `right`). Flips above when not enough space below.
@@ -295,6 +297,7 @@ function InlineCategorySelect({
   onApplySimilarDone?: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [addMode, setAddMode] = useState(false);
   const [newName, setNewName] = useState("");
@@ -340,12 +343,21 @@ function InlineCategorySelect({
       setOpen(false);
       setShowRulePrompt(false);
       setAddMode(false);
+      setSearchInput("");
       setSearch("");
       setNewName("");
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [open, showRulePrompt]);
+
+  useEffect(() => {
+    if (!open) return;
+    const timer = setTimeout(() => {
+      setSearch(searchInput);
+    }, CATEGORY_PICKER_SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput, open]);
 
   const repositionFloating = useCallback(() => {
     if (!buttonRef.current) return;
@@ -384,6 +396,7 @@ function InlineCategorySelect({
     if (buttonRef.current) {
       setDropStyle(calcFloatingPanelStyle(buttonRef.current, 256, { estimatedMinHeight: 280, maxHeightCap: 480 }));
     }
+    setSearchInput("");
     setSearch("");
     setShowRulePrompt(false);
     setOpen(true);
@@ -409,6 +422,7 @@ function InlineCategorySelect({
   const handleSelect = async (catId: string | null) => {
     if (isParentWithSplits) return;
     setOpen(false);
+    setSearchInput("");
     setSearch("");
     setAddMode(false);
     const prevId = localCatId;
@@ -500,6 +514,7 @@ function InlineCategorySelect({
         setOpen(false);
         setAddMode(false);
         setNewName("");
+        setSearchInput("");
         setSearch("");
         openRulePrompt();
       }
@@ -597,10 +612,15 @@ function InlineCategorySelect({
               <input
                 autoFocus
                 type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Escape") { setOpen(false); setSearch(""); }
+                  if (e.key === "Escape") {
+                    setOpen(false);
+                    setSearchInput("");
+                    setSearch("");
+                  }
+                  if (e.key === "Enter") setSearch(searchInput);
                   if (e.key === "Enter" && filteredCategories.length === 1 && filteredCategories[0]) {
                     handleSelect(filteredCategories[0].id);
                   }
@@ -608,8 +628,14 @@ function InlineCategorySelect({
                 placeholder="חפש קטגוריה..."
                 className="w-full border border-gray-200 rounded-lg pr-6 pl-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
               />
-              {search && (
-                <button onClick={() => setSearch("")} className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {searchInput && (
+                <button
+                  onClick={() => {
+                    setSearchInput("");
+                    setSearch("");
+                  }}
+                  className="absolute left-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
                   <X className="w-2.5 h-2.5" />
                 </button>
               )}
@@ -980,6 +1006,7 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   const [localSearch, setLocalSearch] = useState(searchFilter);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [collapsedSplitGroups, setCollapsedSplitGroups] = useState<Set<string>>(new Set());
+  const knownSplitGroupsRef = useRef<Set<string>>(new Set());
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onSearchChangeRef = useRef(onSearchChange);
@@ -1025,14 +1052,29 @@ export const BankTransactionsTable = memo(function BankTransactionsTable({
   // Clear selection when transaction list changes (new page / filter)
   useEffect(() => { setSelected(new Set()); }, [transactions]);
 
-  // Default: keep split groups collapsed for cleaner table.
+  // Keep user expand/collapse state across refreshes:
+  // new groups start collapsed, existing groups keep their current state.
   useEffect(() => {
     const groups = new Set(
       transactions
         .filter((t) => t.is_split_line && t.split_parent_id)
         .map((t) => t.split_parent_id!)
     );
-    setCollapsedSplitGroups(groups);
+    const knownGroups = knownSplitGroupsRef.current;
+    setCollapsedSplitGroups((prev) => {
+      const next = new Set<string>();
+      groups.forEach((groupId) => {
+        if (knownGroups.has(groupId)) {
+          // Existing group: preserve previous collapsed/expanded state.
+          if (prev.has(groupId)) next.add(groupId);
+        } else {
+          // New group: start collapsed.
+          next.add(groupId);
+        }
+      });
+      return next;
+    });
+    knownSplitGroupsRef.current = groups;
   }, [transactions]);
 
   const clearAllFilters = () => {

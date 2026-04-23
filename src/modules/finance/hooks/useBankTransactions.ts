@@ -28,7 +28,7 @@ export type SortBy =
   | "category_id";
 export type SortDir = "asc" | "desc";
 
-const PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 const SCAN_BATCH_SIZE = 200;
 
 function buildDuplicateSignature(tx: BankTransaction): string | null {
@@ -96,6 +96,7 @@ export interface UseBankTransactionsReturn {
   /** Maps transaction_id → number of saved splits */
   splitCounts: Map<string, number>;
   setPage: (p: number) => void;
+  setPageSize: (size: number) => void;
   setFilters: (f: BankTransactionFilters | ((prev: BankTransactionFilters) => BankTransactionFilters)) => void;
   setSort: (col: SortBy) => void;
   refresh: () => void;
@@ -113,6 +114,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
   const [splitCounts, setSplitCounts] = useState<Map<string, number>>(new Map());
   const [totalCount, setTotalCount] = useState(0);
   const [page, setPage] = useState(0);
+  const [pageSize, setPageSizeState] = useState(DEFAULT_PAGE_SIZE);
   const [filters, setFiltersState] = useState<BankTransactionFilters>(emptyFilters);
   const [sortBy, setSortBy] = useState<SortBy>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -145,6 +147,13 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
 
   const refresh = useCallback(() => {
     setRefreshCounter((c) => c + 1);
+  }, []);
+
+  const setPageSize = useCallback((size: number) => {
+    const next = Number(size);
+    if (!Number.isFinite(next) || next <= 0) return;
+    setPageSizeState(next);
+    setPage(0);
   }, []);
 
   // Load bank accounts + categories (re-load when refreshCounter changes)
@@ -309,8 +318,8 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
             return (duplicateCounts.get(signature) ?? 0) > 1;
           });
 
-          const from = page * PAGE_SIZE;
-          const toExclusive = from + PAGE_SIZE;
+          const from = page * pageSize;
+          const toExclusive = from + pageSize;
           const pageParents = duplicateParents.slice(from, toExclusive);
           const { rows, splitCounts: counts } = await buildVisibleRows(pageParents);
           if (cancelled) return;
@@ -323,8 +332,8 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
         }
 
         if (filters.categoryId) {
-          const pageStart = page * PAGE_SIZE;
-          const pageEndExclusive = pageStart + PAGE_SIZE;
+          const pageStart = page * pageSize;
+          const pageEndExclusive = pageStart + pageSize;
           let matchedSeen = 0;
           let offset = 0;
           const pageRows: BankTransaction[] = [];
@@ -374,8 +383,8 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
           return;
         }
 
-        const from = page * PAGE_SIZE;
-        const to = from + PAGE_SIZE - 1;
+        const from = page * pageSize;
+        const to = from + pageSize - 1;
         const { data, count, error: qErr } = await buildBaseQuery().range(from, to);
         if (cancelled) return;
         if (qErr) throw qErr;
@@ -401,7 +410,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
     void load();
 
     return () => { cancelled = true; };
-  }, [user, selectedCompanyId, page, filters, sortBy, sortDir, refreshCounter, applyCategoryFilter, opts?.keepLogicalDuplicates]);
+  }, [user, selectedCompanyId, page, pageSize, filters, sortBy, sortDir, refreshCounter, applyCategoryFilter, opts?.keepLogicalDuplicates]);
 
   return {
     transactions,
@@ -409,7 +418,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
     categories,
     totalCount,
     page,
-    pageSize: PAGE_SIZE,
+    pageSize,
     filters,
     sortBy,
     sortDir,
@@ -417,6 +426,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
     error,
     splitCounts,
     setPage,
+    setPageSize,
     setFilters,
     setSort,
     refresh,
