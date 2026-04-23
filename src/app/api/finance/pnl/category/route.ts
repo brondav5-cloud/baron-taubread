@@ -1,8 +1,8 @@
 /**
  * GET /api/finance/pnl/category?categoryId=xxx&year=2025&month=3
  *
- * Returns grouped rows for a category (or uncategorized) within the selected period.
- * Excludes merged-into children; collapses identical bank lines (same date, supplier, description, reference).
+ * Returns rows for a category (or uncategorized) within the selected period.
+ * Excludes merged-into children; each underlying movement is returned separately.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -10,7 +10,7 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
 
-/** One aggregated row: same date + description + supplier + reference (bank line identity) */
+/** One movement row returned to the UI */
 export interface CategoryTransactionGroup {
   /** Open transaction detail / analysis for this group */
   representative_id: string;
@@ -186,39 +186,20 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
-    const groupMap = new Map<string, TxRow[]>();
-    for (const row of rows) {
-      const key = [
-        row.date,
-        norm(row.supplier_name ?? ""),
-        norm(row.description),
-        row.reference.trim(),
-      ].join("\x1e");
-      const arr = groupMap.get(key) ?? [];
-      arr.push(row);
-      groupMap.set(key, arr);
-    }
-
-    const groups: CategoryTransactionGroup[] = Array.from(groupMap.values())
-      .map((txs) => {
-        const amount = txs.reduce((s, t) => s + t.amount, 0);
-        const rep = txs.reduce((a, b) => (Math.abs(b.amount) > Math.abs(a.amount) ? b : a));
-        const date = txs.reduce((a, b) => (a >= b.date ? a : b.date), txs[0]!.date);
-        return {
-          representative_id: rep.id,
-          open_tx_id: rep.open_tx_id,
-          count: txs.length,
-          amount,
-          date,
-          description: rep.description,
-          details: rep.details,
-          reference: rep.reference,
-          source_bank: rep.source_bank,
-          notes: rep.notes,
-          supplier_name: rep.supplier_name,
-        };
-      })
+    const groups: CategoryTransactionGroup[] = rows
+      .map((row) => ({
+        representative_id: row.id,
+        open_tx_id: row.open_tx_id,
+        count: 1,
+        amount: row.amount,
+        date: row.date,
+        description: row.description,
+        details: row.details,
+        reference: row.reference,
+        source_bank: row.source_bank,
+        notes: row.notes,
+        supplier_name: row.supplier_name,
+      }))
       .sort((a, b) => b.date.localeCompare(a.date) || Math.abs(b.amount) - Math.abs(a.amount));
 
     return NextResponse.json({
