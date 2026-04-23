@@ -78,6 +78,8 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
   const [duplicateInfo, setDuplicateInfo] = useState<DuplicateInfo | null>(null);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [classifyResult, setClassifyResult] = useState<string | null>(null);
+  const [showPostUploadClassifyPrompt, setShowPostUploadClassifyPrompt] = useState(false);
+  const [postUploadClassifying, setPostUploadClassifying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
@@ -209,26 +211,40 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
         skippedDetailsTruncated: Boolean(data.skipped_details_truncated),
       });
       setStep("done");
-
-      // Auto-classify after successful upload
-      try {
-        const cr = await fetch("/api/finance/classify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mode: "auto" }),
-        });
-        const cd = await cr.json();
-        if (cd.classified > 0) {
-          setClassifyResult(`סווגו אוטומטית ${cd.classified} תנועות`);
-        }
-      } catch {
-        // non-critical
-      }
+      setClassifyResult(null);
+      setShowPostUploadClassifyPrompt(true);
     } catch (e) {
       setParseError(String(e));
       setStep("preview");
     }
   }, [parseResult, file, bank, fileHash]);
+
+  const runPostUploadClassify = useCallback(async (mode: "auto" | "force_auto") => {
+    setPostUploadClassifying(true);
+    try {
+      const cr = await fetch("/api/finance/classify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const cd = await cr.json().catch(() => ({}));
+      if (!cr.ok) {
+        setClassifyResult((cd as { error?: string }).error ?? "שגיאה בסיווג אוטומטי");
+        return;
+      }
+      const classified = (cd as { classified?: number }).classified ?? 0;
+      setClassifyResult(
+        mode === "force_auto"
+          ? `סווגו מחדש ${classified} תנועות`
+          : `סווגו אוטומטית ${classified} תנועות`
+      );
+      setShowPostUploadClassifyPrompt(false);
+    } catch {
+      setClassifyResult("שגיאה בסיווג אוטומטי");
+    } finally {
+      setPostUploadClassifying(false);
+    }
+  }, []);
 
   const handleUpload = useCallback(() => {
     if (duplicateInfo) {
@@ -501,6 +517,37 @@ export function UploadBankFileModal({ onClose, onSuccess }: Props) {
                 <p className="text-sm text-teal-700 font-medium bg-teal-50 rounded-lg px-3 py-2">
                   הוזהו {uploadResult.matched} שיקים עם שמות ספקים
                 </p>
+              )}
+              {showPostUploadClassifyPrompt && (
+                <div className="text-right bg-purple-50 border border-purple-200 rounded-lg px-3 py-3 space-y-2">
+                  <p className="text-sm font-medium text-purple-700">הקובץ נקלט. מה לעשות עם סיווג אוטומטי?</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPostUploadClassifyPrompt(false)}
+                      disabled={postUploadClassifying}
+                      className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      דלג
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void runPostUploadClassify("auto"); }}
+                      disabled={postUploadClassifying}
+                      className="px-3 py-1.5 text-xs bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {postUploadClassifying ? "מסווג..." : "סווג בלבד"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void runPostUploadClassify("force_auto"); }}
+                      disabled={postUploadClassifying}
+                      className="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                    >
+                      {postUploadClassifying ? "מסווג..." : "סווג ולהחיל"}
+                    </button>
+                  </div>
+                </div>
               )}
               {classifyResult && (
                 <p className="text-sm text-purple-600 font-medium bg-purple-50 rounded-lg px-3 py-2">

@@ -870,6 +870,34 @@ function InlineCategorySelect({
             />
             לכלול גם תנועות שכבר מסווגות (רק לפי כלל זה)
           </label>
+          {!isSplitLine && localCatId && (
+            <div className="flex items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1.5">
+              <p className="text-[10px] text-amber-900">
+                {manualLock
+                  ? "התנועה נעולה: סיווג אוטומטי לא ישנה אותה."
+                  : "רוצה לנעול עכשיו את התנועה הזו?"}
+              </p>
+              {manualLock ? (
+                <button
+                  type="button"
+                  onClick={() => { void handleUnlockManual(); }}
+                  disabled={saving}
+                  className="shrink-0 text-[10px] px-2 py-1 rounded-md border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+                >
+                  בטל נעילה
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => { void handleLockPersist(); }}
+                  disabled={saving}
+                  className="shrink-0 text-[10px] px-2 py-1 rounded-md border border-amber-300 bg-amber-100 text-amber-900 hover:bg-amber-200 disabled:opacity-50"
+                >
+                  נעל תנועה
+                </button>
+              )}
+            </div>
+          )}
 
           {ruleError && (
             <p className="text-[10px] text-red-600 bg-red-50 rounded px-2 py-1">{ruleError}</p>

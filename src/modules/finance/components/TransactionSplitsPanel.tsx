@@ -89,6 +89,7 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
   const [batchCatId, setBatchCatId] = useState("");
   const [supplierSuggestions, setSupplierSuggestions] = useState<Array<{ id: string; master_name: string }>>([]);
   const [supplierSearch, setSupplierSearch] = useState("");
+  const [showAutoClassifyPrompt, setShowAutoClassifyPrompt] = useState(false);
 
   // After-save: show how many unclassified were retroactively updated
   const [appliedCount, setAppliedCount] = useState<number | null>(null);
@@ -190,6 +191,14 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
     }
   }, []);
 
+  const handlePromptClassify = useCallback(() => {
+    const current = rowsRef.current;
+    setShowAutoClassifyPrompt(false);
+    void applyAutoClassify(current).then((classified) => {
+      setRows(classified);
+    });
+  }, [applyAutoClassify]);
+
   // ── Auto-import when doc rows arrive (no existing splits) ────────────────
   useEffect(() => {
     if (loading) return;
@@ -207,14 +216,9 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
     const imported = rowsFromDocRows(docRows);
     if (imported.length === 0) return;
 
-    // Apply auto-classify then set rows
-    applyAutoClassify(imported).then((classified) => {
-      setRows(classified);
-      const alreadyClassified = classified.filter((r) => r.auto_classified).length;
-      if (alreadyClassified === 0) {
-        toast.success(`${imported.length} שורות נטענו מהפירוט`);
-      }
-    });
+    setRows(imported);
+    setShowAutoClassifyPrompt(true);
+    toast.success(`${imported.length} שורות נטענו מהפירוט`);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, hasSplits, docRows]);
 
@@ -258,13 +262,12 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
     const imported = rowsFromDocRows(docRows);
     if (imported.length === 0) { toast.error("לא נמצאו שורות לייבוא"); return; }
 
-    applyAutoClassify(imported).then((classified) => {
-      setRows(classified);
-      setFilter("");
-      setBatchCatId("");
-      toast.success(`${imported.length} שורות נטענו מחדש`);
-    });
-  }, [docRows, applyAutoClassify]);
+    setRows(imported);
+    setFilter("");
+    setBatchCatId("");
+    setShowAutoClassifyPrompt(true);
+    toast.success(`${imported.length} שורות נטענו מחדש`);
+  }, [docRows]);
 
   // ── Save ─────────────────────────────────────────────────────────────────
   const handleSave = useCallback(async () => {
@@ -423,6 +426,26 @@ export function TransactionSplitsPanel({ txId, txAmount, txIsDebit, categories, 
           <span>
             <strong>{autoClassifiedCount}</strong> שורות סווגו אוטומטית לפי כללים שמורים — בדוק ושמור
           </span>
+        </div>
+      )}
+      {showAutoClassifyPrompt && !hasSplits && (
+        <div className="flex flex-wrap items-center gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-800">
+          <span>נטענו שורות מפירוט. לבצע סיווג אוטומטי עכשיו?</span>
+          <button
+            type="button"
+            onClick={() => setShowAutoClassifyPrompt(false)}
+            className="px-2 py-1 text-gray-500 hover:text-gray-700"
+          >
+            דלג
+          </button>
+          <button
+            type="button"
+            onClick={handlePromptClassify}
+            disabled={classifying}
+            className="px-2.5 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 disabled:opacity-50"
+          >
+            סווג בלבד
+          </button>
         </div>
       )}
 
