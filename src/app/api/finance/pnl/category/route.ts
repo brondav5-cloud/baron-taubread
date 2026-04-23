@@ -62,20 +62,20 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    function filterMovementsUsingMergedChildren<T extends { id: string; merged_into_id: string | null }>(rows: T[]): T[] {
+    const filterMovementsUsingMergedChildren = <T extends { id: string; merged_into_id: string | null }>(rows: T[]): T[] => {
       const mergedParentIds = new Set(
         rows
           .map((r) => r.merged_into_id)
           .filter((id): id is string => typeof id === "string" && id.length > 0),
       );
       return rows.filter((row) => row.merged_into_id !== null || !mergedParentIds.has(row.id));
-    }
+    };
 
-    function chunkArray<T>(items: T[], size: number): T[][] {
+    const chunkArray = <T>(items: T[], size: number): T[][] => {
       const out: T[][] = [];
       for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
       return out;
-    }
+    };
 
     // Fetch transactions in the period first (we'll apply category filter after split replacement)
     const allTransactions: Array<{
