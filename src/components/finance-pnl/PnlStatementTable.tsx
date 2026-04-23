@@ -10,7 +10,6 @@ import {
   pnlDisplayMonths,
   subtotalBlocksInMonth,
   sumBlockInMonths,
-  sumCategoryInMonths,
 } from "./layout-utils";
 import type { PnlStatementView } from "./types";
 
@@ -176,6 +175,19 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
     );
   }
 
+  function categoryMonthlyTotalsFromGroups(categoryId: string): Record<string, number> | null {
+    if (!(categoryId in groupsByCategory)) return null;
+    const rows = groupsByCategory[categoryId] ?? [];
+    const totals: Record<string, number> = {};
+    for (const monthKey of displayMonths) totals[monthKey] = 0;
+    for (const row of rows) {
+      const monthKey = row.date.slice(0, 7);
+      if (!(monthKey in totals)) continue;
+      totals[monthKey] = (totals[monthKey] ?? 0) + row.amount;
+    }
+    return totals;
+  }
+
   function toggleSupplierDetails(categoryId: string, supplierKey: string) {
     const key = `${categoryId}::${supplierKey}`;
     setExpandedSuppliers((prev) => {
@@ -244,6 +256,14 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
 
                   {isExpanded && block.categories.map((row) => (
                     <Fragment key={row.id}>
+                      {(() => {
+                        const totalsFromGroups = categoryMonthlyTotalsFromGroups(row.id);
+                        const monthlyForDisplay = totalsFromGroups ?? row.monthly;
+                        const totalForDisplay = displayMonths.reduce(
+                          (sum, monthKey) => sum + (monthlyForDisplay[monthKey] ?? 0),
+                          0,
+                        );
+                        return (
                       <tr
                         className="border-b border-gray-100 hover:bg-blue-50/40 cursor-pointer"
                         onClick={() => { void openCategory(row.id); }}
@@ -258,12 +278,14 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
                         </td>
                         {displayMonths.map((month) => (
                           <td key={month} className="text-center px-2 py-2 tabular-nums text-gray-600">
-                            {fmtCurrency(row.monthly[month] ?? 0)}
+                            {fmtCurrency(monthlyForDisplay[month] ?? 0)}
                           </td>
                         ))}
-                        <td className="text-center px-3 py-2 font-medium tabular-nums text-gray-800">{fmtCurrency(sumCategoryInMonths(row.monthly, displayMonths))}</td>
-                        <td className="text-center px-2 py-2 text-xs text-gray-500">{pct(sumCategoryInMonths(row.monthly, displayMonths), revenueTotalForPeriod)}</td>
+                        <td className="text-center px-3 py-2 font-medium tabular-nums text-gray-800">{fmtCurrency(totalForDisplay)}</td>
+                        <td className="text-center px-2 py-2 text-xs text-gray-500">{pct(totalForDisplay, revenueTotalForPeriod)}</td>
                       </tr>
+                        );
+                      })()}
 
                       {expandedCategories.has(row.id) && (
                         <tr className="border-b border-gray-100 bg-slate-50/60">
