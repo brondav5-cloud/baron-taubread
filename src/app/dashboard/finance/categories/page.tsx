@@ -347,7 +347,40 @@ export default function CategoriesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: editingRuleId, match_field: editField, match_type: editType, match_value: cleanedValue }),
       });
-      if (!res.ok) {
+      if (res.status === 409 && editField === "supplier_name") {
+        const data = await res.json().catch(() => ({}));
+        const categories = Array.isArray((data as { conflicting_categories?: unknown[] }).conflicting_categories)
+          ? ((data as { conflicting_categories: Array<{ name?: string }> }).conflicting_categories)
+              .map((c) => c.name)
+              .filter(Boolean)
+              .join(", ")
+          : "";
+        const confirmed = window.confirm(
+          categories
+            ? `לספק כבר יש כלל בקטגוריות: ${categories}. להחליף לקטגוריה החדשה?`
+            : "לספק כבר יש כלל בקטגוריה אחרת. להחליף לקטגוריה החדשה?"
+        );
+        if (!confirmed) {
+          setClassifyResult("הכלל לא עודכן");
+          return;
+        }
+        const replaceRes = await fetch("/api/finance/categories/rules", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: editingRuleId,
+            match_field: editField,
+            match_type: editType,
+            match_value: cleanedValue,
+            conflict_strategy: "replace_existing",
+          }),
+        });
+        if (!replaceRes.ok) {
+          const replaceData = await replaceRes.json().catch(() => ({}));
+          setClassifyResult((replaceData as { error?: string }).error ?? "שגיאה בעדכון כלל");
+          return;
+        }
+      } else if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setClassifyResult((data as { error?: string }).error ?? "שגיאה בעדכון כלל");
         return;
@@ -374,7 +407,40 @@ export default function CategoriesPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ category_id: catId, match_field: addRuleField, match_type: "contains", match_value: cleanedValue }),
       });
-      if (!res.ok) {
+      if (res.status === 409 && addRuleField === "supplier_name") {
+        const data = await res.json().catch(() => ({}));
+        const categories = Array.isArray((data as { conflicting_categories?: unknown[] }).conflicting_categories)
+          ? ((data as { conflicting_categories: Array<{ name?: string }> }).conflicting_categories)
+              .map((c) => c.name)
+              .filter(Boolean)
+              .join(", ")
+          : "";
+        const confirmed = window.confirm(
+          categories
+            ? `לספק כבר יש כלל בקטגוריות: ${categories}. להחליף לקטגוריה החדשה?`
+            : "לספק כבר יש כלל בקטגוריה אחרת. להחליף לקטגוריה החדשה?"
+        );
+        if (!confirmed) {
+          setClassifyResult("הכלל לא עודכן");
+          return;
+        }
+        const replaceRes = await fetch("/api/finance/categories/rules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category_id: catId,
+            match_field: addRuleField,
+            match_type: "contains",
+            match_value: cleanedValue,
+            conflict_strategy: "replace_existing",
+          }),
+        });
+        if (!replaceRes.ok) {
+          const replaceData = await replaceRes.json().catch(() => ({}));
+          setClassifyResult((replaceData as { error?: string }).error ?? "שגיאה בהוספת כלל");
+          return;
+        }
+      } else if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         setClassifyResult((data as { error?: string }).error ?? "שגיאה בהוספת כלל");
         return;

@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
         .from("bank_transactions")
         .select("id, date, effective_date, description, details, debit, credit, reference, source_bank, notes, supplier_name, category_id, merged_into_id")
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .gte("effective_date", dateFrom)
         .lte("effective_date", dateTo)
         .order("effective_date", { ascending: false })

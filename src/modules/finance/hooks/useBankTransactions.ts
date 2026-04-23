@@ -299,6 +299,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
         .from("bank_transactions")
         .select("*", { count: "exact" })
         .eq("company_id", selectedCompanyId)
+        .is("deleted_at", null)
         .is("merged_into_id", null)
         .order(sortColumn, { ascending: sortDir === "asc", nullsFirst: false })
         .order("created_at", { ascending: false });

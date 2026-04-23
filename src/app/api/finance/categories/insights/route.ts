@@ -131,6 +131,7 @@ export async function GET(request: NextRequest) {
           .from("bank_transactions")
           .select("id,date,description,supplier_name,debit,credit,details,reference,operation_code,category_id,category_override")
           .eq("company_id", companyId)
+          .is("deleted_at", null)
           .eq("category_id", categoryId)
           .order("date", { ascending: false })
           .limit(limit),
@@ -151,6 +152,7 @@ export async function GET(request: NextRequest) {
             .from("bank_transactions")
             .select("id,date")
             .eq("company_id", companyId)
+              .is("deleted_at", null)
             .in("id", splitTxIds)
         : { data: [] as { id: string; date: string }[] };
       const parentDateMap = new Map((splitParents ?? []).map((p) => [p.id, p.date]));
@@ -213,6 +215,7 @@ export async function GET(request: NextRequest) {
         .from("bank_transactions")
         .select("id,date,description,supplier_name,debit,credit,details,reference,operation_code,category_id,category_override")
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .or(`description.ilike.${like},supplier_name.ilike.${like}`)
         .order("date", { ascending: false })
         .limit(limit),
@@ -231,6 +234,7 @@ export async function GET(request: NextRequest) {
           .from("bank_transactions")
           .select("id,date")
           .eq("company_id", companyId)
+          .is("deleted_at", null)
           .in("id", splitTxIds)
       : { data: [] as { id: string; date: string }[] };
     const parentDateMap = new Map((splitParents ?? []).map((p) => [p.id, p.date]));

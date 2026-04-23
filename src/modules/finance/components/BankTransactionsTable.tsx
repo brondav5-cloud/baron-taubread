@@ -445,6 +445,14 @@ function InlineCategorySelect({
     setSavingRule(true);
     setRuleError(null);
     try {
+      const supplierConflictMessage = (payload: Record<string, unknown>) => {
+        const categories = Array.isArray(payload.conflicting_categories)
+          ? (payload.conflicting_categories as Array<{ name?: string }>).map((c) => c.name).filter(Boolean).join(", ")
+          : "";
+        return categories
+          ? `הספק כבר משויך לקטגוריות: ${categories}. להחליף ולשמור בקטגוריה החדשה?`
+          : "הספק כבר משויך לקטגוריה אחרת. להחליף ולשמור בקטגוריה החדשה?";
+      };
       const ruleRes = isSplitLine
         ? await fetch("/api/finance/splits/rules", {
             method: "POST",
@@ -463,7 +471,30 @@ function InlineCategorySelect({
               match_value: ruleMatchValue.trim(),
             }),
           });
-      if (!ruleRes.ok) {
+      if (!isSplitLine && ruleRes.status === 409) {
+        const conflictPayload = await ruleRes.json().catch(() => ({})) as Record<string, unknown>;
+        const shouldReplace = window.confirm(supplierConflictMessage(conflictPayload));
+        if (!shouldReplace) {
+          setRuleError("נשמר ללא שינוי. אפשר לבחור ספק אחר או לשמור ללא כלל ספק.");
+          return;
+        }
+        const replaceRes = await fetch("/api/finance/categories/rules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category_id: localCatId,
+            match_field: ruleField,
+            match_type: "contains",
+            match_value: ruleMatchValue.trim(),
+            conflict_strategy: "replace_existing",
+          }),
+        });
+        if (!replaceRes.ok) {
+          const err = await replaceRes.json().catch(() => ({})) as Record<string, string>;
+          setRuleError(err.error ?? "שגיאה בשמירת הכלל");
+          return;
+        }
+      } else if (!ruleRes.ok) {
         const err = await ruleRes.json().catch(() => ({})) as Record<string, string>;
         setRuleError(err.error ?? "שגיאה בשמירת הכלל");
         return;

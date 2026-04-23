@@ -8,6 +8,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
+import { normalizeSupplierDisplay } from "@/modules/finance/classification/match";
 
 const VALID_FIELDS = new Set(["description", "details", "reference", "operation_code", "supplier_name"]);
 const VALID_TYPES = new Set(["contains", "starts_with", "exact", "regex"]);
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
 
   let body: Record<string, unknown>;
   try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
-  const { category_id, match_field, match_type, match_value, priority } = body as Record<string, string | number | undefined>;
+  const { category_id, match_field, match_type, match_value, priority, conflict_strategy } = body as Record<string, string | number | undefined>;
   const field = String(match_field ?? "description").trim();
   const type = String(match_type ?? "contains").trim();
   const value = normalizeRuleValue(String(match_value ?? ""));
@@ -58,6 +59,58 @@ export async function POST(request: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
+  if (field === "supplier_name") {
+    const normalizedSupplier = normalizeSupplierDisplay(value);
+    const { data: existingSupplierRules, error: existingSupplierRulesError } = await supabase
+      .from("category_rules")
+      .select("id, category_id, match_value")
+      .eq("company_id", auth.companyId)
+      .eq("match_field", "supplier_name");
+    if (existingSupplierRulesError) {
+      logError("finance/categories/rules POST check supplier conflicts", existingSupplierRulesError);
+      return NextResponse.json({ error: "שגיאה בבדיקת קונפליקט ספק" }, { status: 500 });
+    }
+    const conflictingRules = (existingSupplierRules ?? []).filter((rule) => {
+      if (!rule?.match_value) return false;
+      if (rule.category_id === category_id) return false;
+      return normalizeSupplierDisplay(rule.match_value) === normalizedSupplier;
+    });
+    if (conflictingRules.length > 0 && conflict_strategy !== "replace_existing") {
+      const conflictingCategoryIds = Array.from(new Set(conflictingRules.map((r) => r.category_id).filter(Boolean)));
+      let conflictingCategories: Array<{ id: string; name: string }> = [];
+      if (conflictingCategoryIds.length > 0) {
+        const { data: cats } = await supabase
+          .from("bank_categories")
+          .select("id, name")
+          .eq("company_id", auth.companyId)
+          .in("id", conflictingCategoryIds);
+        conflictingCategories = (cats ?? []) as Array<{ id: string; name: string }>;
+      }
+      return NextResponse.json(
+        {
+          error: "הספק כבר משויך לקטגוריה אחרת",
+          conflict_code: "supplier_rule_conflict",
+          supplier_display: value,
+          conflicting_categories: conflictingCategories,
+        },
+        { status: 409 }
+      );
+    }
+    if (conflictingRules.length > 0 && conflict_strategy === "replace_existing") {
+      const idsToDelete = conflictingRules.map((r) => r.id).filter(Boolean);
+      if (idsToDelete.length > 0) {
+        const { error: deleteConflictError } = await supabase
+          .from("category_rules")
+          .delete()
+          .eq("company_id", auth.companyId)
+          .in("id", idsToDelete);
+        if (deleteConflictError) {
+          logError("finance/categories/rules POST delete conflicting supplier rules", deleteConflictError);
+          return NextResponse.json({ error: "שגיאה בעדכון כללי ספק קיימים" }, { status: 500 });
+        }
+      }
+    }
+  }
   const { data, error } = await supabase
     .from("category_rules")
     .insert({
@@ -85,7 +138,7 @@ export async function PUT(request: NextRequest) {
 
   let putBody: Record<string, unknown>;
   try { putBody = await request.json(); } catch { return NextResponse.json({ error: "JSON לא תקין" }, { status: 400 }); }
-  const { id, match_field, match_type, match_value, priority } = putBody as Record<string, string | number | undefined>;
+  const { id, match_field, match_type, match_value, priority, conflict_strategy } = putBody as Record<string, string | number | undefined>;
   if (!id) return NextResponse.json({ error: "id חסר" }, { status: 400 });
 
   const updateFields: Record<string, string | number> = {};
@@ -120,6 +173,74 @@ export async function PUT(request: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
+  const { data: existingRule, error: existingRuleError } = await supabase
+    .from("category_rules")
+    .select("id, category_id, match_field, match_value")
+    .eq("id", id)
+    .eq("company_id", auth.companyId)
+    .maybeSingle();
+  if (existingRuleError) {
+    logError("finance/categories/rules PUT load existing", existingRuleError);
+    return NextResponse.json({ error: "שגיאה באימות כלל" }, { status: 500 });
+  }
+  if (!existingRule) {
+    return NextResponse.json({ error: "כלל לא נמצא" }, { status: 404 });
+  }
+  const nextField = String(updateFields.match_field ?? existingRule.match_field);
+  const nextValue = String(updateFields.match_value ?? existingRule.match_value ?? "");
+  if (nextField === "supplier_name" && nextValue.trim()) {
+    const normalizedSupplier = normalizeSupplierDisplay(nextValue);
+    const { data: existingSupplierRules, error: existingSupplierRulesError } = await supabase
+      .from("category_rules")
+      .select("id, category_id, match_value")
+      .eq("company_id", auth.companyId)
+      .eq("match_field", "supplier_name");
+    if (existingSupplierRulesError) {
+      logError("finance/categories/rules PUT check supplier conflicts", existingSupplierRulesError);
+      return NextResponse.json({ error: "שגיאה בבדיקת קונפליקט ספק" }, { status: 500 });
+    }
+    const conflictingRules = (existingSupplierRules ?? []).filter((rule) => {
+      if (!rule?.match_value) return false;
+      if (rule.id === id) return false;
+      if (rule.category_id === existingRule.category_id) return false;
+      return normalizeSupplierDisplay(rule.match_value) === normalizedSupplier;
+    });
+    if (conflictingRules.length > 0 && conflict_strategy !== "replace_existing") {
+      const conflictingCategoryIds = Array.from(new Set(conflictingRules.map((r) => r.category_id).filter(Boolean)));
+      let conflictingCategories: Array<{ id: string; name: string }> = [];
+      if (conflictingCategoryIds.length > 0) {
+        const { data: cats } = await supabase
+          .from("bank_categories")
+          .select("id, name")
+          .eq("company_id", auth.companyId)
+          .in("id", conflictingCategoryIds);
+        conflictingCategories = (cats ?? []) as Array<{ id: string; name: string }>;
+      }
+      return NextResponse.json(
+        {
+          error: "הספק כבר משויך לקטגוריה אחרת",
+          conflict_code: "supplier_rule_conflict",
+          supplier_display: nextValue,
+          conflicting_categories: conflictingCategories,
+        },
+        { status: 409 }
+      );
+    }
+    if (conflictingRules.length > 0 && conflict_strategy === "replace_existing") {
+      const idsToDelete = conflictingRules.map((r) => r.id).filter(Boolean);
+      if (idsToDelete.length > 0) {
+        const { error: deleteConflictError } = await supabase
+          .from("category_rules")
+          .delete()
+          .eq("company_id", auth.companyId)
+          .in("id", idsToDelete);
+        if (deleteConflictError) {
+          logError("finance/categories/rules PUT delete conflicting supplier rules", deleteConflictError);
+          return NextResponse.json({ error: "שגיאה בעדכון כללי ספק קיימים" }, { status: 500 });
+        }
+      }
+    }
+  }
   const { error } = await supabase
     .from("category_rules")
     .update(updateFields)

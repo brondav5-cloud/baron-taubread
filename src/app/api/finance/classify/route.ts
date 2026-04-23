@@ -119,7 +119,8 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update(payload)
         .eq("id", tx_id)
-        .eq("company_id", companyId);
+        .eq("company_id", companyId)
+        .is("deleted_at", null);
 
       if (manualErr) return NextResponse.json({ error: manualErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
@@ -141,6 +142,7 @@ export async function POST(request: NextRequest) {
         .select("id, category_id")
         .eq("id", tx_id)
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .maybeSingle();
       if (loadErr) return NextResponse.json({ error: loadErr.message }, { status: 500 });
       if (!targetRow) return NextResponse.json({ error: "התנועה לא נמצאה" }, { status: 404 });
@@ -152,7 +154,8 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update({ category_override: "manual" })
         .eq("id", tx_id)
-        .eq("company_id", companyId);
+        .eq("company_id", companyId)
+        .is("deleted_at", null);
       if (lockErr) return NextResponse.json({ error: lockErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
     }
@@ -166,6 +169,7 @@ export async function POST(request: NextRequest) {
         .update({ category_override: null })
         .eq("id", tx_id)
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .select("id");
       if (unlockErr) return NextResponse.json({ error: unlockErr.message }, { status: 500 });
       if (!unlockedRows || unlockedRows.length === 0) {
@@ -183,6 +187,7 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update({ category_override: null })
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .eq("category_override", "manual")
         .select("id");
       if (unlockAllErr) return NextResponse.json({ error: unlockAllErr.message }, { status: 500 });
@@ -203,7 +208,8 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("id", body.tx_id)
-        .eq("company_id", companyId);
+        .eq("company_id", companyId)
+        .is("deleted_at", null);
 
       if (clearErr) return NextResponse.json({ error: clearErr.message }, { status: 500 });
       return NextResponse.json({ ok: true });
@@ -236,6 +242,7 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .not("category_id", "is", null);
       clearUnlockedTxQuery = unlockedFilter(clearUnlockedTxQuery);
       const { data: txRows, error: txErr } = await clearUnlockedTxQuery.select("id");
@@ -275,6 +282,7 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .update({ category_id: null })
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .is("merged_into_id", null);
       clearForceTxQuery = unlockedFilter(clearForceTxQuery);
       const { error: forceTxErr } = await clearForceTxQuery;
@@ -306,6 +314,7 @@ export async function POST(request: NextRequest) {
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
+        .is("deleted_at", null)
         .is("merged_into_id", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
@@ -355,7 +364,8 @@ export async function POST(request: NextRequest) {
           .from("bank_transactions")
           .update({ category_id: catId })
           .in("id", chunk)
-          .eq("company_id", companyId);
+          .eq("company_id", companyId)
+          .is("deleted_at", null);
         if (!upErr) classified += chunk.length;
       }
     }

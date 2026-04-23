@@ -57,7 +57,8 @@ export async function PATCH(request: NextRequest) {
     .from("bank_transactions")
     .update(updates)
     .eq("id", tx_id)
-    .eq("company_id", companyId);
+    .eq("company_id", companyId)
+    .is("deleted_at", null);
 
   if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
   return NextResponse.json({ ok: true });
@@ -85,12 +86,17 @@ export async function DELETE(request: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
-  const { error: deleteErr } = await supabase
+  const { data: deletedRows, error: deleteErr } = await supabase
     .from("bank_transactions")
-    .delete()
+    .update({ deleted_at: new Date().toISOString() })
     .eq("id", tx_id)
-    .eq("company_id", companyId);
+    .eq("company_id", companyId)
+    .is("deleted_at", null)
+    .select("id");
 
   if (deleteErr) return NextResponse.json({ error: deleteErr.message }, { status: 500 });
+  if (!deletedRows || deletedRows.length === 0) {
+    return NextResponse.json({ error: "התנועה לא נמצאה או כבר נמחקה" }, { status: 404 });
+  }
   return NextResponse.json({ ok: true });
 }

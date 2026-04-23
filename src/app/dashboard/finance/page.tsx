@@ -277,12 +277,47 @@ function FinancePageInner() {
         toast.error((data as { error?: string }).error ?? "שגיאה במחיקה", { id: toastId });
         return;
       }
-      toast.success("התנועה נמחקה", { id: toastId });
+      const undoDelete = async () => {
+        const restoreRes = await fetch("/api/finance/transactions/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tx_id: tx.id }),
+        });
+        const restoreData = await restoreRes.json().catch(() => ({}));
+        if (!restoreRes.ok) {
+          toast.error((restoreData as { error?: string }).error ?? "שגיאה בשחזור תנועה");
+          return;
+        }
+        toast.success("התנועה שוחזרה");
+        hook.refresh();
+      };
+      if (showDuplicatesOnly) {
+        setShowDuplicatesOnly(false);
+        hook.setPage(0);
+        toast.success("התנועה נמחקה. חזרנו לתצוגת כל התנועות כדי שתוכל לראות את הרשומה שנותרה.", { id: toastId });
+      } else {
+        toast.success("התנועה נמחקה", { id: toastId });
+      }
+      toast((t) => (
+        <div className="flex items-center gap-2">
+          <span>התנועה נמחקה. רוצה לבטל?</span>
+          <button
+            type="button"
+            onClick={() => {
+              toast.dismiss(t.id);
+              void undoDelete();
+            }}
+            className="text-xs px-2 py-1 rounded border border-blue-200 text-blue-700 hover:bg-blue-50"
+          >
+            בטל מחיקה
+          </button>
+        </div>
+      ), { duration: 12000 });
       hook.refresh();
     } catch {
       toast.error("שגיאת רשת במחיקה", { id: toastId });
     }
-  }, [hook]);
+  }, [hook, showDuplicatesOnly]);
 
   const handleShiftSelectedToPreviousDay = useCallback(async (selectedTxs: BankTransaction[]) => {
     const ids = selectedTxs
@@ -316,8 +351,8 @@ function FinancePageInner() {
     if (!selectedCompanyId) return;
     const supabase = createClient();
     Promise.all([
-      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).is("merged_into_id", null).order("effective_date", { ascending: true }).limit(1),
-      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).is("merged_into_id", null).order("effective_date", { ascending: false }).limit(1),
+      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).is("merged_into_id", null).is("deleted_at", null).order("effective_date", { ascending: true }).limit(1),
+      supabase.from("bank_transactions").select("effective_date").eq("company_id", selectedCompanyId).is("merged_into_id", null).is("deleted_at", null).order("effective_date", { ascending: false }).limit(1),
     ]).then(([{ data: minData }, { data: maxData }]) => {
       const minRaw = (minData?.[0] as { effective_date?: string } | undefined)?.effective_date;
       const maxRaw = (maxData?.[0] as { effective_date?: string } | undefined)?.effective_date;
@@ -339,6 +374,7 @@ function FinancePageInner() {
         .from("bank_transactions")
         .select("date,effective_date,description,details,reference,debit,credit,balance,category_id,operation_code,source_bank")
         .eq("company_id", selectedCompanyId)
+        .is("deleted_at", null)
         .is("merged_into_id", null)
         .order("effective_date", { ascending: false })
         .limit(5000);

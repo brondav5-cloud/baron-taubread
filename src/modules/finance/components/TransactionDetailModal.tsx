@@ -346,6 +346,14 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
     if (!value) return;
     setSavingRule(true);
     try {
+      const supplierConflictMessage = (payload: Record<string, unknown>) => {
+        const categories = Array.isArray(payload.conflicting_categories)
+          ? (payload.conflicting_categories as Array<{ name?: string }>).map((c) => c.name).filter(Boolean).join(", ")
+          : "";
+        return categories
+          ? `הספק כבר משויך לקטגוריות: ${categories}. להחליף לקטגוריה הנוכחית?`
+          : "הספק כבר משויך לקטגוריה אחרת. להחליף לקטגוריה הנוכחית?";
+      };
       const res = await fetch("/api/finance/categories/rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -356,7 +364,30 @@ export function TransactionDetailModal({ transaction: tx, onClose, onSupplierCli
           match_value: value,
         }),
       });
-      if (!res.ok) {
+      if (res.status === 409 && ruleField === "supplier_name") {
+        const conflictPayload = await res.json().catch(() => ({})) as Record<string, unknown>;
+        const shouldReplace = window.confirm(supplierConflictMessage(conflictPayload));
+        if (!shouldReplace) {
+          toast("לא בוצע שינוי בכלל הספק הקיים");
+          return;
+        }
+        const replaceRes = await fetch("/api/finance/categories/rules", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category_id: selectedCatId,
+            match_field: ruleField,
+            match_type: "contains",
+            match_value: value,
+            conflict_strategy: "replace_existing",
+          }),
+        });
+        if (!replaceRes.ok) {
+          const err = await replaceRes.json().catch(() => ({}));
+          toast.error(err.error ?? "שגיאה ביצירת כלל");
+          return;
+        }
+      } else if (!res.ok) {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error ?? "שגיאה ביצירת כלל");
         return;
