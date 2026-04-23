@@ -238,26 +238,19 @@ export async function POST(request: NextRequest) {
     let offset = 0;
     const FETCH_BATCH = 1000;
     while (true) {
-      const { data: batch } = await supabase
+      let txQuery = supabase
         .from("bank_transactions")
         .select("id, description, details, reference, operation_code, supplier_name")
         .eq("company_id", companyId)
-        .is("category_id", null)
         .order("date", { ascending: false })
         .range(offset, offset + FETCH_BATCH - 1);
+      if (!forceAll) txQuery = txQuery.is("category_id", null);
+      const { data: batch } = await txQuery;
 
       if (!batch || batch.length === 0) break;
       allTransactions = allTransactions.concat(batch as BankTx[]);
       if (batch.length < FETCH_BATCH) break;
       offset += FETCH_BATCH;
-    }
-
-    if (allTransactions.length === 0) {
-      return NextResponse.json({
-        ok: true,
-        classified: 0,
-        message: forceAll ? "אין תנועות לסיווג מחדש" : "אין תנועות ללא סיווג",
-      });
     }
 
     // ── Apply rules to bank_transactions ─────────────────────────────────────
@@ -308,17 +301,26 @@ export async function POST(request: NextRequest) {
     let allSplits: SplitRow[] = [];
     let splitOffset = 0;
     while (true) {
-      const { data: splitBatch } = await supabase
+      let splitQuery = supabase
         .from("bank_transaction_splits")
         .select("id, description, supplier_name")
         .eq("company_id", companyId)
-        .is("category_id", null)
         .range(splitOffset, splitOffset + FETCH_BATCH - 1);
+      if (!forceAll) splitQuery = splitQuery.is("category_id", null);
+      const { data: splitBatch } = await splitQuery;
 
       if (!splitBatch || splitBatch.length === 0) break;
       allSplits = allSplits.concat(splitBatch as SplitRow[]);
       if (splitBatch.length < FETCH_BATCH) break;
       splitOffset += FETCH_BATCH;
+    }
+
+    if (allTransactions.length === 0 && allSplits.length === 0) {
+      return NextResponse.json({
+        ok: true,
+        classified: 0,
+        message: forceAll ? "אין תנועות לסיווג מחדש" : "אין תנועות ללא סיווג",
+      });
     }
 
     const splitsByCategory = new Map<string, string[]>();
