@@ -53,6 +53,11 @@ interface ReviewCandidate {
   reason: string;
 }
 
+interface SplitClassificationRule {
+  category_id: string;
+  match_value: string;
+}
+
 async function transactionHasSplits(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   companyId: string,
@@ -323,6 +328,23 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Also load split-specific rules (created from split editor flows) so the
+    // global "auto classify" button can classify split rows by those rules too.
+    const { data: splitRulesRaw } = await supabase
+      .from("split_classification_rules")
+      .select("category_id, match_value")
+      .eq("company_id", companyId);
+    const splitRules: Array<SplitClassificationRule & { normalized: string }> = (splitRulesRaw ?? [])
+      .map((r) => {
+        const row = r as SplitClassificationRule;
+        return {
+          category_id: row.category_id,
+          match_value: row.match_value,
+          normalized: normalizeForMatch(row.match_value ?? ""),
+        };
+      })
+      .filter((r) => r.category_id && r.normalized);
+
     const splitsByCategory = new Map<string, string[]>();
     for (const split of allSplits) {
       // Build a BankTx-compatible object with the fields matchesRule needs
@@ -334,6 +356,7 @@ export async function POST(request: NextRequest) {
         operation_code: null,
         supplier_name: split.supplier_name ?? null,
       };
+      let matchedByCategoryRule = false;
       for (const rule of rules as CategoryRule[]) {
         if (matchesRule(asTx, rule)) {
           const normalizedValue = normalizeForMatch(rule.match_value);
@@ -351,8 +374,31 @@ export async function POST(request: NextRequest) {
               reason,
             });
           }
+          matchedByCategoryRule = true;
           break;
         }
+      }
+      if (matchedByCategoryRule) continue;
+
+      // Fallback: apply split-specific rules by best text similarity.
+      const splitDescNorm = normalizeForMatch(asTx.description ?? "");
+      if (!splitDescNorm) continue;
+      let bestRule: { category_id: string; score: number } | null = null;
+      for (const sr of splitRules) {
+        if (!sr.normalized) continue;
+        let score = 0;
+        if (splitDescNorm === sr.normalized) score = 3;
+        else if (splitDescNorm.includes(sr.normalized)) score = 2;
+        else if (sr.normalized.includes(splitDescNorm)) score = 1;
+        if (score === 0) continue;
+        if (!bestRule || score > bestRule.score) {
+          bestRule = { category_id: sr.category_id, score };
+        }
+      }
+      if (bestRule) {
+        const arr = splitsByCategory.get(bestRule.category_id) ?? [];
+        arr.push(split.id);
+        splitsByCategory.set(bestRule.category_id, arr);
       }
     }
 
