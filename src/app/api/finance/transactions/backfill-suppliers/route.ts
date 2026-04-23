@@ -10,6 +10,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
+import { normalizeSupplierName, resolveOrCreateSupplierMaster } from "@/modules/finance/suppliers/master";
 
 function extractSupplierFromDetails(details: string): string | null {
   if (!details) return null;
@@ -63,22 +64,30 @@ export async function POST(_request: NextRequest) {
       if (!rows || rows.length === 0) break;
 
       // Group updates by extracted supplier name to reduce number of queries
-      const bySupplier = new Map<string, string[]>();
+      const bySupplier = new Map<string, { sample: string; ids: string[] }>();
       for (const row of rows as { id: string; details: string }[]) {
         const name = extractSupplierFromDetails(row.details);
         if (!name) continue;
-        const ids = bySupplier.get(name) ?? [];
-        ids.push(row.id);
-        bySupplier.set(name, ids);
+        const norm = normalizeSupplierName(name);
+        if (!norm) continue;
+        const entry = bySupplier.get(norm) ?? { sample: name, ids: [] };
+        entry.ids.push(row.id);
+        bySupplier.set(norm, entry);
       }
 
-      for (const [name, ids] of Array.from(bySupplier.entries())) {
+      for (const [, entry] of Array.from(bySupplier.entries())) {
+        const resolved = await resolveOrCreateSupplierMaster({
+          supabase,
+          companyId,
+          inputName: entry.sample,
+        });
+        if (!resolved) continue;
         const { error: upErr } = await supabase
           .from("bank_transactions")
-          .update({ supplier_name: name })
-          .in("id", ids)
+          .update({ supplier_name: resolved.masterName, supplier_id: resolved.supplierId })
+          .in("id", entry.ids)
           .eq("company_id", companyId);
-        if (!upErr) updated += ids.length;
+        if (!upErr) updated += entry.ids.length;
       }
 
       if (rows.length < BATCH) break;

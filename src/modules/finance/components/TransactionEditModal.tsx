@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Loader2, Pencil } from "lucide-react";
 import toast from "react-hot-toast";
 import type { BankTransaction } from "../types";
@@ -17,10 +17,35 @@ function fmt(n: number) {
 
 export function TransactionEditModal({ transaction: tx, onClose, onSaved }: Props) {
   const [supplierName, setSupplierName] = useState(tx.supplier_name ?? "");
+  const [supplierSuggestions, setSupplierSuggestions] = useState<Array<{ id: string; master_name: string }>>([]);
   const [description, setDescription] = useState(tx.description ?? "");
   const [debit, setDebit] = useState(tx.debit > 0 ? String(tx.debit) : "");
   const [credit, setCredit] = useState(tx.credit > 0 ? String(tx.credit) : "");
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const q = supplierName.trim();
+    if (q.length < 2) {
+      setSupplierSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/finance/suppliers?q=${encodeURIComponent(q)}&limit=10`);
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled) {
+          setSupplierSuggestions((data as { suppliers?: Array<{ id: string; master_name: string }> }).suppliers ?? []);
+        }
+      } catch {
+        if (!cancelled) setSupplierSuggestions([]);
+      }
+    }, 280);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [supplierName]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -88,8 +113,14 @@ export function TransactionEditModal({ transaction: tx, onClose, onSaved }: Prop
               value={supplierName}
               onChange={(e) => setSupplierName(e.target.value)}
               placeholder="למשל: חברת חשמל"
+              list="supplier-master-suggestions"
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-blue-300 focus:outline-none"
             />
+            <datalist id="supplier-master-suggestions">
+              {supplierSuggestions.map((s) => (
+                <option key={s.id} value={s.master_name} />
+              ))}
+            </datalist>
             <p className="text-[10px] text-gray-400 mt-0.5">יחליף את התיאור הגנרי בטבלה</p>
           </div>
 

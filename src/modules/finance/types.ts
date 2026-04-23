@@ -69,6 +69,7 @@ export interface BankTransaction {
   category_id?: string;
   category_override?: string;
   supplier_name?: string;  // set by checks_registry matching or user edit
+  supplier_id?: string | null;
   merged_into_id?: string | null;
   source_bank: SourceBank;
   raw_row: Record<string, unknown>;
@@ -110,6 +111,7 @@ export interface TransactionSplit {
   company_id?: string;
   description: string;
   supplier_name?: string;
+  supplier_id?: string | null;
   category_id?: string | null;
   amount: number;
   notes?: string;

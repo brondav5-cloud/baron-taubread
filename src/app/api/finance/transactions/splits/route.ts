@@ -11,6 +11,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
 import { logError } from "@/lib/api/logger";
+import { normalizeSupplierName, resolveOrCreateSupplierMaster } from "@/modules/finance/suppliers/master";
 
 function cleanText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
@@ -101,16 +102,51 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, count: 0 });
     }
 
-    const rows = splits.map((s, i) => ({
-      transaction_id: tx_id,
-      company_id: companyId,
-      description: cleanText(s.description ?? ""),
-      supplier_name: s.supplier_name || null,
-      category_id: s.category_id || null,
-      amount: Number(s.amount) || 0,
-      notes: s.notes || null,
-      sort_order: s.sort_order ?? i,
-    }));
+    const supplierCache = new Map<string, { supplierId: string; masterName: string }>();
+    const rows: Array<{
+      transaction_id: string;
+      company_id: string;
+      description: string;
+      supplier_name: string | null;
+      supplier_id: string | null;
+      category_id: string | null;
+      amount: number;
+      notes: string | null;
+      sort_order: number;
+    }> = [];
+    for (let i = 0; i < splits.length; i++) {
+      const s = splits[i]!;
+      const description = cleanText(s.description ?? "");
+      const rawSupplierName = cleanText(s.supplier_name ?? "");
+      let supplierName: string | null = rawSupplierName || null;
+      let supplierId: string | null = null;
+      if (rawSupplierName) {
+        const cacheKey = normalizeSupplierName(rawSupplierName);
+        const cached = supplierCache.get(cacheKey);
+        const resolved = cached ?? await resolveOrCreateSupplierMaster({
+          supabase,
+          companyId,
+          inputName: rawSupplierName,
+        });
+        if (resolved) {
+          supplierName = resolved.masterName;
+          supplierId = resolved.supplierId;
+          supplierCache.set(cacheKey, resolved);
+        }
+      }
+
+      rows.push({
+        transaction_id: tx_id,
+        company_id: companyId,
+        description,
+        supplier_name: supplierName,
+        supplier_id: supplierId,
+        category_id: s.category_id || null,
+        amount: Number(s.amount) || 0,
+        notes: s.notes || null,
+        sort_order: s.sort_order ?? i,
+      });
+    }
 
     const { error: insErr } = await supabase
       .from("bank_transaction_splits")

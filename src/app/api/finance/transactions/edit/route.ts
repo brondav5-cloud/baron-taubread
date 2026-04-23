@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
+import { resolveOrCreateSupplierMaster } from "@/modules/finance/suppliers/master";
 
 export async function PATCH(request: NextRequest) {
   const supabaseAuth = createServerSupabaseClient();
@@ -27,7 +28,22 @@ export async function PATCH(request: NextRequest) {
   if (!tx_id) return NextResponse.json({ error: "tx_id חסר" }, { status: 400 });
 
   const updates: Record<string, unknown> = {};
-  if (supplier_name !== undefined) updates.supplier_name = supplier_name || null;
+  if (supplier_name !== undefined) {
+    const rawName = String(supplier_name ?? "").trim();
+    if (!rawName) {
+      updates.supplier_name = null;
+      updates.supplier_id = null;
+    } else {
+      const resolved = await resolveOrCreateSupplierMaster({
+        supabase: getSupabaseAdmin(),
+        companyId,
+        inputName: rawName,
+      });
+      if (!resolved) return NextResponse.json({ error: "שגיאה בעדכון שם ספק" }, { status: 500 });
+      updates.supplier_name = resolved.masterName;
+      updates.supplier_id = resolved.supplierId;
+    }
+  }
   if (description !== undefined) updates.description = description;
   if (debit !== undefined && debit >= 0) updates.debit = debit;
   if (credit !== undefined && credit >= 0) updates.credit = credit;

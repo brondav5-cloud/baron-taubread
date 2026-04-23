@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useSupabaseAuth } from "@/context/SupabaseAuthContext";
 import type { BankCategory, CategoryType } from "@/modules/finance/types";
 import { SupplierRuleConflictsPanel } from "@/modules/finance/categories/components/SupplierRuleConflictsPanel";
+import { SupplierMergePanel } from "@/modules/finance/categories/components/SupplierMergePanel";
+import { SupplierAliasManagerPanel } from "@/modules/finance/categories/components/SupplierAliasManagerPanel";
 import { CategoryInsightsPanel } from "@/modules/finance/categories/components/CategoryInsightsPanel";
 import { ClassificationSearchPanel } from "@/modules/finance/categories/components/ClassificationSearchPanel";
 import { buildSupplierRuleConflicts, buildSupplierSimilarityWarnings } from "@/modules/finance/categories/utils";
@@ -549,6 +551,8 @@ export default function CategoriesPage() {
         conflicts={supplierConflicts}
         similarities={supplierSimilarities}
       />
+      <SupplierMergePanel onMerged={() => { void load(); }} />
+      <SupplierAliasManagerPanel />
 
       <ClassificationSearchPanel
         query={searchQuery}
