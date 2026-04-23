@@ -9,9 +9,29 @@ interface SupplierRow {
   normalized_name: string;
 }
 
+function normalizedTokens(value: string): string[] {
+  return value
+    .split(" ")
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2)
+    .filter((t) => !/^\d+$/.test(t));
+}
+
+function sameLeadingTokens(a: string, b: string): number {
+  const at = normalizedTokens(a);
+  const bt = normalizedTokens(b);
+  const max = Math.min(at.length, bt.length, 3);
+  let same = 0;
+  for (let i = 0; i < max; i++) {
+    if (at[i] !== bt[i]) break;
+    same += 1;
+  }
+  return same;
+}
+
 function tokenSimilarity(a: string, b: string): number {
-  const aTokens = new Set(a.split(" ").filter((t) => t.length >= 2));
-  const bTokens = new Set(b.split(" ").filter((t) => t.length >= 2));
+  const aTokens = new Set(normalizedTokens(a));
+  const bTokens = new Set(normalizedTokens(b));
   if (aTokens.size === 0 || bTokens.size === 0) return 0;
   let common = 0;
   aTokens.forEach((t) => {
@@ -25,6 +45,7 @@ function charOverlap(a: string, b: string): number {
   if (!a || !b) return 0;
   if (a === b) return 1;
   if (a.includes(b) || b.includes(a)) return 0.95;
+  if (a.slice(0, 10) === b.slice(0, 10)) return 0.93;
   let same = 0;
   const min = Math.min(a.length, b.length);
   for (let i = 0; i < min; i++) if (a[i] === b[i]) same += 1;
@@ -32,9 +53,12 @@ function charOverlap(a: string, b: string): number {
 }
 
 function pairScore(a: SupplierRow, b: SupplierRow): number {
+  const leading = sameLeadingTokens(a.normalized_name, b.normalized_name);
+  if (leading >= 2) return 0.96;
   const token = tokenSimilarity(a.normalized_name, b.normalized_name);
   const chars = charOverlap(a.normalized_name, b.normalized_name);
-  return Math.max(token, chars);
+  const boosted = leading === 1 ? Math.max(token, chars) + 0.08 : Math.max(token, chars);
+  return Math.min(1, boosted);
 }
 
 export async function GET() {
@@ -64,7 +88,7 @@ export async function GET() {
       const a = suppliers[i]!;
       const b = suppliers[j]!;
       const score = pairScore(a, b);
-      if (score < 0.72) continue;
+      if (score < 0.58) continue;
       candidates.push({
         a: { id: a.id, name: a.master_name },
         b: { id: b.id, name: b.master_name },

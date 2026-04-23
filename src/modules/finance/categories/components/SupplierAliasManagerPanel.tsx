@@ -120,6 +120,65 @@ export function SupplierAliasManagerPanel() {
     }
   }, [loadAliases, selectedSupplierId]);
 
+  const promoteAliasToMaster = useCallback(async (alias: SupplierAlias) => {
+    if (!selectedSupplierId || !selectedSupplier) return;
+    setBusy(true);
+    try {
+      const previewRes = await fetch("/api/finance/suppliers/aliases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "preview_promote_alias",
+          supplier_id: selectedSupplierId,
+          alias_id: alias.id,
+        }),
+      });
+      const previewData = await previewRes.json().catch(() => ({}));
+      if (!previewRes.ok) {
+        setMessage((previewData as { error?: string }).error ?? "שגיאה בתצוגה מקדימה");
+        return;
+      }
+
+      const preview = (previewData as {
+        preview?: { transactions: number; splits: number; current_master: string; new_master: string };
+      }).preview;
+      const ok = confirm(
+        `להחליף שם מאסטר?\n` +
+        `מ: ${preview?.current_master ?? selectedSupplier.master_name}\n` +
+        `ל: ${preview?.new_master ?? alias.alias_name}\n\n` +
+        `יעודכנו ${(preview?.transactions ?? 0).toLocaleString()} תנועות ו-${(preview?.splits ?? 0).toLocaleString()} פיצולים.`
+      );
+      if (!ok) return;
+
+      const applyRes = await fetch("/api/finance/suppliers/aliases", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "promote_alias",
+          supplier_id: selectedSupplierId,
+          alias_id: alias.id,
+          confirm: true,
+        }),
+      });
+      const applyData = await applyRes.json().catch(() => ({}));
+      if (!applyRes.ok) {
+        setMessage((applyData as { error?: string }).error ?? "שגיאה בעדכון שם מאסטר");
+        return;
+      }
+      const promoted = (applyData as {
+        promoted?: { master_name: string; transactions: number; splits: number };
+      }).promoted;
+      setMessage(
+        `עודכן מאסטר ל-"${promoted?.master_name ?? alias.alias_name}" · ` +
+        `תנועות: ${promoted?.transactions ?? 0} · פיצולים: ${promoted?.splits ?? 0}`
+      );
+      await loadSuppliers();
+      await loadAliases(selectedSupplierId);
+    } finally {
+      setBusy(false);
+    }
+  }, [loadAliases, loadSuppliers, selectedSupplier, selectedSupplierId]);
+
   return (
     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-3">
       <div>
@@ -192,14 +251,24 @@ export function SupplierAliasManagerPanel() {
                     <p className="text-xs text-gray-700 truncate">{a.alias_name}</p>
                     <p className="text-[10px] text-gray-400 truncate">{a.normalized_alias}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { void removeAlias(a.id); }}
-                    disabled={busy}
-                    className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => { void promoteAliasToMaster(a); }}
+                      disabled={busy}
+                      className="text-[10px] px-2 py-1 rounded border border-blue-200 text-blue-700 bg-white hover:bg-blue-50 disabled:opacity-50"
+                    >
+                      קבע כמאסטר
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void removeAlias(a.id); }}
+                      disabled={busy}
+                      className="p-1 text-gray-400 hover:text-red-500 disabled:opacity-50"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
