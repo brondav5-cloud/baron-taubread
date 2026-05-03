@@ -41,6 +41,14 @@ function getReadableErrorMessage(err: unknown): string {
   return "Unknown error";
 }
 
+function isMissingColumnError(err: unknown, table: string, column: string): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = "code" in err ? String((err as { code?: unknown }).code ?? "") : "";
+  const message = "message" in err ? String((err as { message?: unknown }).message ?? "") : "";
+  if (code !== "42703") return false;
+  return message.toLowerCase().includes(`${table}.${column}`.toLowerCase());
+}
+
 function buildDuplicateSignature(tx: BankTransaction): string | null {
   const txDate = tx.effective_date ?? tx.date;
   const reference = (tx.reference ?? "").trim();
@@ -316,16 +324,19 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
       return buildVisibleRowsFromSplits(txs, splitsData);
     };
 
-    const buildBaseQuery = () => {
+    const buildBaseQuery = (opts?: { includeDeletedFilter?: boolean }) => {
       const sortColumn = sortBy === "date" ? "effective_date" : sortBy;
       let query = supabase
         .from("bank_transactions")
         .select("*", { count: "exact" })
         .eq("company_id", selectedCompanyId)
-        .is("deleted_at", null)
         .is("merged_into_id", null)
         .order(sortColumn, { ascending: sortDir === "asc", nullsFirst: false })
         .order("created_at", { ascending: false });
+
+      if (opts?.includeDeletedFilter !== false) {
+        query = query.is("deleted_at", null);
+      }
 
       // Duplicate mode scans all periods, not just current date range.
       if (!opts?.keepLogicalDuplicates && filters.dateFrom) query = query.gte("effective_date", filters.dateFrom);
@@ -341,6 +352,14 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
       return query;
     };
 
+    const runBaseRange = async (from: number, to: number) => {
+      let result = await buildBaseQuery({ includeDeletedFilter: true }).range(from, to);
+      if (result.error && isMissingColumnError(result.error, "bank_transactions", "deleted_at")) {
+        result = await buildBaseQuery({ includeDeletedFilter: false }).range(from, to);
+      }
+      return result;
+    };
+
     const load = async () => {
       try {
         if (opts?.keepLogicalDuplicates) {
@@ -348,7 +367,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
           let offset = 0;
 
           while (true) {
-            const { data, error: qErr } = await buildBaseQuery().range(offset, offset + SCAN_BATCH_SIZE - 1);
+            const { data, error: qErr } = await runBaseRange(offset, offset + SCAN_BATCH_SIZE - 1);
             if (cancelled) return;
             if (qErr) throw qErr;
 
@@ -392,7 +411,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
           let offset = 0;
 
           while (true) {
-            const { data, error: qErr } = await buildBaseQuery().range(offset, offset + SCAN_BATCH_SIZE - 1);
+            const { data, error: qErr } = await runBaseRange(offset, offset + SCAN_BATCH_SIZE - 1);
             if (cancelled) return;
             if (qErr) throw qErr;
 
@@ -429,7 +448,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
 
         const from = page * pageSize;
         const to = from + pageSize - 1;
-        const { data, count, error: qErr } = await buildBaseQuery().range(from, to);
+        const { data, count, error: qErr } = await runBaseRange(from, to);
         if (cancelled) return;
         if (qErr) throw qErr;
 
