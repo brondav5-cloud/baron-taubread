@@ -32,6 +32,15 @@ const DEFAULT_PAGE_SIZE = 50;
 const SCAN_BATCH_SIZE = 200;
 const SPLIT_FETCH_CHUNK_SIZE = 500;
 
+function getReadableErrorMessage(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === "object" && err !== null && "message" in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return "Unknown error";
+}
+
 function buildDuplicateSignature(tx: BankTransaction): string | null {
   const txDate = tx.effective_date ?? tx.date;
   const reference = (tx.reference ?? "").trim();
@@ -281,7 +290,21 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
           .in("transaction_id", chunk)
           .eq("company_id", selectedCompanyId)
           .order("sort_order");
-        if (splitErr) throw splitErr;
+        if (splitErr) {
+          const missingSortOrder = splitErr.message.toLowerCase().includes("sort_order");
+          if (!missingSortOrder) throw splitErr;
+
+          // Backward-compatible fallback for environments where sort_order column
+          // has not been added yet on bank_transaction_splits.
+          const { data: fallbackData, error: fallbackErr } = await supabase
+            .from("bank_transaction_splits")
+            .select("id, transaction_id, description, supplier_name, category_id, amount, notes")
+            .in("transaction_id", chunk)
+            .eq("company_id", selectedCompanyId);
+          if (fallbackErr) throw fallbackErr;
+          allSplits.push(...((fallbackData ?? []) as typeof allSplits));
+          continue;
+        }
         allSplits.push(...((data ?? []) as typeof allSplits));
       }
       return allSplits;
@@ -422,7 +445,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
         setIsLoading(false);
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof Error ? err.message : "Unknown error";
+        const message = getReadableErrorMessage(err);
         setError(message);
         setIsLoading(false);
       }
