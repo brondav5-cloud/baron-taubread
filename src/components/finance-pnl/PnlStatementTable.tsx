@@ -220,7 +220,25 @@ export default function PnlStatementTable({ view, year, month, onOpenTransaction
   const revenueTotalForPeriod = useMemo(
     () => view.blocks
       .filter((block) => block.kind === "income")
-      .reduce((sum, block) => sum + blockPeriodTotal(block), 0),
+      .reduce(
+        (sum, block) =>
+          sum + displayMonths.reduce(
+            (monthSum, monthKey) =>
+              monthSum + block.categories.reduce((catSum, category) => {
+                if (!(category.id in groupsByCategory)) {
+                  return catSum + (category.monthly[monthKey] ?? 0);
+                }
+                const groupedRows = groupsByCategory[category.id] ?? [];
+                const groupedTotal = groupedRows.reduce(
+                  (rowSum, row) => (row.date.slice(0, 7) === monthKey ? rowSum + row.amount : rowSum),
+                  0,
+                );
+                return catSum + groupedTotal;
+              }, 0),
+            0,
+          ),
+        0,
+      ),
     [view.blocks, displayMonths, groupsByCategory],
   );
 

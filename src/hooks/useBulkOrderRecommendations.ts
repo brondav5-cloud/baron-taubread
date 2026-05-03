@@ -78,10 +78,13 @@ export function useBulkOrderRecommendations(
   const [isLoading,   setIsLoading]   = useState(false);
   const [error,       setError]       = useState<string | null>(null);
 
-  const storeIdsKey = storeIds.slice().sort((a, b) => a - b).join(",");
+  const sortedStoreIds = useMemo(
+    () => storeIds.slice().sort((a, b) => a - b),
+    [storeIds],
+  );
 
   useEffect(() => {
-    if (!companyId || !selectedWeek || storeIds.length === 0) {
+    if (!companyId || !selectedWeek || sortedStoreIds.length === 0) {
       setDailyRows([]);
       setMonthlyRows([]);
       setIsLoading(false);
@@ -114,7 +117,7 @@ export function useBulkOrderRecommendations(
       .from("store_product_daily")
       .select("store_external_id,product_name_normalized,day_of_week,gross_qty,returns_qty")
       .eq("company_id", companyId)
-      .in("store_external_id", storeIds)
+      .in("store_external_id", sortedStoreIds)
       .gte("week_start_date", dailyCutoffStr)
       .lte("week_start_date", selectedWeek);
 
@@ -122,7 +125,7 @@ export function useBulkOrderRecommendations(
       .from("store_product_monthly_dist")
       .select("store_external_id,product_name_normalized,year,month,gross_qty,returns_qty")
       .eq("company_id", companyId)
-      .in("store_external_id", storeIds)
+      .in("store_external_id", sortedStoreIds)
       .gte("year", yearFrom)
       .filter("year * 100 + month", "gte", ymFrom)
       .filter("year * 100 + month", "lte", ymTo);
@@ -152,7 +155,7 @@ export function useBulkOrderRecommendations(
         setIsLoading(false);
         setError(err instanceof Error ? err.message : "שגיאה בטעינת נתונים");
       });
-  }, [companyId, storeIdsKey, selectedWeek]);
+  }, [companyId, sortedStoreIds, selectedWeek]);
 
   const policy: PolicyBracket[] = useMemo(() => {
     if (policyRows.length === 0) return DEFAULT_POLICY;

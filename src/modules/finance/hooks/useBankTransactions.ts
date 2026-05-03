@@ -324,7 +324,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
       return buildVisibleRowsFromSplits(txs, splitsData);
     };
 
-    const buildBaseQuery = (opts?: { includeDeletedFilter?: boolean }) => {
+    const buildBaseQuery = (queryOpts?: { includeDeletedFilter?: boolean }) => {
       const sortColumn = sortBy === "date" ? "effective_date" : sortBy;
       let query = supabase
         .from("bank_transactions")
@@ -334,7 +334,7 @@ export function useBankTransactions(opts?: { keepLogicalDuplicates?: boolean }):
         .order(sortColumn, { ascending: sortDir === "asc", nullsFirst: false })
         .order("created_at", { ascending: false });
 
-      if (opts?.includeDeletedFilter !== false) {
+      if (queryOpts?.includeDeletedFilter !== false) {
         query = query.is("deleted_at", null);
       }
 
