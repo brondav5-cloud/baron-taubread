@@ -80,7 +80,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const dbRate = await checkUploadRateDb(supabaseAdmin, companyId, 10, 10);
+    const dbRate = await checkUploadRateDb(
+      supabaseAdmin,
+      companyId,
+      10,
+      10,
+      "uploads",
+    );
     if (!dbRate.ok) {
       return NextResponse.json(
         { error: "יותר מדי העלאות ב-10 הדקות האחרונות. נסה שוב מאוחר יותר." },

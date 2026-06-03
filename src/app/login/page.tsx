@@ -5,12 +5,31 @@ import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
+const AUTH_RETRY_DELAYS_MS = [700, 1500];
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isTransientAuthError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("failed to fetch") ||
+    m.includes("network") ||
+    m.includes("timeout") ||
+    m.includes("522") ||
+    m.includes("503")
+  );
+}
+
 function mapAuthError(message: string): string {
   if (message.includes("Invalid login")) return "פרטי התחברות שגויים";
   if (message.includes("Email not confirmed"))
     return "נא לאשר את כתובת האימייל";
   if (message.includes("Too many requests"))
     return "יותר מדי ניסיונות, נסה שוב מאוחר יותר";
+  if (isTransientAuthError(message))
+    return "שירות ההתחברות לא זמין כרגע. נסה שוב בעוד כמה דקות.";
   if (message.includes("Network") || message.includes("fetch"))
     return "בעיית תקשורת, בדוק את החיבור לאינטרנט";
   if (message.includes("supabaseUrl") || message.includes("API key"))
@@ -34,13 +53,17 @@ export default function LoginPage() {
     let mounted = true;
 
     const redirectIfAlreadySignedIn = async () => {
-      const supabase = createClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
 
-      if (mounted && user) {
-        router.replace("/dashboard");
+        if (mounted && user) {
+          router.replace("/dashboard");
+        }
+      } catch {
+        // Ignore transient auth/network errors on initial login screen load.
       }
     };
 
@@ -56,25 +79,29 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      // Sign in directly with the browser Supabase client.
-      // This sets both the in-memory session AND the cookies correctly,
-      // ensuring all subsequent data requests (RPC, select, etc.) include
-      // the Authorization header. Using a server-side Route Handler for login
-      // only sets cookies but leaves the browser client's in-memory state empty,
-      // which causes 401s on data requests right after login.
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
 
-      if (error) {
-        setError(mapAuthError(error.message));
-        return;
+      let lastErrorMessage = "";
+      for (let attempt = 0; attempt <= AUTH_RETRY_DELAYS_MS.length; attempt++) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (!error) {
+          window.location.href = "/dashboard";
+          return;
+        }
+
+        lastErrorMessage = error.message ?? "Failed to fetch";
+        const canRetry =
+          attempt < AUTH_RETRY_DELAYS_MS.length &&
+          isTransientAuthError(lastErrorMessage);
+        if (!canRetry) break;
+        await sleep(AUTH_RETRY_DELAYS_MS[attempt]!);
       }
 
-      // Full reload so the singleton is recreated with the fresh session.
-      window.location.href = "/dashboard";
+      setError(mapAuthError(lastErrorMessage));
     } catch (err) {
       const msg =
         err instanceof Error ? err.message : "אירעה שגיאה, נסה שוב";

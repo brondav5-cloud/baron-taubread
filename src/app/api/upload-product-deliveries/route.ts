@@ -94,7 +94,13 @@ export async function POST(request: NextRequest) {
 
     // DB-level rate limit
     const supabaseAdmin = getSupabaseAdmin();
-    const dbRate = await checkUploadRateDb(supabaseAdmin, companyId, 15, 10);
+    const dbRate = await checkUploadRateDb(
+      supabaseAdmin,
+      companyId,
+      15,
+      10,
+      "product_delivery_uploads",
+    );
     if (!dbRate.ok) {
       return NextResponse.json(
         {

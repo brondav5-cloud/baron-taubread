@@ -70,11 +70,29 @@ export async function getDeliveriesByPeriod(
   if (periods.length === 0) return [];
   const supabase = createClient();
   const periodSet = new Set(periods);
+  const parsedPeriods = periods
+    .map((p) => ({
+      raw: p,
+      year: Number.parseInt(p.slice(0, 4), 10),
+      month: Number.parseInt(p.slice(4, 6), 10),
+    }))
+    .filter((p) => Number.isFinite(p.year) && Number.isFinite(p.month) && p.month >= 1 && p.month <= 12);
+
+  if (parsedPeriods.length === 0) return [];
+
+  const years = Array.from(new Set(parsedPeriods.map((p) => p.year))).sort((a, b) => a - b);
+  const months = Array.from(new Set(parsedPeriods.map((p) => p.month))).sort((a, b) => a - b);
+  const minYear = years[0]!;
+  const maxYear = years[years.length - 1]!;
+
   const { data, error } = await supabase
     .from("store_deliveries")
     .select("store_external_id, year, month, deliveries_count")
     .eq("company_id", companyId)
-    .is("week", null);
+    .is("week", null)
+    .gte("year", minYear)
+    .lte("year", maxYear)
+    .in("month", months);
   if (error) {
     console.error("[deliveries.repo] getDeliveriesByPeriod:", error);
     return [];

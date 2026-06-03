@@ -5,6 +5,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
+  deleteDeliveriesForPeriod,
   upsertDeliveries,
   createDeliveryUpload,
 } from "@/lib/db/deliveries.repo";
@@ -84,7 +85,13 @@ export async function POST(request: NextRequest) {
 
     const supabaseAdmin = getSupabaseAdmin();
 
-    const dbRate = await checkUploadRateDb(supabaseAdmin, companyId, 10, 10);
+    const dbRate = await checkUploadRateDb(
+      supabaseAdmin,
+      companyId,
+      10,
+      10,
+      "delivery_uploads",
+    );
     if (!dbRate.ok) {
       return NextResponse.json(
         { error: "יותר מדי העלאות ב-10 הדקות האחרונות. נסה שוב מאוחר יותר." },
@@ -109,7 +116,33 @@ export async function POST(request: NextRequest) {
       typeof payload.totalChunks === "number" && payload.totalChunks > 1;
     const chunkIndex = payload.chunkIndex ?? 0;
     const totalChunks = payload.totalChunks ?? 1;
+    const isFirstChunk = chunkIndex === 0;
     const isLastChunk = chunkIndex === totalChunks - 1;
+
+    // First chunk replaces the uploaded period to avoid stale ghost rows.
+    if (isFirstChunk) {
+      const periodStart = payload.stats?.periodStart;
+      const periodEnd = payload.stats?.periodEnd;
+      if (!periodStart || !periodEnd) {
+        return NextResponse.json(
+          { error: "חסר טווח תקופה בקובץ האספקות" },
+          { status: 400 },
+        );
+      }
+
+      const delResult = await deleteDeliveriesForPeriod(
+        supabaseAdmin,
+        companyId,
+        periodStart,
+        periodEnd,
+      );
+      if (!delResult.success) {
+        return NextResponse.json(
+          { error: delResult.error || "שגיאה במחיקת אספקות קיימות לתקופה" },
+          { status: 500 },
+        );
+      }
+    }
 
     const elapsed = performance.now() - startTime;
     if (elapsed > MAX_PROCESSING_MS) {
