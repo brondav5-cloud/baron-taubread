@@ -44,7 +44,14 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   if (auth.status === "anon") {
-    return null;
+    return (
+      <div className="min-h-screen bg-gradient-main flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-10 h-10 text-primary-500 animate-spin mx-auto" />
+          <p className="mt-3 text-gray-500 text-sm">מעביר לדף התחברות...</p>
+        </div>
+      </div>
+    );
   }
 
   const needsCompanySelection =

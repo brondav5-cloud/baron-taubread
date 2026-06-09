@@ -1,5 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
-import { getAuthCookieOptions, AUTH_COOKIE_NAME } from "./env";
+import { getAuthCookieOptions } from "./env";
 
 const _U = "aHR0cHM6Ly93eGthdXFobGFpeXhwaWVibXZrYi5zdXBhYmFzZS5jbw==";
 const _K =
@@ -13,11 +13,6 @@ function _d(s: string): string {
 export function createClient() {
   return createBrowserClient(_d(_U), _d(_K), {
     cookieOptions: getAuthCookieOptions(),
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      storageKey: AUTH_COOKIE_NAME,
-    },
   });
 }
 

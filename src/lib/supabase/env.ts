@@ -11,7 +11,7 @@ export const SUPABASE_ANON_KEY = _d(
 );
 export const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-/** Supabase auth cookie name — must match in client.ts, server.ts, serverClient.ts, middleware.ts, and auth routes */
+/** Supabase auth cookie name — must match in client.ts, server.ts, serverClient.ts, src/middleware.ts, and auth routes */
 export const AUTH_COOKIE_NAME = "hlaiyxpiebmvkb-auth-token";
 export const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
