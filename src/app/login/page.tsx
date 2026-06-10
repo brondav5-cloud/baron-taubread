@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 const AUTH_RETRY_DELAYS_MS = [700, 1500];
@@ -54,12 +53,10 @@ export default function LoginPage() {
 
     const redirectIfAlreadySignedIn = async () => {
       try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
+        const res = await fetch("/api/whoami", { cache: "no-store" });
+        const data = await res.json();
 
-        if (mounted && user) {
+        if (mounted && res.ok && data?.ok) {
           router.replace("/dashboard");
         }
       } catch {
@@ -79,24 +76,26 @@ export default function LoginPage() {
     setError("");
     setIsLoading(true);
     try {
-      const supabase = createClient();
-
       let lastErrorMessage = "";
       for (let attempt = 0; attempt <= AUTH_RETRY_DELAYS_MS.length; attempt++) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
         });
+        const data = (await res.json()) as { ok?: boolean; error?: string };
 
-        if (!error) {
+        if (res.ok && data.ok) {
           window.location.href = "/dashboard";
           return;
         }
 
-        lastErrorMessage = error.message ?? "Failed to fetch";
+        lastErrorMessage = data.error ?? `HTTP ${res.status}`;
         const canRetry =
           attempt < AUTH_RETRY_DELAYS_MS.length &&
-          isTransientAuthError(lastErrorMessage);
+          (res.status >= 500 ||
+            res.status === 429 ||
+            isTransientAuthError(lastErrorMessage));
         if (!canRetry) break;
         await sleep(AUTH_RETRY_DELAYS_MS[attempt]!);
       }
