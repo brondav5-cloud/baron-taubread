@@ -159,6 +159,7 @@ function NumberCell({
 export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
   const {
     paginatedStores,
+    stores,
     viewMode,
     sortKey,
     sortDirection,
@@ -177,11 +178,9 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
   // Get detailed period labels for cells
   const periodDetails = useMetricsPeriodDetails(metricsPeriodInfo);
 
-  // Check if all visible stores are selected
   const allSelected =
-    paginatedStores.length > 0 &&
-    paginatedStores.every((s) => selectedStoreIds.has(s.id));
-  const someSelected = paginatedStores.some((s) => selectedStoreIds.has(s.id));
+    stores.length > 0 && stores.every((s) => selectedStoreIds.has(s.id));
+  const someSelected = stores.some((s) => selectedStoreIds.has(s.id));
 
   // Header click handler
   const onHeaderClick = (key: SortKey) => handleSort(key);

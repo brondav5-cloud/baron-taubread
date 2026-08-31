@@ -4,6 +4,19 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import type { ReadonlyURLSearchParams } from "next/navigation";
 import type { ComparisonStore, CityStats } from "@/types/comparison";
 
+function findStoreByParam(
+  stores: ComparisonStore[],
+  rawId: string | number,
+): ComparisonStore | undefined {
+  const trimmed = String(rawId).trim();
+  if (!trimmed) return undefined;
+  if (/^\d+$/.test(trimmed)) {
+    const num = Number(trimmed);
+    return stores.find((s) => s.external_id === num);
+  }
+  return stores.find((s) => s.id === trimmed);
+}
+
 export function useComparisonStoreSelection(
   allStores: ComparisonStore[],
   filteredStores: ComparisonStore[],
@@ -33,11 +46,7 @@ export function useComparisonStoreSelection(
       try {
         const ids = JSON.parse(savedStoreIds) as (string | number)[];
         const stores = ids
-          .map((id) => {
-            if (typeof id === "string")
-              return allStores.find((s) => s.id === id);
-            return allStores.find((s) => s.external_id === id);
-          })
+          .map((id) => findStoreByParam(allStores, id))
           .filter((s): s is ComparisonStore => s !== undefined && s !== null);
         if (stores.length > 0) {
           setSelectedStores(stores);
@@ -56,15 +65,7 @@ export function useComparisonStoreSelection(
     if (storeIdsParam) {
       const parts = storeIdsParam.split(",");
       const stores = parts
-        .map((part) => {
-          const trimmed = part.trim();
-          if (!trimmed) return null;
-          const num = parseInt(trimmed, 10);
-          if (!isNaN(num)) {
-            return allStores.find((s) => s.external_id === num);
-          }
-          return allStores.find((s) => s.id === trimmed);
-        })
+        .map((part) => findStoreByParam(allStores, part))
         .filter((s): s is ComparisonStore => s !== undefined && s !== null);
       if (stores.length > 0) {
         setSelectedStores(stores);

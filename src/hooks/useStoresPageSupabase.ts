@@ -256,17 +256,28 @@ export function useStoresPageSupabase() {
   }, []);
 
   const selectAllStores = useCallback(() => {
-    setSelectedStoreIds(new Set(sortResult.paginatedStores.map((s) => s.id)));
-  }, [sortResult.paginatedStores]);
+    setSelectedStoreIds(new Set(sortResult.sortedStores.map((s) => s.id)));
+  }, [sortResult.sortedStores]);
 
   const clearStoreSelection = useCallback(() => {
     setSelectedStoreIds(new Set());
   }, []);
 
   const goToComparePage = useCallback(() => {
-    const ids = Array.from(selectedStoreIds).join(",");
-    router.push(`/dashboard/compare?stores=${ids}`);
-  }, [selectedStoreIds, router]);
+    const selected = sortResult.sortedStores.filter((s) =>
+      selectedStoreIds.has(s.id),
+    );
+    const ids = selected.map((s) => {
+      const externalId = (s as { external_id?: number }).external_id;
+      return externalId != null ? String(externalId) : s.id;
+    });
+    try {
+      localStorage.setItem("compareStoreIds", JSON.stringify(ids));
+    } catch {
+      // localStorage may be unavailable
+    }
+    router.push(`/dashboard/compare?stores=${ids.join(",")}`);
+  }, [selectedStoreIds, sortResult.sortedStores, router]);
 
   const metricsPeriodLabels = useMemo(() => {
     const months = periodSelector.metricsPeriodInfo?.metricsMonths;
