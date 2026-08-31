@@ -518,13 +518,13 @@ export function StoresTotalsBar({
           </>
         ) : (
           <>
-            <TotalCard label="כמות" value={totals.qty.toLocaleString()} />
+            <TotalCard label="כמות נטו" value={totals.qty.toLocaleString()} />
             <TotalCard
               label="מכירות"
               value={`₪${totals.sales.toLocaleString()}`}
             />
             <TotalCard
-              label="אספקות"
+              label="כמות ברוטו"
               value={(totals.gross ?? 0).toLocaleString()}
             />
             <TotalCard label="החזרות" value={totals.returns.toLocaleString()} />

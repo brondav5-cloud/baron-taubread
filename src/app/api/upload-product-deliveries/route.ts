@@ -27,6 +27,10 @@ import {
 } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
+import {
+  monthRangeFromValues,
+  syncCatalogFromMonthlyDist,
+} from "@/lib/db/syncCatalogFromDist";
 
 export const maxDuration = 60;
 
@@ -303,6 +307,16 @@ export async function POST(request: NextRequest) {
           returnsDiff,
           grossDiff,
         };
+      }
+
+      const distRange =
+        monthRangeFromValues(
+          payload.stats.distYearMonthFrom,
+          payload.stats.distYearMonthTo,
+        ) ??
+        monthRangeFromValues(stats.periodStart, stats.periodEnd);
+      if (distRange) {
+        await syncCatalogFromMonthlyDist(supabaseAdmin, companyId, distRange);
       }
 
       await createProductDeliveryUpload(supabaseAdmin, companyId, {

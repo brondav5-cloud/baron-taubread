@@ -17,6 +17,10 @@ import { readJsonWithLimit } from "@/lib/api/readJsonWithLimit";
 import { checkRateLimit, checkUploadRateDb, getClientIdentifier } from "@/lib/api/rateLimit";
 import { logError } from "@/lib/api/logger";
 import { resolveSelectedCompanyId } from "@/lib/api/selectedCompany";
+import {
+  monthRangeFromList,
+  syncCatalogFromMonthlyDist,
+} from "@/lib/db/syncCatalogFromDist";
 
 const PAYLOAD_TOO_LARGE_MSG = {
   error: "גודל הבקשה חורג מהמותר (4MB). נסה קובץ קטן יותר.",
@@ -311,6 +315,14 @@ export async function POST(request: NextRequest) {
           error: rpcError,
         });
         throw new Error(`שגיאה בשמירת הנתונים: ${rpcError.message}`);
+      }
+
+      // Dist file is the source of truth for catalog monthly totals.
+      // Re-apply after sales upload so a later/incomplete sales file cannot
+      // drop stores or products that exist only in פירוט מוצרים.
+      const distRange = monthRangeFromList(periods.all);
+      if (distRange) {
+        await syncCatalogFromMonthlyDist(supabaseAdmin, companyId, distRange);
       }
 
       // ============================================

@@ -306,7 +306,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
                           className="flex flex-col items-start"
                         >
                           <span className="font-medium text-gray-700 flex items-center gap-1">
-                            כמות
+                            כמות נטו
                             <SortIcon
                               sortKey="qty"
                               currentKey={sortKey}
@@ -324,7 +324,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
                           <th className="px-4 py-3 text-right bg-orange-50">
                             <div className="flex flex-col items-start">
                               <span className="font-medium text-gray-700">
-                                כמות
+                                כמות נטו
                               </span>
                               <span className="text-xs text-orange-500 font-normal">
                                 {periodSelector.compare.label}
@@ -372,7 +372,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
                           className="flex flex-col items-start"
                         >
                           <span className="font-medium text-gray-700 flex items-center gap-1">
-                            אספקות
+                            כמות ברוטו
                             <SortIcon
                               sortKey="gross"
                               currentKey={sortKey}
@@ -415,7 +415,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
                       <th className="px-4 py-3 text-right">
                         <div className="flex flex-col items-start">
                           <span className="font-medium text-gray-700">
-                            כמות
+                            כמות נטו
                           </span>
                           <div className="flex items-center gap-2 mt-1">
                             <span className="flex items-center gap-1 text-xs">
@@ -440,7 +440,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
                       </th>
                       <th className="px-4 py-3 text-right">
                         <span className="font-medium text-gray-700">
-                          אספקות
+                          כמות ברוטו
                         </span>
                       </th>
                       <th className="px-4 py-3 text-right">

@@ -228,7 +228,7 @@ export function ProductsTotalsBar({
           </>
         ) : (
           <>
-            <TotalCard label="כמות" value={totals.qty.toLocaleString()} />
+            <TotalCard label="כמות נטו" value={totals.qty.toLocaleString()} />
             <TotalCard
               label="מכירות"
               value={`₪${totals.sales.toLocaleString()}`}

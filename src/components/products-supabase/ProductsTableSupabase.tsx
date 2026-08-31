@@ -256,7 +256,7 @@ export function ProductsTableSupabase({
                       className="flex flex-col items-start"
                     >
                       <span className="font-medium text-gray-700 flex items-center gap-1">
-                        כמות{" "}
+                        כמות נטו{" "}
                         <SortIcon
                           sortKey="qty"
                           currentKey={sortKey}
@@ -273,7 +273,7 @@ export function ProductsTableSupabase({
                       <th className="px-4 py-3 text-right bg-orange-50">
                         <div className="flex flex-col items-start">
                           <span className="font-medium text-gray-700">
-                            כמות
+                            כמות נטו
                           </span>
                           <span className="text-xs text-orange-500 font-normal">
                             {periodSelector.compare.label}
