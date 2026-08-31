@@ -11,7 +11,10 @@ import {
   PRESETS,
   type MonthSelection,
 } from "@/components/ui";
-import { generateMetricsPeriodLabels } from "@/lib/periodUtils";
+import {
+  formatSelectedPeriodLabel,
+  generateMetricsPeriodLabels,
+} from "@/lib/periodUtils";
 import type { DbStore } from "@/types/supabase";
 
 // Re-export types and constants so existing imports keep working
@@ -86,7 +89,7 @@ export function useComparisonSupabase() {
     stores: dbStores,
     filters: dbFilters,
     metadata,
-    periodLabel,
+    periodLabel: coveragePeriodLabel,
     isLoading,
     error,
   } = useSupabaseData();
@@ -189,6 +192,21 @@ export function useComparisonSupabase() {
     const months = metadata?.metrics_months || metadata?.months_list || [];
     return months.length ? generateMetricsPeriodLabels(months) : null;
   }, [metadata]);
+
+  const periodLabel = useMemo(() => {
+    const selected = formatSelectedPeriodLabel(
+      effectiveMonthSelection.months,
+      effectiveMonthSelection.isCompareMode
+        ? effectiveMonthSelection.compareMonths
+        : null,
+    );
+    return selected || coveragePeriodLabel;
+  }, [
+    effectiveMonthSelection.months,
+    effectiveMonthSelection.isCompareMode,
+    effectiveMonthSelection.compareMonths,
+    coveragePeriodLabel,
+  ]);
 
   const getPeriodLabel = useCallback((months: string[]) => {
     if (months.length === 0) return "";

@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseData } from "./useSupabaseData";
 import { usePeriodSelector } from "./usePeriodSelector";
-import { generateMetricsPeriodLabels } from "@/lib/periodUtils";
+import {
+  formatSelectedPeriodLabel,
+  generateMetricsPeriodLabels,
+} from "@/lib/periodUtils";
 import { useStoresDeliveries } from "./useStoresDeliveries";
 import { useStoresPageFilters } from "./useStoresPageFilters";
 import { useExcludedStores } from "./useExcludedStores";
@@ -81,7 +84,7 @@ export function useStoresPageSupabase() {
   const {
     stores: allStores,
     metadata,
-    periodLabel,
+    periodLabel: coveragePeriodLabel,
     filters: dbFilters,
     isLoading,
     error,
@@ -283,6 +286,23 @@ export function useStoresPageSupabase() {
     const months = periodSelector.metricsPeriodInfo?.metricsMonths;
     return months?.length ? generateMetricsPeriodLabels(months) : null;
   }, [periodSelector.metricsPeriodInfo?.metricsMonths]);
+
+  const periodLabel = useMemo(() => {
+    if (viewMode !== "data") return coveragePeriodLabel;
+    const selected = formatSelectedPeriodLabel(
+      periodSelector.primary.months,
+      periodSelector.compare.enabled
+        ? periodSelector.compare.months
+        : null,
+    );
+    return selected || coveragePeriodLabel;
+  }, [
+    viewMode,
+    coveragePeriodLabel,
+    periodSelector.primary.months,
+    periodSelector.compare.enabled,
+    periodSelector.compare.months,
+  ]);
 
   // ============================================
   // RETURN

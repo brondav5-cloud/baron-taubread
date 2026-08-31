@@ -230,6 +230,30 @@ export function formatPeriodRange(startKey: string, endKey: string): string {
   return `${start.label} - ${end.label}`;
 }
 
+/** Label for the months currently selected in the period picker. */
+export function formatSelectedMonthsLabel(months: string[]): string {
+  if (months.length === 0) return "";
+  const sorted = [...months].sort();
+  const first = sorted[0]!;
+  const last = sorted[sorted.length - 1]!;
+  if (first === last) {
+    return parsePeriodKey(first)?.label ?? "";
+  }
+  return formatPeriodRange(first, last);
+}
+
+export function formatSelectedPeriodLabel(
+  months: string[],
+  compareMonths?: string[] | null,
+): string {
+  const primary = formatSelectedMonthsLabel(months);
+  if (compareMonths && compareMonths.length > 0) {
+    const compare = formatSelectedMonthsLabel(compareMonths);
+    if (primary && compare) return `${primary} מול ${compare}`;
+  }
+  return primary;
+}
+
 // ============================================
 // AVAILABLE PERIODS CALCULATION
 // ============================================

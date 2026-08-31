@@ -4,7 +4,10 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSupabaseData } from "./useSupabaseData";
 import { usePeriodSelector } from "./usePeriodSelector";
-import { generateMetricsPeriodLabels } from "@/lib/periodUtils";
+import {
+  formatSelectedPeriodLabel,
+  generateMetricsPeriodLabels,
+} from "@/lib/periodUtils";
 import { createClient } from "@/lib/supabase/client";
 import { getStoreProductsByCompany } from "@/lib/db/storeProducts.repo";
 import * as driverGroupsRepo from "@/lib/db/driverGroups.repo";
@@ -68,7 +71,7 @@ export function useProductsPageSupabase() {
     products: allProducts,
     stores: allStores,
     metadata,
-    periodLabel,
+    periodLabel: coveragePeriodLabel,
     isLoading,
     error,
     refetch,
@@ -416,6 +419,23 @@ export function useProductsPageSupabase() {
     const months = periodSelector.metricsPeriodInfo?.metricsMonths;
     return months?.length ? generateMetricsPeriodLabels(months) : null;
   }, [periodSelector.metricsPeriodInfo?.metricsMonths]);
+
+  const periodLabel = useMemo(() => {
+    if (viewMode !== "data") return coveragePeriodLabel;
+    const selected = formatSelectedPeriodLabel(
+      periodSelector.primary.months,
+      periodSelector.compare.enabled
+        ? periodSelector.compare.months
+        : null,
+    );
+    return selected || coveragePeriodLabel;
+  }, [
+    viewMode,
+    coveragePeriodLabel,
+    periodSelector.primary.months,
+    periodSelector.compare.enabled,
+    periodSelector.compare.months,
+  ]);
 
   return {
     isLoading,
