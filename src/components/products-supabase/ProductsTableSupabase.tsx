@@ -46,6 +46,63 @@ function SortIcon({
   );
 }
 
+function SortableTh({
+  column,
+  currentKey,
+  direction,
+  onClick,
+  children,
+  subtitle,
+  subtitleClassName = "text-blue-500",
+  className,
+}: {
+  column: SortKey;
+  currentKey: SortKey | null;
+  direction: "asc" | "desc" | null;
+  onClick: (key: SortKey) => void;
+  children: React.ReactNode;
+  subtitle?: string;
+  subtitleClassName?: string;
+  className?: string;
+}) {
+  return (
+    <th
+      role="columnheader"
+      aria-sort={
+        currentKey === column
+          ? direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+      onClick={() => onClick(column)}
+      className={clsx(
+        "px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100 transition-colors",
+        className,
+      )}
+    >
+      <span className="font-medium text-gray-700 inline-flex items-center gap-1">
+        {children}
+        <SortIcon
+          sortKey={column}
+          currentKey={currentKey}
+          direction={direction}
+        />
+      </span>
+      {subtitle ? (
+        <span
+          className={clsx(
+            "block text-xs font-normal mt-0.5",
+            subtitleClassName,
+          )}
+        >
+          {subtitle}
+        </span>
+      ) : null}
+    </th>
+  );
+}
+
 function StatusBadge({ status }: { status: string | undefined }) {
   if (!status) return <span className="text-gray-400">-</span>;
   const config = STATUS_COLORS[status] || {
@@ -150,173 +207,126 @@ export function ProductsTableSupabase({
         <table className="w-full">
           <thead className="bg-gray-50 border-b">
             <tr>
-              <th className="px-4 py-3 text-right">
-                <button
-                  onClick={() => onHeaderClick("name")}
-                  className="flex items-center gap-1 font-medium text-gray-700"
-                >
-                  מוצר
-                  <SortIcon
-                    sortKey="name"
-                    currentKey={sortKey}
-                    direction={sortDirection}
-                  />
-                </button>
-              </th>
-              <th className="px-4 py-3 text-right">
-                <button
-                  onClick={() => onHeaderClick("category")}
-                  className="flex items-center gap-1 font-medium text-gray-700"
-                >
-                  קטגוריה
-                  <SortIcon
-                    sortKey="category"
-                    currentKey={sortKey}
-                    direction={sortDirection}
-                  />
-                </button>
-              </th>
+              <SortableTh
+                column="name"
+                currentKey={sortKey}
+                direction={sortDirection}
+                onClick={onHeaderClick}
+              >
+                מוצר
+              </SortableTh>
+              <SortableTh
+                column="category"
+                currentKey={sortKey}
+                direction={sortDirection}
+                onClick={onHeaderClick}
+              >
+                קטגוריה
+              </SortableTh>
               {viewMode === "metrics" ? (
                 <>
-                  <th className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onHeaderClick("status_long")}
-                      className="flex items-center gap-1 font-medium text-gray-700"
-                    >
-                      מגמה שנתית{" "}
-                      <SortIcon
-                        sortKey="status_long"
-                        currentKey={sortKey}
-                        direction={sortDirection}
-                      />
-                    </button>
-                  </th>
+                  <SortableTh
+                    column="status_long"
+                    currentKey={sortKey}
+                    direction={sortDirection}
+                    onClick={onHeaderClick}
+                  >
+                    מגמה שנתית
+                  </SortableTh>
                   {metricsHeaders.map((header) => (
-                    <th key={header.key} className="px-4 py-3 text-right">
-                      <button
-                        onClick={() => onHeaderClick(header.key as SortKey)}
-                        className="flex flex-col items-start"
-                      >
-                        <span className="font-medium text-gray-700 flex items-center gap-1">
-                          {header.label}{" "}
-                          <SortIcon
-                            sortKey={header.key as SortKey}
-                            currentKey={sortKey}
-                            direction={sortDirection}
-                          />
-                        </span>
-                      </button>
-                    </th>
+                    <SortableTh
+                      key={header.key}
+                      column={header.key as SortKey}
+                      currentKey={sortKey}
+                      direction={sortDirection}
+                      onClick={onHeaderClick}
+                    >
+                      {header.label}
+                    </SortableTh>
                   ))}
-                  <th className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onHeaderClick("status_short")}
-                      className="flex items-center gap-1 font-medium text-gray-700"
-                    >
-                      מגמה קצרה{" "}
-                      <SortIcon
-                        sortKey="status_short"
-                        currentKey={sortKey}
-                        direction={sortDirection}
-                      />
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onHeaderClick("metric_peak_distance")}
-                      className="flex items-center gap-1 font-medium text-gray-700"
-                    >
-                      מהשיא{" "}
-                      <SortIcon
-                        sortKey="metric_peak_distance"
-                        currentKey={sortKey}
-                        direction={sortDirection}
-                      />
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onHeaderClick("returns_pct_current")}
-                      className="flex items-center gap-1 font-medium text-gray-700"
-                    >
-                      חזרות %{" "}
-                      <SortIcon
-                        sortKey="returns_pct_current"
-                        currentKey={sortKey}
-                        direction={sortDirection}
-                      />
-                    </button>
-                  </th>
+                  <SortableTh
+                    column="status_short"
+                    currentKey={sortKey}
+                    direction={sortDirection}
+                    onClick={onHeaderClick}
+                  >
+                    מגמה קצרה
+                  </SortableTh>
+                  <SortableTh
+                    column="metric_peak_distance"
+                    currentKey={sortKey}
+                    direction={sortDirection}
+                    onClick={onHeaderClick}
+                  >
+                    מהשיא
+                  </SortableTh>
+                  <SortableTh
+                    column="returns_pct_current"
+                    currentKey={sortKey}
+                    direction={sortDirection}
+                    onClick={onHeaderClick}
+                  >
+                    חזרות %
+                  </SortableTh>
                 </>
               ) : (
                 <>
-                  <th className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onHeaderClick("qty")}
-                      className="flex flex-col items-start"
-                    >
-                      <span className="font-medium text-gray-700 flex items-center gap-1">
-                        כמות נטו{" "}
-                        <SortIcon
-                          sortKey="qty"
-                          currentKey={sortKey}
-                          direction={sortDirection}
-                        />
-                      </span>
-                      <span className="text-xs text-blue-500 font-normal">
-                        {periodSelector.primary.label}
-                      </span>
-                    </button>
-                  </th>
+                  <SortableTh
+                    column="qty"
+                    currentKey={sortKey}
+                    direction={sortDirection}
+                    onClick={onHeaderClick}
+                    subtitle={periodSelector.primary.label}
+                  >
+                    כמות נטו
+                  </SortableTh>
                   {periodSelector.compare.enabled &&
                     periodSelector.compare.months.length > 0 && (
-                      <th className="px-4 py-3 text-right bg-orange-50">
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium text-gray-700">
-                            כמות נטו
-                          </span>
-                          <span className="text-xs text-orange-500 font-normal">
-                            {periodSelector.compare.label}
-                          </span>
-                        </div>
-                      </th>
+                      <SortableTh
+                        column="compare_qty"
+                        currentKey={sortKey}
+                        direction={sortDirection}
+                        onClick={onHeaderClick}
+                        subtitle={periodSelector.compare.label}
+                        subtitleClassName="text-orange-500"
+                        className="bg-orange-50"
+                      >
+                        כמות נטו
+                      </SortableTh>
                     )}
-                  <th className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => onHeaderClick("sales")}
-                      className="flex flex-col items-start"
-                    >
-                      <span className="font-medium text-gray-700 flex items-center gap-1">
-                        מכירות{" "}
-                        <SortIcon
-                          sortKey="sales"
-                          currentKey={sortKey}
-                          direction={sortDirection}
-                        />
-                      </span>
-                      <span className="text-xs text-blue-500 font-normal">
-                        {periodSelector.primary.label}
-                      </span>
-                    </button>
-                  </th>
+                  <SortableTh
+                    column="sales"
+                    currentKey={sortKey}
+                    direction={sortDirection}
+                    onClick={onHeaderClick}
+                    subtitle={periodSelector.primary.label}
+                  >
+                    מכירות
+                  </SortableTh>
                   {periodSelector.compare.enabled &&
                     periodSelector.compare.months.length > 0 && (
-                      <th className="px-4 py-3 text-right bg-orange-50">
-                        <div className="flex flex-col items-start">
-                          <span className="font-medium text-gray-700">
-                            מכירות
-                          </span>
-                          <span className="text-xs text-orange-500 font-normal">
-                            {periodSelector.compare.label}
-                          </span>
-                        </div>
-                      </th>
+                      <SortableTh
+                        column="compare_sales"
+                        currentKey={sortKey}
+                        direction={sortDirection}
+                        onClick={onHeaderClick}
+                        subtitle={periodSelector.compare.label}
+                        subtitleClassName="text-orange-500"
+                        className="bg-orange-50"
+                      >
+                        מכירות
+                      </SortableTh>
                     )}
                   {periodSelector.compare.enabled &&
                     periodSelector.compare.months.length > 0 && (
-                      <th className="px-4 py-3 text-center font-medium text-gray-700">
+                      <SortableTh
+                        column="qty_change"
+                        currentKey={sortKey}
+                        direction={sortDirection}
+                        onClick={onHeaderClick}
+                      >
                         שינוי %
-                      </th>
+                      </SortableTh>
                     )}
                 </>
               )}

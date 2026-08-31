@@ -36,7 +36,11 @@ export type SortKey =
   | "sales"
   | "gross"
   | "returns"
-  | "deliveries";
+  | "deliveries"
+  | "returns_pct"
+  | "compare_qty"
+  | "compare_sales"
+  | "qty_change";
 
 export interface StoresFilters {
   cities: string[];

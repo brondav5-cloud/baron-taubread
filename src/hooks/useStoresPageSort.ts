@@ -22,8 +22,13 @@ type StoreWithPeriodData = {
     sales: number;
     gross: number;
     returns: number;
+    returnsPct: number;
     deliveries: number;
   };
+  compareData?: {
+    qty: number;
+    sales: number;
+  } | null;
 };
 
 export function useStoresPageSort<T extends StoreWithPeriodData>(
@@ -67,6 +72,17 @@ export function useStoresPageSort<T extends StoreWithPeriodData>(
           return store.periodData.returns;
         case "deliveries":
           return store.periodData.deliveries ?? 0;
+        case "returns_pct":
+          return store.periodData.returnsPct ?? 0;
+        case "compare_qty":
+          return store.compareData?.qty ?? 0;
+        case "compare_sales":
+          return store.compareData?.sales ?? 0;
+        case "qty_change": {
+          const prev = store.compareData?.qty ?? 0;
+          if (prev <= 0) return 0;
+          return ((store.periodData.qty - prev) / prev) * 100;
+        }
         default:
           return 0;
       }

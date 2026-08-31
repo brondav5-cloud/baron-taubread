@@ -30,7 +30,10 @@ export type SortKey =
   | "metric_peak_distance"
   | "returns_pct_current"
   | "qty"
-  | "sales";
+  | "sales"
+  | "compare_qty"
+  | "compare_sales"
+  | "qty_change";
 
 export interface ProductsFilters {
   categories: string[];
@@ -340,6 +343,15 @@ export function useProductsPageSupabase() {
           return product.periodData.qty;
         case "sales":
           return product.periodData.sales;
+        case "compare_qty":
+          return product.compareData?.qty ?? 0;
+        case "compare_sales":
+          return product.compareData?.sales ?? 0;
+        case "qty_change": {
+          const prev = product.compareData?.qty ?? 0;
+          if (prev <= 0) return 0;
+          return ((product.periodData.qty - prev) / prev) * 100;
+        }
         default:
           return 0;
       }
