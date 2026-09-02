@@ -3,10 +3,11 @@ import { requireErpSession } from "@/lib/erp/solvit/session";
 import { SolvitRequestError } from "@/lib/erp/solvit/client";
 import {
   rangeForLookbackDays,
+  rangeForNightlyCron,
   syncErpDeliveries,
 } from "@/lib/erp/solvit/syncDeliveries";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   const resolved = await requireErpSession();
@@ -17,8 +18,10 @@ export async function POST(request: NextRequest) {
   }
 
   let days = 90;
+  let recent = false;
   try {
-    const body = (await request.json()) as { days?: number };
+    const body = (await request.json()) as { days?: number; recent?: boolean };
+    recent = body.recent === true;
     if (Number.isFinite(body.days) && Number(body.days) > 0) {
       days = Math.min(366, Math.floor(Number(body.days)));
     }
@@ -26,7 +29,7 @@ export async function POST(request: NextRequest) {
     days = 90;
   }
 
-  const { from, to } = rangeForLookbackDays(days);
+  const { from, to } = recent ? rangeForNightlyCron() : rangeForLookbackDays(days);
   try {
     const counts = await syncErpDeliveries(session.companyId, from, to);
     return NextResponse.json({ ok: true, days, ...counts });

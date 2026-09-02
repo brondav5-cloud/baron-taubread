@@ -4,7 +4,7 @@ import { isErpConfigured } from "@/lib/erp/solvit/env";
 import { syncErpCatalog } from "@/lib/erp/solvit/syncCatalog";
 import { rangeForNightlyCron, syncErpDeliveries } from "@/lib/erp/solvit/syncDeliveries";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 

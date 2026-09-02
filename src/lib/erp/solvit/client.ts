@@ -65,6 +65,7 @@ export async function solvitRequest<T>(
     body?: unknown;
     timeoutMs?: number;
     raw?: boolean;
+    skipThrottle?: boolean;
   },
 ): Promise<T> {
   const token = getErpToken();
@@ -80,7 +81,7 @@ export async function solvitRequest<T>(
     }
   }
 
-  await throttle();
+  if (!options?.skipThrottle) await throttle();
 
   const controller = new AbortController();
   const timer = setTimeout(
@@ -138,12 +139,14 @@ export async function fetchAllPages<T extends object>(
   query: Record<string, string | number | boolean | undefined>,
   pageSize = 500,
   maxPages = 40,
+  skipThrottle = false,
 ): Promise<T[]> {
   const rows: T[] = [];
   let offset = 0;
   for (let i = 0; i < maxPages; i++) {
     const page = await solvitRequest<T[]>(path, {
       query: { ...query, limit: pageSize, offset },
+      skipThrottle,
     });
     const list = Array.isArray(page) ? page : [];
     rows.push(...list);

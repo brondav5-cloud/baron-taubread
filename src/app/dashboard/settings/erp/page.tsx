@@ -108,6 +108,29 @@ export default function ErpSettingsPage() {
               disabled={!!busy}
               className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm disabled:opacity-50"
               onClick={() =>
+                void run("deliveries-recent", async () => {
+                  const res = await fetch("/api/erp/sync/deliveries", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ recent: true }),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.error || "סנכרון חלוקה נכשל");
+                  setMessage(
+                    `נמשכו ${json.items} שורות תעודה · ${json.stores} חנויות · ${json.weekly} שבועות (${json.from}–${json.to}). רענן את נתוני חלוקה וחלון החנויות.`,
+                  );
+                  await mapping.reload();
+                  await status.reload();
+                })
+              }
+            >
+              {busy === "deliveries-recent" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              סנכרן חודש נוכחי
+            </button>
+            <button
+              disabled={!!busy}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm disabled:opacity-50"
+              onClick={() =>
                 void run("deliveries", async () => {
                   const res = await fetch("/api/erp/sync/deliveries", {
                     method: "POST",
@@ -117,7 +140,7 @@ export default function ErpSettingsPage() {
                   const json = await res.json();
                   if (!res.ok) throw new Error(json.error || "סנכרון חלוקה נכשל");
                   setMessage(
-                    `נמשכו ${json.items} שורות תעודה · ${json.stores} חנויות · ${json.weekly} שבועות (${json.from}–${json.to})`,
+                    `נמשכו ${json.items} שורות תעודה · ${json.stores} חנויות · ${json.weekly} שבועות (${json.from}–${json.to}). רענן את נתוני חלוקה וחלון החנויות.`,
                   );
                   await mapping.reload();
                   await status.reload();
@@ -125,7 +148,7 @@ export default function ErpSettingsPage() {
               }
             >
               {busy === "deliveries" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-              סנכרן חלוקה ופירוט מוצרים
+              סנכרן 90 יום
             </button>
             <label className="text-xs text-gray-600 flex items-center gap-2">
               <input type="checkbox" checked={enrich} onChange={(e) => setEnrich(e.target.checked)} />
