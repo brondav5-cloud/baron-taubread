@@ -40,6 +40,14 @@ export function parseStatusMsg<T>(raw: unknown): T {
   }
 }
 
+function safeClientMessage(err: unknown): string {
+  const msg = err instanceof Error ? err.message : "Solvit request failed";
+  if (/Bearer\s|Headers\.append|invalid header/i.test(msg)) {
+    return "טוקן Solvit לא תקין. יש לשמור ERP_MCP_TOKEN בשורה אחת, בלי ירידות שורה.";
+  }
+  return msg;
+}
+
 export class SolvitRequestError extends Error {
   statusCode: number;
   constructor(message: string, statusCode: number) {
@@ -115,10 +123,7 @@ export async function solvitRequest<T>(
     if (err instanceof Error && err.name === "AbortError") {
       throw new SolvitRequestError("Solvit request timed out", 504);
     }
-    throw new SolvitRequestError(
-      err instanceof Error ? err.message : "Solvit request failed",
-      502,
-    );
+    throw new SolvitRequestError(safeClientMessage(err), 502);
   } finally {
     clearTimeout(timer);
   }
