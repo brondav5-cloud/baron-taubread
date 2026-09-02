@@ -9,7 +9,7 @@ import {
 } from "@/lib/db/productDeliveries.repo";
 import { deleteDeliveriesForPeriod, upsertDeliveries } from "@/lib/db/deliveries.repo";
 import { syncCatalogFromMonthlyDist } from "@/lib/db/syncCatalogFromDist";
-import { fetchAllPages } from "./client";
+import { fetchAllPages, solvitRequest } from "./client";
 import { normalizeErpName } from "./mapEntities";
 import type {
   AggregatedWeeklyRecord,
@@ -58,24 +58,6 @@ export function addDaysIso(ymd: string, days: number): string {
 
 export function monthStart(ymd: string): string {
   return `${ymd.slice(0, 7)}-01`;
-}
-
-export function monthEnd(ymd: string): string {
-  const { y, m } = parseYmd(monthStart(ymd));
-  const last = new Date(Date.UTC(y, m, 0));
-  return last.toISOString().slice(0, 10);
-}
-
-function monthsInRange(fromDate: string, toDate: string): string[] {
-  const out: string[] = [];
-  let cursor = monthStart(fromDate);
-  const last = monthStart(toDate);
-  while (cursor <= last) {
-    out.push(cursor);
-    const { y, m } = parseYmd(cursor);
-    cursor = monthStart(addDaysIso(`${y}-${String(m).padStart(2, "0")}-28`, 8));
-  }
-  return out;
 }
 
 export function sundayWeekStart(ymd: string): string {
@@ -329,61 +311,60 @@ export function aggregateDeliveryItems(
   return { weekly, daily, dist, storeDeliveries };
 }
 
-async function writeMonth(
-  companyId: string,
-  storeNames: Map<number, string>,
-  monthFrom: string,
-  monthTo: string,
-): Promise<{ items: number; weekly: number; daily: number; dist: number; stores: number }> {
-  const fetchFrom = sundayWeekStart(monthFrom);
-  const items = await fetchAllPages<SolvitDocItem>(
-    "/mcp/documents/items",
-    {
-      doc_type: "delivery",
-      from_date: fetchFrom,
-      to_date: monthTo,
-      status: "all",
-    },
+const DAY_ITEM_LIMIT = 20_000;
+
+async function fetchItemsForDay(day: string): Promise<SolvitDocItem[]> {
+  let page: SolvitDocItem[];
+  try {
+    page = await solvitRequest<SolvitDocItem[]>("/mcp/documents/items", {
+      query: {
+        doc_type: "delivery",
+        from_date: day,
+        to_date: day,
+        status: "all",
+        limit: DAY_ITEM_LIMIT,
+      },
+      skipThrottle: true,
+    });
+  } catch (err) {
+    if (err instanceof Error && /empty query/i.test(err.message)) return [];
+    throw err;
+  }
+  const list = Array.isArray(page) ? page : [];
+  if (list.length < DAY_ITEM_LIMIT) return list;
+
+  const docs = await fetchAllPages<{ doc_id: number }>(
+    "/mcp/documents",
+    { doc_type: "delivery", from_date: day, to_date: day, status: "all" },
     500,
-    200,
+    40,
     true,
   );
-
-  const agg = aggregateDeliveryItems(items, storeNames);
-  const admin = getSupabaseAdmin();
-  const yFrom = Number(monthFrom.slice(0, 4)) * 100 + Number(monthFrom.slice(5, 7));
-  const yTo = Number(monthTo.slice(0, 4)) * 100 + Number(monthTo.slice(5, 7));
-
-  const weeklyDel = await deleteWeeklyRecordsForPeriod(admin, companyId, fetchFrom, monthTo);
-  if (!weeklyDel.success) throw new Error(weeklyDel.error || "weekly delete failed");
-  const dailyDel = await deleteDailyForPeriod(admin, companyId, fetchFrom, monthTo);
-  if (!dailyDel.success) throw new Error(dailyDel.error || "daily delete failed");
-  const distDel = await deleteMonthlyDistForPeriod(admin, companyId, yFrom, yTo);
-  if (!distDel.success) throw new Error(distDel.error || "dist delete failed");
-  const storeDel = await deleteDeliveriesForPeriod(admin, companyId, monthFrom, monthTo);
-  if (!storeDel.success) throw new Error(storeDel.error || "store deliveries delete failed");
-
-  const weeklyUp = await upsertWeeklyRecords(admin, companyId, agg.weekly);
-  if (!weeklyUp.success) throw new Error(weeklyUp.error || "weekly upsert failed");
-  const dailyUp = await upsertDailyRecords(admin, companyId, agg.daily);
-  if (!dailyUp.success) throw new Error(dailyUp.error || "daily upsert failed");
-  const distUp = await upsertMonthlyDistRecords(admin, companyId, agg.dist);
-  if (!distUp.success) throw new Error(distUp.error || "dist upsert failed");
-  const storeUp = await upsertDeliveries(admin, companyId, agg.storeDeliveries);
-  if (!storeUp.success) throw new Error(storeUp.error || "store deliveries upsert failed");
-
-  if (agg.dist.length) {
-    const catalog = await syncCatalogFromMonthlyDist(admin, companyId, { from: yFrom, to: yTo });
-    if (!catalog.ok) throw new Error(catalog.error || "catalog sync failed");
+  const seen = new Set(list.map((row) => `${row.doc_id}|${row.entity_id}|${row.product_id}|${row.product_name}`));
+  const extra: SolvitDocItem[] = [];
+  for (const doc of docs) {
+    const lines = await solvitRequest<SolvitDocItem[]>("/mcp/documents/items", {
+      query: { doc_type: "delivery", doc_id: doc.doc_id, limit: DAY_ITEM_LIMIT },
+      skipThrottle: true,
+    });
+    for (const line of Array.isArray(lines) ? lines : []) {
+      const key = `${line.doc_id}|${line.entity_id}|${line.product_id}|${line.product_name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      extra.push(line);
+    }
   }
+  return list.concat(extra);
+}
 
-  return {
-    items: items.length,
-    weekly: agg.weekly.length,
-    daily: agg.daily.length,
-    dist: agg.dist.length,
-    stores: new Set(agg.weekly.map((r) => r.storeExternalId)).size,
-  };
+async function fetchItemsByDay(fromDate: string, toDate: string): Promise<SolvitDocItem[]> {
+  const items: SolvitDocItem[] = [];
+  let cursor = fromDate;
+  while (cursor <= toDate) {
+    items.push(...(await fetchItemsForDay(cursor)));
+    cursor = addDaysIso(cursor, 1);
+  }
+  return items;
 }
 
 export async function syncErpDeliveries(
@@ -408,23 +389,33 @@ export async function syncErpDeliveries(
     (clients ?? []).map((c) => [c.erp_id as number, String(c.client_name)]),
   );
 
-  let items = 0;
-  let weekly = 0;
-  let daily = 0;
-  let dist = 0;
-  let stores = 0;
+  const items = await fetchItemsByDay(fromDate, toDate);
+  const agg = aggregateDeliveryItems(items, storeNames);
+  const yFrom = Number(fromDate.slice(0, 4)) * 100 + Number(fromDate.slice(5, 7));
+  const yTo = Number(toDate.slice(0, 4)) * 100 + Number(toDate.slice(5, 7));
+  const weeklyFrom = sundayWeekStart(fromDate);
 
-  const months = monthsInRange(fromDate, toDate).reverse();
-  for (const month of months) {
-    const start = month < fromDate ? fromDate : month;
-    const end = monthEnd(month);
-    const monthTo = end < toDate ? end : toDate;
-    const part = await writeMonth(companyId, storeNames, monthStart(start), monthTo);
-    items += part.items;
-    weekly += part.weekly;
-    daily += part.daily;
-    dist += part.dist;
-    if (part.stores > stores) stores = part.stores;
+  const weeklyDel = await deleteWeeklyRecordsForPeriod(admin, companyId, weeklyFrom, toDate);
+  if (!weeklyDel.success) throw new Error(weeklyDel.error || "weekly delete failed");
+  const dailyDel = await deleteDailyForPeriod(admin, companyId, weeklyFrom, toDate);
+  if (!dailyDel.success) throw new Error(dailyDel.error || "daily delete failed");
+  const distDel = await deleteMonthlyDistForPeriod(admin, companyId, yFrom, yTo);
+  if (!distDel.success) throw new Error(distDel.error || "dist delete failed");
+  const storeDel = await deleteDeliveriesForPeriod(admin, companyId, fromDate, toDate);
+  if (!storeDel.success) throw new Error(storeDel.error || "store deliveries delete failed");
+
+  const weeklyUp = await upsertWeeklyRecords(admin, companyId, agg.weekly);
+  if (!weeklyUp.success) throw new Error(weeklyUp.error || "weekly upsert failed");
+  const dailyUp = await upsertDailyRecords(admin, companyId, agg.daily);
+  if (!dailyUp.success) throw new Error(dailyUp.error || "daily upsert failed");
+  const distUp = await upsertMonthlyDistRecords(admin, companyId, agg.dist);
+  if (!distUp.success) throw new Error(distUp.error || "dist upsert failed");
+  const storeUp = await upsertDeliveries(admin, companyId, agg.storeDeliveries);
+  if (!storeUp.success) throw new Error(storeUp.error || "store deliveries upsert failed");
+
+  if (agg.dist.length) {
+    const catalog = await syncCatalogFromMonthlyDist(admin, companyId, { from: yFrom, to: yTo });
+    if (!catalog.ok) throw new Error(catalog.error || "catalog sync failed");
   }
 
   const now = new Date().toISOString();
@@ -433,5 +424,13 @@ export async function syncErpDeliveries(
     .update({ last_catalog_sync_at: now, last_ok_at: now, last_error: null, updated_at: now })
     .eq("company_id", companyId);
 
-  return { items, weekly, daily, dist, stores, from: fromDate, to: toDate };
+  return {
+    items: items.length,
+    weekly: agg.weekly.length,
+    daily: agg.daily.length,
+    dist: agg.dist.length,
+    stores: new Set(agg.weekly.map((r) => r.storeExternalId)).size,
+    from: fromDate,
+    to: toDate,
+  };
 }
