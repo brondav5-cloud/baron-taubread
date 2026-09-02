@@ -60,6 +60,20 @@ export function monthStart(ymd: string): string {
   return `${ymd.slice(0, 7)}-01`;
 }
 
+export function monthEnd(ymd: string): string {
+  const { y, m } = parseYmd(monthStart(ymd));
+  const last = new Date(Date.UTC(y, m, 0));
+  return last.toISOString().slice(0, 10);
+}
+
+export function rangeForMonth(yearMonth: string): { from: string; to: string } | null {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(yearMonth)) return null;
+  const from = `${yearMonth}-01`;
+  const end = monthEnd(from);
+  const today = jerusalemToday();
+  return { from, to: end < today ? end : today };
+}
+
 export function sundayWeekStart(ymd: string): string {
   const { y, m, d } = parseYmd(ymd);
   const dt = new Date(Date.UTC(y, m - 1, d));
@@ -86,7 +100,7 @@ export function rangeForNightlyCron(): { from: string; to: string } {
   const to = jerusalemToday();
   const day = Number(to.slice(8, 10));
   const currentMonth = monthStart(to);
-  const from = day <= 7 ? monthStart(addDaysIso(currentMonth, -1)) : currentMonth;
+  const from = day <= 15 ? monthStart(addDaysIso(currentMonth, -1)) : currentMonth;
   return { from, to };
 }
 

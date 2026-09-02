@@ -3,6 +3,7 @@ import { requireErpSession } from "@/lib/erp/solvit/session";
 import { SolvitRequestError } from "@/lib/erp/solvit/client";
 import {
   rangeForLookbackDays,
+  rangeForMonth,
   rangeForNightlyCron,
   syncErpDeliveries,
 } from "@/lib/erp/solvit/syncDeliveries";
@@ -19,9 +20,11 @@ export async function POST(request: NextRequest) {
 
   let days = 90;
   let recent = false;
+  let month: string | null = null;
   try {
-    const body = (await request.json()) as { days?: number; recent?: boolean };
+    const body = (await request.json()) as { days?: number; recent?: boolean; month?: string };
     recent = body.recent === true;
+    month = typeof body.month === "string" ? body.month : null;
     if (Number.isFinite(body.days) && Number(body.days) > 0) {
       days = Math.min(366, Math.floor(Number(body.days)));
     }
@@ -29,7 +32,15 @@ export async function POST(request: NextRequest) {
     days = 90;
   }
 
-  const { from, to } = recent ? rangeForNightlyCron() : rangeForLookbackDays(days);
+  const monthRange = month ? rangeForMonth(month) : null;
+  if (month && !monthRange) {
+    return NextResponse.json({ error: "חודש לא תקין" }, { status: 400 });
+  }
+  const { from, to } = monthRange
+    ? monthRange
+    : recent
+      ? rangeForNightlyCron()
+      : rangeForLookbackDays(days);
   try {
     const counts = await syncErpDeliveries(session.companyId, from, to);
     return NextResponse.json({ ok: true, days, ...counts });

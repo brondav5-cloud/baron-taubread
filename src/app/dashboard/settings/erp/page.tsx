@@ -34,6 +34,7 @@ export default function ErpSettingsPage() {
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [enrich, setEnrich] = useState(false);
+  const [month, setMonth] = useState(defaultPrevMonth);
 
   const run = async (label: string, fn: () => Promise<void>) => {
     setBusy(label);
@@ -52,7 +53,7 @@ export default function ErpSettingsPage() {
       <div>
         <h2 className="text-lg font-semibold text-gray-900">חיבור Solvit</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          קטלוג + משיכת תעודות משלוח לפירוט מוצרים ונתוני חלוקה. בלילה זה רץ אוטומטית.
+          בלילה נמשכות תעודות החודש הנוכחי, ועד ה-15 גם החודש הקודם (התאמות מכר עם תאריך 30/31).
         </p>
       </div>
 
@@ -150,6 +151,35 @@ export default function ErpSettingsPage() {
               {busy === "deliveries" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               סנכרן 90 יום
             </button>
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="px-3 py-2 rounded-xl border text-sm"
+            />
+            <button
+              disabled={!!busy || !month}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border text-sm disabled:opacity-50"
+              onClick={() =>
+                void run("deliveries-month", async () => {
+                  const res = await fetch("/api/erp/sync/deliveries", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ month }),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.error || "סנכרון חלוקה נכשל");
+                  setMessage(
+                    `נמשך חודש ${month}: ${json.items} שורות · ${json.stores} חנויות (${json.from}–${json.to}). רענן את נתוני חלוקה וחלון החנויות.`,
+                  );
+                  await mapping.reload();
+                  await status.reload();
+                })
+              }
+            >
+              {busy === "deliveries-month" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              סנכרן חודש נבחר
+            </button>
             <label className="text-xs text-gray-600 flex items-center gap-2">
               <input type="checkbox" checked={enrich} onChange={(e) => setEnrich(e.target.checked)} />
               עדכן נהג/סוכן/עיר בחנויות ממופות שאושרו
@@ -241,6 +271,18 @@ export default function ErpSettingsPage() {
       </Card>
     </div>
   );
+}
+
+function defaultPrevMonth(): string {
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const [y, m] = today.split("-").map(Number);
+  if (!y || !m) return today.slice(0, 7);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
 }
 
 function statusLabel(status: MappingCandidate["status"]): string {
