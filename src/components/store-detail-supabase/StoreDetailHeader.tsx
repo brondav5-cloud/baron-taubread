@@ -21,26 +21,7 @@ import {
   TREATMENT_REASON_CONFIG,
   type TreatmentReason,
 } from "@/context/TreatmentContext";
-
-// ============================================
-// STATUS CONFIG
-// ============================================
-
-const STATUS_CONFIG: Record<
-  string,
-  { bg: string; text: string; label: string }
-> = {
-  עליה_חדה: {
-    bg: "bg-emerald-100",
-    text: "text-emerald-700",
-    label: "🚀 עליה חדה",
-  },
-  צמיחה: { bg: "bg-green-100", text: "text-green-700", label: "📈 צמיחה" },
-  יציב: { bg: "bg-blue-100", text: "text-blue-700", label: "➡️ יציב" },
-  ירידה: { bg: "bg-orange-100", text: "text-orange-700", label: "📉 ירידה" },
-  התרסקות: { bg: "bg-red-100", text: "text-red-700", label: "💥 התרסקות" },
-  אזעקה: { bg: "bg-red-100", text: "text-red-700", label: "🚨 אזעקה" },
-};
+import { statusTone } from "@/types/data";
 
 function StatusBadge({
   status,
@@ -50,11 +31,7 @@ function StatusBadge({
   label: string;
 }) {
   if (!status) return null;
-  const config = STATUS_CONFIG[status] || {
-    bg: "bg-gray-100",
-    text: "text-gray-700",
-    label: status,
-  };
+  const config = statusTone(status);
   return (
     <div className="text-center">
       <p className="text-xs text-gray-400 mb-1">{label}</p>

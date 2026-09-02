@@ -88,7 +88,7 @@ interface StatusBadgeLongProps {
 export function StatusBadgeLong({
   status,
   size = "md",
-  showIcon = true,
+  showIcon = false,
   className,
 }: StatusBadgeLongProps) {
   const colors = STATUS_COLORS_LONG[status];
@@ -132,7 +132,7 @@ interface StatusBadgeShortProps {
 export function StatusBadgeShort({
   status,
   size = "md",
-  showIcon = true,
+  showIcon = false,
   className,
 }: StatusBadgeShortProps) {
   const colors = STATUS_COLORS_SHORT[status];

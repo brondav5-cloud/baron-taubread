@@ -167,10 +167,18 @@ export const STATUS_ICONS: Record<StatusLong, string> = {
 // Status card colors (for dashboard cards)
 export const STATUS_CARD_COLORS: Record<StatusLong, string> = {
   עליה_חדה: "bg-emerald-100 text-emerald-700",
-  צמיחה: "bg-lime-100 text-lime-700",
+  צמיחה: "bg-emerald-100 text-emerald-700",
   יציב: "bg-gray-100 text-gray-600",
-  ירידה: "bg-amber-100 text-amber-700",
+  ירידה: "bg-amber-100 text-amber-800",
   התרסקות: "bg-red-100 text-red-700",
+};
+
+export const STATUS_CHART_HEX: Record<StatusLong, string> = {
+  עליה_חדה: "#059669",
+  צמיחה: "#10b981",
+  יציב: "#6b7280",
+  ירידה: "#d97706",
+  התרסקות: "#dc2626",
 };
 
 // Status colors
@@ -184,15 +192,15 @@ export const STATUS_COLORS_LONG: Record<
     border: "border-emerald-300",
   },
   צמיחה: {
-    bg: "bg-green-100",
-    text: "text-green-700",
-    border: "border-green-300",
+    bg: "bg-emerald-100",
+    text: "text-emerald-700",
+    border: "border-emerald-300",
   },
-  יציב: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-300" },
+  יציב: { bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-300" },
   ירידה: {
-    bg: "bg-orange-100",
-    text: "text-orange-700",
-    border: "border-orange-300",
+    bg: "bg-amber-100",
+    text: "text-amber-800",
+    border: "border-amber-300",
   },
   התרסקות: { bg: "bg-red-100", text: "text-red-700", border: "border-red-300" },
 };
@@ -206,14 +214,36 @@ export const STATUS_COLORS_SHORT: Record<
     text: "text-emerald-700",
     border: "border-emerald-300",
   },
-  יציב: { bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-300" },
+  יציב: { bg: "bg-gray-100", text: "text-gray-600", border: "border-gray-300" },
   ירידה: {
-    bg: "bg-orange-100",
-    text: "text-orange-700",
-    border: "border-orange-300",
+    bg: "bg-amber-100",
+    text: "text-amber-800",
+    border: "border-amber-300",
   },
   אזעקה: { bg: "bg-red-100", text: "text-red-700", border: "border-red-300" },
 };
+
+export function statusTone(status: string | undefined): {
+  bg: string;
+  text: string;
+  label: string;
+} {
+  if (!status) {
+    return { bg: "bg-gray-100", text: "text-gray-600", label: "—" };
+  }
+  const long = STATUS_COLORS_LONG[status as StatusLong];
+  const short = STATUS_COLORS_SHORT[status as StatusShort];
+  const colors = long ?? short ?? {
+    bg: "bg-gray-100",
+    text: "text-gray-600",
+    border: "border-gray-300",
+  };
+  const label =
+    STATUS_DISPLAY_LONG[status as StatusLong] ??
+    STATUS_DISPLAY_SHORT[status as StatusShort] ??
+    status;
+  return { bg: colors.bg, text: colors.text, label };
+}
 
 // ============================================
 // EXTENDED STORE TYPE (with calculated status)

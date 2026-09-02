@@ -13,20 +13,7 @@ import type {
   SortKey,
 } from "@/hooks/useProductsPageSupabase";
 
-const STATUS_COLORS: Record<
-  string,
-  { bg: string; text: string; label: string }
-> = {
-  עליה_חדה: {
-    bg: "bg-green-100",
-    text: "text-green-700",
-    label: "🚀 עליה חדה",
-  },
-  צמיחה: { bg: "bg-emerald-100", text: "text-emerald-700", label: "📈 צמיחה" },
-  יציב: { bg: "bg-blue-100", text: "text-blue-700", label: "➡️ יציב" },
-  ירידה: { bg: "bg-orange-100", text: "text-orange-700", label: "📉 ירידה" },
-  התרסקות: { bg: "bg-red-100", text: "text-red-700", label: "💥 התרסקות" },
-};
+import { statusTone } from "@/types/data";
 
 function SortIcon({
   sortKey,
@@ -105,11 +92,7 @@ function SortableTh({
 
 function StatusBadge({ status }: { status: string | undefined }) {
   if (!status) return <span className="text-gray-400">-</span>;
-  const config = STATUS_COLORS[status] || {
-    bg: "bg-gray-100",
-    text: "text-gray-700",
-    label: status,
-  };
+  const config = statusTone(status);
   return (
     <span
       className={clsx(
