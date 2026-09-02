@@ -19,7 +19,6 @@ import {
   Bug,
   Calendar,
   GitCompare,
-  Target,
   Users,
   Upload,
   BarChart3,
@@ -69,7 +68,7 @@ interface NavSection {
 
 const navigation: NavSection[] = [
   {
-    title: "ראשי",
+    title: "היום",
     items: [
       {
         label: "דשבורד",
@@ -89,28 +88,51 @@ const navigation: NavSection[] = [
         icon: Package,
         module: "products",
       },
+    ],
+  },
+  {
+    title: "ניתוח",
+    items: [
+      {
+        label: "השוואה שבועית",
+        href: "/dashboard/weekly",
+        icon: BarChart3,
+        module: "compare",
+      },
       {
         label: "נתוני חלוקה",
         href: "/dashboard/distribution-v2",
         icon: Table2,
         module: "distribution",
       },
+      {
+        label: "השוואת חנויות",
+        href: "/dashboard/compare",
+        icon: GitCompare,
+        module: "compare",
+      },
+      {
+        label: "רווחיות",
+        href: "/dashboard/profitability",
+        icon: TrendingUp,
+        module: "profitability",
+      },
     ],
   },
   {
-    title: "ניהול שטח",
+    title: "שטח",
     items: [
-      {
-        label: "סיכומי ישיבות",
-        href: "/dashboard/meetings",
-        icon: FileText,
-        module: "meetings",
-      },
       {
         label: "מסכם פעולות",
         href: "/dashboard/field-summary",
         icon: BarChart3,
         module: "treatment",
+      },
+      {
+        label: "ביקורים",
+        href: "/dashboard/visits",
+        icon: ClipboardList,
+        module: "visits",
       },
       {
         label: "משימות",
@@ -137,6 +159,12 @@ const navigation: NavSection[] = [
         module: "work_plan",
       },
       {
+        label: "סיכומי ישיבות",
+        href: "/dashboard/meetings",
+        icon: FileText,
+        module: "meetings",
+      },
+      {
         label: "מתחרים",
         href: "/dashboard/competitors",
         icon: Users,
@@ -145,54 +173,8 @@ const navigation: NavSection[] = [
     ],
   },
   {
-    title: "ביקורים",
+    title: "כסף ומערכת",
     items: [
-      {
-        label: "כל הביקורים",
-        href: "/dashboard/visits",
-        icon: ClipboardList,
-        module: "visits",
-      },
-      {
-        label: "הוסף ביקור",
-        href: "/dashboard/visits/new",
-        icon: Target,
-        module: "visits",
-      },
-    ],
-  },
-  {
-    title: "ניתוחים",
-    items: [
-      {
-        label: "השוואה שבועית",
-        href: "/dashboard/weekly",
-        icon: BarChart3,
-        module: "compare",
-      },
-      {
-        label: "רווחיות",
-        href: "/dashboard/profitability",
-        icon: TrendingUp,
-        module: "profitability",
-      },
-      {
-        label: "השוואת חנויות",
-        href: "/dashboard/compare",
-        icon: GitCompare,
-        module: "compare",
-      },
-    ],
-  },
-  {
-    title: "כספים",
-    items: [
-      {
-        label: "הוצאות ורווח/הפסד",
-        href: "/dashboard/expenses",
-        icon: Wallet,
-        module: "expenses",
-      },
       {
         label: "תנועות בנק",
         href: "/dashboard/finance",
@@ -200,16 +182,17 @@ const navigation: NavSection[] = [
         module: "finance",
       },
       {
+        label: "הוצאות ורווח/הפסד",
+        href: "/dashboard/expenses",
+        icon: Wallet,
+        module: "expenses",
+      },
+      {
         label: "תוכנת האם",
         href: "/dashboard/erp",
         icon: FileText,
         module: "erp",
       },
-    ],
-  },
-  {
-    title: "מערכת",
-    items: [
       {
         label: "העלאת נתונים",
         href: "/dashboard/upload",
