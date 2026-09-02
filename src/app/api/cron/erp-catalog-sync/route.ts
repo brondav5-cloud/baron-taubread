@@ -26,7 +26,14 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const results: Array<{ companyId: string; ok: boolean; error?: string }> = [];
+  const results: Array<{
+    companyId: string;
+    ok: boolean;
+    error?: string;
+    clients?: number;
+    products?: number;
+    deliveries?: unknown;
+  }> = [];
   for (const row of connections ?? []) {
     try {
       const catalog = await syncErpCatalog(row.company_id as string);
