@@ -9,6 +9,7 @@ import {
   StoresPagination,
   StoresTotalsBar,
   StoresExclusionBar,
+  StoresInactivityAlert,
 } from "@/components/stores-supabase";
 import { LoadingState } from "@/components/common";
 
@@ -84,6 +85,14 @@ export default function StoresPage() {
         onClearFilters={clearFilters}
         activeFiltersCount={activeFiltersCount}
       />
+
+      {hook.viewMode === "data" && hook.inactivityAlerts.stores.length > 0 && (
+        <StoresInactivityAlert
+          stores={hook.inactivityAlerts.stores}
+          previousLabel={hook.inactivityAlerts.previousLabel}
+          currentLabel={hook.inactivityAlerts.currentLabel}
+        />
+      )}
 
       {/* Search Bar */}
       <StoresSearchBar value={search} onChange={setSearch} />

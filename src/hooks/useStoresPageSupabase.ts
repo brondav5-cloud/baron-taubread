@@ -8,7 +8,13 @@ import { usePeriodSelector } from "./usePeriodSelector";
 import {
   formatSelectedPeriodLabel,
   generateMetricsPeriodLabels,
+  parsePeriodKey,
 } from "@/lib/periodUtils";
+import {
+  hasActivity,
+  previousMonthBefore,
+  storeHasActivityInMonths,
+} from "@/lib/storeActivity";
 import { useStoresDeliveries } from "./useStoresDeliveries";
 import { useStoresPageFilters } from "./useStoresPageFilters";
 import { useExcludedStores } from "./useExcludedStores";
@@ -109,6 +115,8 @@ export function useStoresPageSupabase() {
       periodSelector.compare.months,
     );
 
+  const [viewMode, setViewMode] = useState<ViewMode>("metrics");
+
   const excluded = useExcludedStores(companyId);
 
   const excludedStores = useMemo(
@@ -189,13 +197,61 @@ export function useStoresPageSupabase() {
     deliveriesByStoreCompare,
   ]);
 
+  const visibleStores = useMemo(() => {
+    if (viewMode !== "data") return storesWithPeriodData;
+    return storesWithPeriodData.filter(
+      (store) => hasActivity(store.periodData) || hasActivity(store.compareData),
+    );
+  }, [viewMode, storesWithPeriodData]);
+
+  const inactivityAlerts = useMemo(() => {
+    if (viewMode !== "data") {
+      return { stores: [] as Array<{ id: string; name: string; city?: string | null }>, previousLabel: "", currentLabel: "" };
+    }
+    const selectedMonths = primaryMonthsKey ? primaryMonthsKey.split(",") : [];
+    const compareMonths =
+      compareEnabled && compareMonthsKey ? compareMonthsKey.split(",") : [];
+    const previousMonths =
+      compareMonths.length > 0
+        ? compareMonths
+        : (() => {
+            const prev = previousMonthBefore(selectedMonths);
+            return prev ? [prev] : [];
+          })();
+    if (selectedMonths.length === 0 || previousMonths.length === 0) {
+      return { stores: [], previousLabel: "", currentLabel: "" };
+    }
+
+    const stores = storesWithPeriodData
+      .filter(
+        (store) =>
+          !hasActivity(store.periodData) &&
+          storeHasActivityInMonths(store, previousMonths),
+      )
+      .map((store) => ({ id: store.id, name: store.name, city: store.city }));
+
+    const previousLabel =
+      compareMonths.length > 0
+        ? formatSelectedPeriodLabel(compareMonths, null)
+        : parsePeriodKey(previousMonths[0]!)?.label ?? previousMonths[0]!;
+    const currentLabel = formatSelectedPeriodLabel(selectedMonths, null);
+
+    return { stores, previousLabel, currentLabel };
+  }, [
+    viewMode,
+    storesWithPeriodData,
+    primaryMonthsKey,
+    compareEnabled,
+    compareMonthsKey,
+  ]);
+
   // ============================================
   // TOTALS
   // ============================================
 
   const totals = useMemo((): TotalsData | null => {
-    if (storesWithPeriodData.length === 0) return null;
-    const count = storesWithPeriodData.length;
+    if (visibleStores.length === 0) return null;
+    const count = visibleStores.length;
     let sumQty = 0,
       sumSales = 0,
       sumGross = 0,
@@ -208,7 +264,7 @@ export function useStoresPageSupabase() {
       sumPeak = 0,
       sumReturnsPct = 0;
 
-    storesWithPeriodData.forEach((store) => {
+    visibleStores.forEach((store) => {
       sumQty += store.periodData.qty;
       sumSales += store.periodData.sales;
       sumGross += store.periodData.gross;
@@ -236,16 +292,15 @@ export function useStoresPageSupabase() {
       metric_peak_distance: sumPeak / count,
       returns_pct: sumReturnsPct / count,
     };
-  }, [storesWithPeriodData]);
+  }, [visibleStores]);
 
   // Sort + pagination
-  const sortResult = useStoresPageSort(storesWithPeriodData);
+  const sortResult = useStoresPageSort(visibleStores);
 
   // ============================================
-  // VIEW MODE + STORE SELECTION
+  // STORE SELECTION
   // ============================================
 
-  const [viewMode, setViewMode] = useState<ViewMode>("metrics");
   const [selectedStoreIds, setSelectedStoreIds] = useState<Set<string>>(
     new Set(),
   );
@@ -335,7 +390,8 @@ export function useStoresPageSupabase() {
     filterOptions: filterResult.filterOptions,
     stores: sortResult.sortedStores,
     paginatedStores: sortResult.paginatedStores,
-    filteredCount: filterResult.filteredStores.length,
+    filteredCount: visibleStores.length,
+    inactivityAlerts,
     totalCount: allStores.length,
     activeFiltersCount: filterResult.activeFiltersCount,
     totals,

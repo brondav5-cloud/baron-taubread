@@ -1,5 +1,6 @@
 export { StoresHeaderSupabase } from "./StoresHeaderSupabase";
 export { StoresTableSupabase } from "./StoresTableSupabase";
+export { StoresInactivityAlert } from "./StoresInactivityAlert";
 export {
   StoresSearchBar,
   StoresFiltersPanel,

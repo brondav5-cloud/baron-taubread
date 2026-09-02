@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import type { SortKey, SortDirection } from "./useStoresPageSupabase";
 
 type StoreWithPeriodData = {
@@ -38,6 +38,10 @@ export function useStoresPageSort<T extends StoreWithPeriodData>(
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [pageSize, setPageSize] = useState<number>(50);
   const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [storesWithPeriodData.length]);
 
   const getSortValue = useCallback(
     (store: T, key: SortKey): number | string => {
