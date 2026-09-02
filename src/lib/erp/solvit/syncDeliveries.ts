@@ -38,9 +38,21 @@ export function jerusalemToday(): string {
   }).format(new Date());
 }
 
+function parseYmd(ymd: string): { y: number; m: number; d: number } {
+  const parts = ymd.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
+  return {
+    y: Number.isFinite(y) ? y : 1970,
+    m: Number.isFinite(m) ? m : 1,
+    d: Number.isFinite(d) ? d : 1,
+  };
+}
+
 export function addDaysIso(ymd: string, days: number): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, (d ?? 1) + days));
+  const { y, m, d } = parseYmd(ymd);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
   return dt.toISOString().slice(0, 10);
 }
 
@@ -49,15 +61,15 @@ export function monthStart(ymd: string): string {
 }
 
 export function sundayWeekStart(ymd: string): string {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  const { y, m, d } = parseYmd(ymd);
+  const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() - dt.getUTCDay());
   return dt.toISOString().slice(0, 10);
 }
 
 export function isoWeekNumber(ymd: string): number {
-  const [y, m, d] = ymd.split("-").map(Number);
-  const date = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+  const { y, m, d } = parseYmd(ymd);
+  const date = new Date(Date.UTC(y, m - 1, d));
   const day = date.getUTCDay() || 7;
   date.setUTCDate(date.getUTCDate() + 4 - day);
   const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
@@ -254,7 +266,7 @@ export function aggregateDeliveryItems(
       totalValue: number;
     }
   >();
-  for (const sw of storeWeekMap.values()) {
+  Array.from(storeWeekMap.values()).forEach((sw) => {
     storeDeliveries.push({
       storeExternalId: sw.storeExternalId,
       storeName: sw.storeName,
@@ -268,7 +280,7 @@ export function aggregateDeliveryItems(
     const mk = `${sw.storeExternalId}|${sw.year}|${sw.month}`;
     const monthRow = monthMap.get(mk);
     if (monthRow) {
-      sw.dates.forEach((d) => monthRow.dates.add(d));
+      sw.dates.forEach((d: string) => monthRow.dates.add(d));
       monthRow.totalQuantity += sw.totalQuantity;
       monthRow.totalValue += sw.totalValue;
     } else {
@@ -282,8 +294,8 @@ export function aggregateDeliveryItems(
         totalValue: sw.totalValue,
       });
     }
-  }
-  for (const sm of monthMap.values()) {
+  });
+  Array.from(monthMap.values()).forEach((sm) => {
     storeDeliveries.push({
       storeExternalId: sm.storeExternalId,
       storeName: sm.storeName,
@@ -294,7 +306,7 @@ export function aggregateDeliveryItems(
       totalValue: sm.totalValue,
       totalQuantity: sm.totalQuantity,
     });
-  }
+  });
 
   return { weekly, daily, dist, storeDeliveries };
 }
