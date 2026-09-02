@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { isErpConfigured } from "@/lib/erp/solvit/env";
 import { syncErpCatalog } from "@/lib/erp/solvit/syncCatalog";
+import { rangeForNightlyCron, syncErpDeliveries } from "@/lib/erp/solvit/syncDeliveries";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const CRON_SECRET = process.env.CRON_SECRET ?? "";
 
@@ -28,8 +29,15 @@ export async function GET(request: NextRequest) {
   const results: Array<{ companyId: string; ok: boolean; error?: string }> = [];
   for (const row of connections ?? []) {
     try {
-      const counts = await syncErpCatalog(row.company_id as string);
-      results.push({ companyId: row.company_id as string, ok: true, ...counts });
+      const catalog = await syncErpCatalog(row.company_id as string);
+      const { from, to } = rangeForNightlyCron();
+      const deliveries = await syncErpDeliveries(row.company_id as string, from, to);
+      results.push({
+        companyId: row.company_id as string,
+        ok: true,
+        ...catalog,
+        deliveries,
+      });
     } catch (err) {
       results.push({
         companyId: row.company_id as string,

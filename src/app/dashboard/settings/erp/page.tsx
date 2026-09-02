@@ -52,7 +52,7 @@ export default function ErpSettingsPage() {
       <div>
         <h2 className="text-lg font-semibold text-gray-900">חיבור Solvit</h2>
         <p className="text-sm text-gray-500 mt-0.5">
-          סטטוס, סנכרון קטלוג ומיפוי מזהים. לא דורס מדדי אקסל.
+          קטלוג + משיכת תעודות משלוח לפירוט מוצרים ונתוני חלוקה. בלילה זה רץ אוטומטית.
         </p>
       </div>
 
@@ -103,6 +103,29 @@ export default function ErpSettingsPage() {
             >
               {busy === "sync" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               סנכרן קטלוג
+            </button>
+            <button
+              disabled={!!busy}
+              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-gray-900 text-white text-sm disabled:opacity-50"
+              onClick={() =>
+                void run("deliveries", async () => {
+                  const res = await fetch("/api/erp/sync/deliveries", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ days: 90 }),
+                  });
+                  const json = await res.json();
+                  if (!res.ok) throw new Error(json.error || "סנכרון חלוקה נכשל");
+                  setMessage(
+                    `נמשכו ${json.items} שורות תעודה · ${json.stores} חנויות · ${json.weekly} שבועות (${json.from}–${json.to})`,
+                  );
+                  await mapping.reload();
+                  await status.reload();
+                })
+              }
+            >
+              {busy === "deliveries" ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              סנכרן חלוקה ופירוט מוצרים
             </button>
             <label className="text-xs text-gray-600 flex items-center gap-2">
               <input type="checkbox" checked={enrich} onChange={(e) => setEnrich(e.target.checked)} />

@@ -137,10 +137,11 @@ export async function fetchAllPages<T extends object>(
   path: string,
   query: Record<string, string | number | boolean | undefined>,
   pageSize = 500,
+  maxPages = 40,
 ): Promise<T[]> {
   const rows: T[] = [];
   let offset = 0;
-  for (let i = 0; i < 40; i++) {
+  for (let i = 0; i < maxPages; i++) {
     const page = await solvitRequest<T[]>(path, {
       query: { ...query, limit: pageSize, offset },
     });
