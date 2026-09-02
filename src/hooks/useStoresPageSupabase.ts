@@ -12,6 +12,7 @@ import {
 } from "@/lib/periodUtils";
 import {
   hasActivity,
+  periodIncludesOpenMonth,
   previousMonthBefore,
   storeHasActivityInMonths,
 } from "@/lib/storeActivity";
@@ -219,6 +220,10 @@ export function useStoresPageSupabase() {
             return prev ? [prev] : [];
           })();
     if (selectedMonths.length === 0 || previousMonths.length === 0) {
+      return { stores: [], previousLabel: "", currentLabel: "" };
+    }
+    // Incomplete current month vs a full previous month produces false drop-offs.
+    if (periodIncludesOpenMonth(selectedMonths)) {
       return { stores: [], previousLabel: "", currentLabel: "" };
     }
 

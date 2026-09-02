@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
-import { Users } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useStoreDetailSupabase } from "@/hooks/useStoreDetailSupabase";
 import { useStoreCityComparison } from "@/hooks/useStoreCityComparison";
@@ -16,7 +15,6 @@ import {
   StoreSummaryCards,
   StoreMonthlyTable,
   StoreTabs,
-  TabPlaceholder,
   StoreCityComparison,
   StoreProductsTab,
   StoreWeeklyTab,
@@ -35,7 +33,6 @@ const VALID_TABS: StoreTabType[] = [
   "products",
   "weekly",
   "pricing",
-  "competitors",
 ];
 
 function periodToMonthKey(period: string): string {
@@ -54,7 +51,7 @@ export default function StoreDetailPage() {
     const tab = searchParams.get("tab") as StoreTabType | null;
     if (tab && VALID_TABS.includes(tab)) {
       setActiveTab(tab);
-    } else if (!tab) {
+    } else {
       setActiveTab("overview");
     }
   }, [searchParams]);
@@ -202,13 +199,6 @@ export default function StoreDetailPage() {
 
       {activeTab === "pricing" && store && (
         <StorePricingTab storeId={store.external_id} storeName={store.name} />
-      )}
-      {activeTab === "competitors" && (
-        <TabPlaceholder
-          icon={Users}
-          label="מתחרים"
-          settingsPath="/dashboard/settings/competitors"
-        />
       )}
     </div>
   );

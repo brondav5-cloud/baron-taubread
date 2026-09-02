@@ -10,6 +10,7 @@ import {
   Calculator,
   Truck,
   ListTodo,
+  ClipboardList,
   AlertTriangle,
   CheckCircle,
   Users,
@@ -53,6 +54,16 @@ const TABS = [
     href: "/dashboard/settings/returns-policy",
     label: "נורמת חזרות",
     icon: Percent,
+  },
+  {
+    href: "/dashboard/settings/checklist",
+    label: "צ'קליסט",
+    icon: ClipboardList,
+  },
+  {
+    href: "/dashboard/settings/competitors",
+    label: "מתחרים",
+    icon: Users,
   },
   {
     href: "/dashboard/settings/erp",

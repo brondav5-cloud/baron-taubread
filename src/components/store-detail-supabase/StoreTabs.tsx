@@ -1,14 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { BarChart3, Package, Receipt, Users, Settings, TrendingUp } from "lucide-react";
+import { BarChart3, Package, Receipt, Settings, TrendingUp } from "lucide-react";
 import { clsx } from "clsx";
 
 // ============================================
 // TYPES
 // ============================================
 
-export type StoreTabType = "overview" | "products" | "weekly" | "pricing" | "competitors";
+export type StoreTabType = "overview" | "products" | "weekly" | "pricing";
 
 interface StoreTabsProps {
   activeTab: StoreTabType;
@@ -24,7 +24,6 @@ const TABS: { id: StoreTabType; label: string; icon: React.ElementType }[] = [
   { id: "products",    label: "מוצרים",  icon: Package    },
   { id: "weekly",      label: "שבועי",   icon: TrendingUp },
   { id: "pricing",     label: "מחירון",  icon: Receipt    },
-  { id: "competitors", label: "מתחרים",  icon: Users      },
 ];
 
 // ============================================

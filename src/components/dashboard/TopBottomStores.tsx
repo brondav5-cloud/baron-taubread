@@ -27,11 +27,11 @@ export function TopBottomStores({
       {/* Top 20 */}
       <Card>
         <CardHeader>
-          <CardTitle>🏆 20 מובילות</CardTitle>
+          <CardTitle>20 מובילות</CardTitle>
         </CardHeader>
         <CardContent className="max-h-96 overflow-y-auto">
           <div className="space-y-2">
-            {topStores.slice(0, 5).map((store, i) => (
+            {topStores.map((store, i) => (
               <Link
                 key={store.id}
                 href={`/dashboard/stores/${store.id}`}
@@ -58,11 +58,11 @@ export function TopBottomStores({
       {/* Bottom 20 */}
       <Card>
         <CardHeader>
-          <CardTitle>📉 20 בירידה</CardTitle>
+          <CardTitle>20 בירידה</CardTitle>
         </CardHeader>
         <CardContent className="max-h-96 overflow-y-auto">
           <div className="space-y-2">
-            {bottomStores.slice(0, 5).map((store, i) => (
+            {bottomStores.map((store, i) => (
               <Link
                 key={store.id}
                 href={`/dashboard/stores/${store.id}`}

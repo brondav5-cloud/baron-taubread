@@ -105,8 +105,6 @@ const navigation: NavSection[] = [
         href: "/dashboard/meetings",
         icon: FileText,
         module: "meetings",
-        badge: "חדש",
-        badgeColor: "bg-indigo-100 text-indigo-700",
       },
       {
         label: "מסכם פעולות",
@@ -171,8 +169,6 @@ const navigation: NavSection[] = [
         href: "/dashboard/weekly",
         icon: BarChart3,
         module: "compare",
-        badge: "חדש",
-        badgeColor: "bg-purple-100 text-purple-700",
       },
       {
         label: "רווחיות",
@@ -196,8 +192,6 @@ const navigation: NavSection[] = [
         href: "/dashboard/expenses",
         icon: Wallet,
         module: "expenses",
-        badge: "חדש",
-        badgeColor: "bg-purple-100 text-purple-700",
       },
       {
         label: "תנועות בנק",
@@ -210,8 +204,6 @@ const navigation: NavSection[] = [
         href: "/dashboard/erp",
         icon: FileText,
         module: "erp",
-        badge: "חדש",
-        badgeColor: "bg-sky-100 text-sky-700",
       },
     ],
   },
@@ -223,8 +215,6 @@ const navigation: NavSection[] = [
         href: "/dashboard/upload",
         icon: Upload,
         module: "upload",
-        badge: "חדש",
-        badgeColor: "bg-blue-100 text-blue-700",
       },
       {
         label: "הגדרות",

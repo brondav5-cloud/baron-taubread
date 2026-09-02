@@ -42,3 +42,23 @@ export function previousMonthBefore(months: string[]): string | null {
   const latest = [...months].filter((m) => /^\d{6}$/.test(m)).sort().pop();
   return latest ? shiftMonthKeyYYYYMM(latest, -1) : null;
 }
+
+/** Current calendar month in Asia/Jerusalem as YYYYMM. */
+export function currentMonthKeyJerusalem(now = new Date()): string {
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Jerusalem",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  return `${ymd.slice(0, 4)}${ymd.slice(5, 7)}`;
+}
+
+/** True when the selected range still includes the open (incomplete) month. */
+export function periodIncludesOpenMonth(
+  months: string[],
+  now = new Date(),
+): boolean {
+  const open = currentMonthKeyJerusalem(now);
+  return months.some((month) => month === open);
+}
