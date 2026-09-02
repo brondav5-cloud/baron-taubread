@@ -71,9 +71,9 @@ export function OverviewCards({
               {formatNumber(totals.qtyCurrent)}
             </p>
             <p className="text-[10px] sm:text-xs text-gray-600 truncate leading-tight">
-              {hasData
-                ? `סה"כ כמות`
-                : "סה\"כ כמות"}
+              {hasData && totals.currentYearPeriodLabel
+                ? `סה"כ כמות · ${totals.currentYearPeriodLabel}`
+                : 'סה"כ כמות'}
             </p>
             <p
               className={clsx(

@@ -21,6 +21,58 @@ function sumMonthlyData(
   }, 0);
 }
 
+function shiftPeriodsBackOneYear(periods: string[]): string[] {
+  return periods.map(
+    (key) => `${parseInt(key.slice(0, 4), 10) - 1}${key.slice(4)}`,
+  );
+}
+
+function periodListLabel(periods: string[], fallback: string): string {
+  const first = periods[0];
+  const last = periods[periods.length - 1];
+  if (periods.length >= 2 && first && last) {
+    return formatPeriodRange(first, last);
+  }
+  if (first) {
+    return parsePeriodKey(first)?.label ?? fallback;
+  }
+  return fallback;
+}
+
+function sumMonthlyPoints(points: MonthlyDataPoint[]) {
+  const t = {
+    grossCurrent: 0,
+    grossPrevious: 0,
+    qtyCurrent: 0,
+    qtyPrevious: 0,
+    returnsCurrent: 0,
+    returnsPrevious: 0,
+    salesCurrent: 0,
+    salesPrevious: 0,
+  };
+  points.forEach((m) => {
+    t.grossCurrent += m.grossCurrent;
+    t.grossPrevious += m.grossPrevious;
+    t.qtyCurrent += m.qtyCurrent;
+    t.qtyPrevious += m.qtyPrevious;
+    t.returnsCurrent += m.returnsCurrent;
+    t.returnsPrevious += m.returnsPrevious;
+    t.salesCurrent += m.salesCurrent;
+    t.salesPrevious += m.salesPrevious;
+  });
+  return t;
+}
+
+function buildPointsForPeriods(
+  stores: DbStore[],
+  periods: string[],
+): MonthlyDataPoint[] {
+  return periods.map((periodKey) => {
+    const parsed = parsePeriodKey(periodKey);
+    return buildMonthlyPoint(stores, periodKey, parsed?.label ?? periodKey);
+  });
+}
+
 function buildMonthlyPoint(
   stores: DbStore[],
   periodKey: string,
@@ -97,57 +149,28 @@ export function useDashboardMonthly(
   }, [stores, monthsList, selectedYear, monthlyData]);
 
   const totals = useMemo((): TotalsData => {
-    const t = {
-      grossCurrent: 0,
-      grossPrevious: 0,
-      qtyCurrent: 0,
-      qtyPrevious: 0,
-      returnsCurrent: 0,
-      returnsPrevious: 0,
-      salesCurrent: 0,
-      salesPrevious: 0,
-    };
-    monthlyData.forEach((m) => {
-      t.grossCurrent += m.grossCurrent;
-      t.grossPrevious += m.grossPrevious;
-      t.qtyCurrent += m.qtyCurrent;
-      t.qtyPrevious += m.qtyPrevious;
-      t.returnsCurrent += m.returnsCurrent;
-      t.returnsPrevious += m.returnsPrevious;
-      t.salesCurrent += m.salesCurrent;
-      t.salesPrevious += m.salesPrevious;
-    });
+    // Year comparison is calendar YTD: same months this year vs last year.
+    // Do not split the rolling last-12 window by calendar year (that produced
+    // unequal ranges like Aug-Dec vs Jan-Jul).
+    const yearToDatePeriods =
+      monthsList && monthsList.length > 0
+        ? [...monthsList]
+            .filter((p) => p.startsWith(String(currentYear)))
+            .sort()
+        : [];
+    const comparisonPeriods =
+      yearToDatePeriods.length > 0
+        ? yearToDatePeriods
+        : monthlyData
+            .map((m) => m.periodKey)
+            .filter((key): key is string => Boolean(key));
+    const comparisonPoints =
+      yearToDatePeriods.length > 0
+        ? buildPointsForPeriods(stores, yearToDatePeriods)
+        : monthlyData;
 
-    const prevYearPeriods = monthlyData
-      .filter(
-        (m) =>
-          m.periodKey && parseInt(m.periodKey.slice(0, 4), 10) === previousYear,
-      )
-      .map((m) => m.periodKey!);
-    const currYearPeriods = monthlyData
-      .filter(
-        (m) =>
-          m.periodKey && parseInt(m.periodKey.slice(0, 4), 10) === currentYear,
-      )
-      .map((m) => m.periodKey!);
-
-    const prevFirst = prevYearPeriods[0];
-    const prevLast = prevYearPeriods[prevYearPeriods.length - 1];
-    const currFirst = currYearPeriods[0];
-    const currLast = currYearPeriods[currYearPeriods.length - 1];
-
-    const previousYearPeriodLabel =
-      prevYearPeriods.length >= 2 && prevFirst && prevLast
-        ? formatPeriodRange(prevFirst, prevLast)
-        : prevFirst
-          ? (parsePeriodKey(prevFirst)?.label ?? String(previousYear))
-          : String(previousYear);
-    const currentYearPeriodLabel =
-      currYearPeriods.length >= 2 && currFirst && currLast
-        ? formatPeriodRange(currFirst, currLast)
-        : currFirst
-          ? (parsePeriodKey(currFirst)?.label ?? String(currentYear))
-          : String(currentYear);
+    const t = sumMonthlyPoints(comparisonPoints);
+    const previousPeriods = shiftPeriodsBackOneYear(comparisonPeriods);
 
     return {
       ...t,
@@ -165,10 +188,16 @@ export function useDashboardMonthly(
           : 0,
       currentYear,
       previousYear,
-      previousYearPeriodLabel,
-      currentYearPeriodLabel,
+      previousYearPeriodLabel: periodListLabel(
+        previousPeriods,
+        String(previousYear),
+      ),
+      currentYearPeriodLabel: periodListLabel(
+        comparisonPeriods,
+        String(currentYear),
+      ),
     };
-  }, [monthlyData, currentYear, previousYear]);
+  }, [stores, monthsList, monthlyData, currentYear, previousYear]);
 
   const halfYearData = useMemo((): HalfYearData => {
     const h1 = { qty: 0, sales: 0 };
@@ -192,24 +221,6 @@ export function useDashboardMonthly(
       }
     });
 
-    const h1First = h1Periods[0];
-    const h1Last = h1Periods[h1Periods.length - 1];
-    const h2First = h2Periods[0];
-    const h2Last = h2Periods[h2Periods.length - 1];
-
-    const h1PeriodLabel =
-      h1Periods.length >= 2 && h1First && h1Last
-        ? formatPeriodRange(h1First, h1Last)
-        : h1First
-          ? (parsePeriodKey(h1First)?.label ?? "")
-          : "";
-    const h2PeriodLabel =
-      h2Periods.length >= 2 && h2First && h2Last
-        ? formatPeriodRange(h2First, h2Last)
-        : h2First
-          ? (parsePeriodKey(h2First)?.label ?? "")
-          : "";
-
     return {
       h1Qty: h1.qty,
       h2Qty: h2.qty,
@@ -218,25 +229,19 @@ export function useDashboardMonthly(
       qtyChange: h1.qty > 0 ? ((h2.qty - h1.qty) / h1.qty) * 100 : 0,
       salesChange: h1.sales > 0 ? ((h2.sales - h1.sales) / h1.sales) * 100 : 0,
       currentYear,
-      h1PeriodLabel: h1PeriodLabel || `H1 ${currentYear}`,
-      h2PeriodLabel: h2PeriodLabel || `H2 ${currentYear}`,
+      h1PeriodLabel: periodListLabel(h1Periods, `H1 ${currentYear}`),
+      h2PeriodLabel: periodListLabel(h2Periods, `H2 ${currentYear}`),
     };
   }, [monthlyData, currentYear]);
 
   const chartData = useMemo((): ChartDataPoint[] => {
-    return monthlyData.map((m) => {
-      const periodYear = m.periodKey
-        ? parseInt(m.periodKey.slice(0, 4), 10)
-        : currentYear;
-      const useCurrent = selectedYear === periodYear;
-      return {
-        month: m.month,
-        gross: useCurrent ? m.grossCurrent : m.grossPrevious,
-        qty: useCurrent ? m.qtyCurrent : m.qtyPrevious,
-        returns: useCurrent ? m.returnsCurrent : m.returnsPrevious,
-      };
-    });
-  }, [monthlyData, selectedYear, currentYear]);
+    return tableMonthlyData.map((m) => ({
+      month: m.month,
+      gross: m.grossCurrent,
+      qty: m.qtyCurrent,
+      returns: m.returnsCurrent,
+    }));
+  }, [tableMonthlyData]);
 
   return { monthlyData, tableMonthlyData, totals, halfYearData, chartData };
 }
