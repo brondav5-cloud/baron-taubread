@@ -3,6 +3,8 @@
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useDashboardSupabase } from "@/hooks/useDashboardSupabase";
+import { useOpsAlerts } from "@/hooks/useOpsAlerts";
+import { useAuth } from "@/hooks/useAuth";
 import {
   DashboardHeader,
   OverviewCards,
@@ -11,6 +13,8 @@ import {
   MonthlySalesTable,
   TopBottomStores,
   CitySalesCards,
+  DataFreshnessBanner,
+  AlertsInbox,
 } from "@/components/dashboard";
 import { LoadingSpinner } from "@/components/common";
 
@@ -43,7 +47,9 @@ export default function DashboardPage() {
     stats,
     topStores,
     bottomStores,
-    alertStores,
+    metadata,
+    stores,
+    products,
     statusDistribution,
     tableMonthlyData,
     totals,
@@ -51,6 +57,15 @@ export default function DashboardPage() {
     citySales,
     chartData,
   } = useDashboardSupabase();
+
+  const auth = useAuth();
+  const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const opsAlerts = useOpsAlerts({
+    companyId,
+    stores,
+    products,
+    metadata,
+  });
 
   // Loading state
   if (isLoading) {
@@ -83,14 +98,26 @@ export default function DashboardPage() {
         periodSubtitle={hasData ? periodLabel : undefined}
       />
 
+      {hasData && (
+        <DataFreshnessBanner
+          lastUploadLabel={opsAlerts.freshness.lastUploadLabel}
+          periodEnd={opsAlerts.freshness.periodEnd}
+          latestClosedWeek={opsAlerts.freshness.latestClosedWeek}
+        />
+      )}
+
       {/* Overview Cards */}
       <OverviewCards
         totalStores={stats.totalStores}
         totalProducts={stats.totalProducts}
-        alertCount={alertStores.length}
+        alertCount={opsAlerts.alertCount}
         totals={totals}
         hasData={hasData}
       />
+
+      {hasData && (
+        <AlertsInbox alerts={opsAlerts.alerts} isLoading={opsAlerts.weeklyLoading} />
+      )}
 
       {/* Empty state - no periods when no data */}
       {!hasData && (

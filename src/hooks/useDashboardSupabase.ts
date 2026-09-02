@@ -162,6 +162,7 @@ export function useDashboardSupabase() {
     previousYear,
     availableYears,
     periodLabel,
+    metadata,
     stores,
     products,
     stats: storeStats.stats,

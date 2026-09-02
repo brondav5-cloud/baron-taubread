@@ -109,8 +109,8 @@ export function OverviewCards({
       </Link>
 
       {/* Alerts */}
-      <Link
-        href="/dashboard/treatment"
+      <a
+        href="#alerts"
         className="bg-gradient-to-br from-red-50 to-rose-50 rounded-2xl p-3 sm:p-4 border border-red-100 hover:shadow-md transition-all"
       >
         <div className="flex items-center gap-2 sm:gap-3">
@@ -127,7 +127,7 @@ export function OverviewCards({
             </p>
           </div>
         </div>
-      </Link>
+      </a>
 
     </div>
   );

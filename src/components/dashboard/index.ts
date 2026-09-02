@@ -8,3 +8,5 @@ export { MonthlySalesChart } from "./MonthlySalesChart";
 export { TopBottomStores } from "./TopBottomStores";
 export { CitySalesCards } from "./CitySalesCards";
 export { StatusDistributionPie } from "./StatusDistributionPie";
+export { DataFreshnessBanner } from "./DataFreshnessBanner";
+export { AlertsInbox } from "./AlertsInbox";
