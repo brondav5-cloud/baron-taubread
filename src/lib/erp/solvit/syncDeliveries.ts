@@ -381,6 +381,50 @@ async function fetchItemsByDay(fromDate: string, toDate: string): Promise<Solvit
   return items;
 }
 
+async function mergeMonthsIntoMetadata(
+  companyId: string,
+  fromDate: string,
+  toDate: string,
+): Promise<void> {
+  const extra: string[] = [];
+  let cursor = fromDate.slice(0, 7);
+  const last = toDate.slice(0, 7);
+  while (cursor <= last) {
+    extra.push(cursor.replace("-", ""));
+    const { y, m } = parseYmd(`${cursor}-01`);
+    cursor = monthStart(addDaysIso(`${y}-${String(m).padStart(2, "0")}-28`, 8)).slice(0, 7);
+  }
+
+  const admin = getSupabaseAdmin();
+  const { data } = await admin
+    .from("data_metadata")
+    .select("months_list")
+    .eq("company_id", companyId)
+    .maybeSingle();
+  const existing = Array.isArray(data?.months_list) ? (data.months_list as string[]) : [];
+  const merged = Array.from(new Set([...existing, ...extra])).sort();
+  if (merged.length === 0) return;
+  const metricsMonths = merged.slice(-24);
+  const now = new Date().toISOString();
+  const lastPeriod = merged[merged.length - 1]!;
+  const currentYear = Number(lastPeriod.slice(0, 4));
+
+  await admin
+    .from("data_metadata")
+    .update({
+      current_year: currentYear,
+      previous_year: currentYear - 1,
+      period_start: merged[0],
+      period_end: lastPeriod,
+      months_list: merged,
+      metrics_period_start: metricsMonths[0],
+      metrics_period_end: metricsMonths[metricsMonths.length - 1],
+      metrics_months: metricsMonths,
+      updated_at: now,
+    })
+    .eq("company_id", companyId);
+}
+
 export async function syncErpDeliveries(
   companyId: string,
   fromDate: string,
@@ -430,6 +474,7 @@ export async function syncErpDeliveries(
   if (agg.dist.length) {
     const catalog = await syncCatalogFromMonthlyDist(admin, companyId, { from: yFrom, to: yTo });
     if (!catalog.ok) throw new Error(catalog.error || "catalog sync failed");
+    await mergeMonthsIntoMetadata(companyId, fromDate, toDate);
   }
 
   const now = new Date().toISOString();
