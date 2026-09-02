@@ -54,6 +54,11 @@ const TABS = [
     label: "נורמת חזרות",
     icon: Percent,
   },
+  {
+    href: "/dashboard/settings/erp",
+    label: "Solvit",
+    icon: Settings,
+  },
 ];
 
 const ADMIN_ONLY_TABS = new Set([
@@ -62,6 +67,7 @@ const ADMIN_ONLY_TABS = new Set([
   "/dashboard/settings/costs",
   "/dashboard/settings/exclusions",
   "/dashboard/settings/returns-policy",
+  "/dashboard/settings/erp",
 ]);
 
 export function SettingsTabs() {

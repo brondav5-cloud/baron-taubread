@@ -27,6 +27,7 @@ const PERMISSION_MODULES: {
   { key: "profitability", label: "רווחיות" },
   { key: "expenses", label: "רווח והפסד" },
   { key: "finance", label: "תנועות בנק", defaultDenied: true },
+  { key: "erp", label: "תוכנת האם (Solvit)", defaultDenied: true },
   { key: "settings", label: "הגדרות" },
   { key: "upload", label: "העלאת נתונים (Excel)" },
 ];

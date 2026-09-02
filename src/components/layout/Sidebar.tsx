@@ -56,7 +56,8 @@ interface NavItem {
     | "settings"
     | "expenses"
     | "meetings"
-    | "finance";
+    | "finance"
+    | "erp";
   badge?: string;
   badgeColor?: string;
 }
@@ -203,6 +204,14 @@ const navigation: NavSection[] = [
         href: "/dashboard/finance",
         icon: Building2,
         module: "finance",
+      },
+      {
+        label: "תוכנת האם",
+        href: "/dashboard/erp",
+        icon: FileText,
+        module: "erp",
+        badge: "חדש",
+        badgeColor: "bg-sky-100 text-sky-700",
       },
     ],
   },

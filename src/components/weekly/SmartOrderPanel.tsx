@@ -8,7 +8,7 @@
 // ============================================================
 
 import { useState, useEffect } from "react";
-import { ChevronDown, ChevronRight, TrendingDown, AlertCircle, Loader2, Download } from "lucide-react";
+import { ChevronDown, ChevronRight, TrendingDown, AlertCircle, Loader2, Download, Upload } from "lucide-react";
 import { clsx } from "clsx";
 import { useOrderRecommendations } from "@/hooks/useOrderRecommendations";
 import type { OrderRecommendation, PolicyBracket } from "@/lib/smartOrderEngine";
@@ -28,6 +28,8 @@ interface SmartOrderPanelProps {
 
 export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, products }: SmartOrderPanelProps) {
   const [open, setOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendMessage, setSendMessage] = useState("");
   const { recommendations, policy, isLoading, error } = useOrderRecommendations(
     storeExternalId,
     selectedWeek,
@@ -94,6 +96,40 @@ export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, prod
     }
   };
 
+  const handleSendToSolvit = async () => {
+    if (excessProducts.length === 0 || sending) return;
+    const confirmed = window.confirm(
+      `לשלוח ל-Solvit הזמנה מומלצת ל-${storeName} עם ${excessProducts.length} מוצרים?`,
+    );
+    if (!confirmed) return;
+    setSending(true);
+    setSendMessage("");
+    try {
+      const res = await fetch("/api/erp/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storeExternalId,
+          notes: `Smart order ${storeName} week ${selectedWeek}`,
+          items: excessProducts.map((rec) => ({
+            productNameNormalized: rec.productNameNormalized,
+            quantity: rec.dayBreakdown.reduce((sum, d) => sum + d.suggestedQty, 0) || rec.weeklyReductionQty,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setSendMessage(json.error || "שליחה נכשלה");
+        return;
+      }
+      setSendMessage(`נשלחה הזמנה ${json.order?.order_id ?? ""}`.trim());
+    } catch {
+      setSendMessage("בעיית תקשורת מול Solvit");
+    } finally {
+      setSending(false);
+    }
+  };
+
   return (
     <div className="border-t border-orange-200 bg-orange-50/40" dir="rtl">
       {/* Header toggle */}
@@ -121,14 +157,25 @@ export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, prod
           {open ? "סגור" : excessProducts.length > 0 ? "חזרות עודפות — לחץ לפרטים ולהמלצות" : "המלצות הזמנה לפי היסטוריה"}
         </span>
         {excessProducts.length > 0 && (
-          <button
-            onClick={(e) => { e.stopPropagation(); void handleExport(); }}
-            className="flex items-center gap-1.5 text-xs font-medium text-orange-700 hover:text-orange-900 hover:bg-orange-100 rounded-lg px-2 py-1 transition-colors"
-            title="ייצא לאקסל"
-          >
-            <Download className="w-3.5 h-3.5" />
-            ייצא
-          </button>
+          <>
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleSendToSolvit(); }}
+              disabled={sending}
+              className="flex items-center gap-1.5 text-xs font-medium text-white bg-orange-600 hover:bg-orange-700 rounded-lg px-2 py-1 transition-colors disabled:opacity-50"
+              title="שלח הזמנה ל-Solvit"
+            >
+              {sending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+              שלח ל-Solvit
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); void handleExport(); }}
+              className="flex items-center gap-1.5 text-xs font-medium text-orange-700 hover:text-orange-900 hover:bg-orange-100 rounded-lg px-2 py-1 transition-colors"
+              title="ייצא לאקסל"
+            >
+              <Download className="w-3.5 h-3.5" />
+              ייצא
+            </button>
+          </>
         )}
       </button>
 
@@ -165,6 +212,12 @@ export function SmartOrderPanel({ storeExternalId, storeName, selectedWeek, prod
             <div className="text-sm text-green-700 bg-green-50 rounded-lg px-4 py-3 border border-green-200">
               <p className="font-medium">אין מוצרים עם חזרות חריגות</p>
               <p className="text-xs text-green-600 mt-1">כל המוצרים במסגרת הנורמה. מעולה!</p>
+            </div>
+          )}
+
+          {sendMessage && (
+            <div className="text-sm rounded-lg px-3 py-2 bg-white border border-orange-200 text-orange-900">
+              {sendMessage}
             </div>
           )}
 

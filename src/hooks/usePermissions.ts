@@ -22,10 +22,11 @@ export const MODULE_TO_PATH: Record<string, string[]> = {
   expenses: ["/dashboard/expenses"],
   meetings: ["/dashboard/meetings"],
   finance: ["/dashboard/finance"],
+  erp: ["/dashboard/erp"],
 };
 
 // Modules that are restricted by default — non-admins must be explicitly granted access
-const RESTRICTED_BY_DEFAULT = new Set<string>(["finance"]);
+const RESTRICTED_BY_DEFAULT = new Set<string>(["finance", "erp"]);
 
 export function usePermissions() {
   const { currentUser } = useUsers();
