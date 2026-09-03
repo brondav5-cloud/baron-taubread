@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSupabaseData } from "./useSupabaseData";
 import { DEFAULT_MONTH_SELECTION, type MonthSelection } from "@/components/ui";
 import { MONTH_NAMES_SHORT as PRODUCT_MONTHS } from "@/lib/periodUtils";
+import { calculateProductMetrics } from "@/lib/excelMetricsCalculator";
 import type { DbProduct, DbStore, MonthlyData } from "@/types/supabase";
 import type { StatusLong, StatusShort } from "@/types/data";
 export const PRODUCT_DONUT_COLORS = [
@@ -144,12 +145,24 @@ function computePeakDistance(
   return { metric_peak_distance, peak_value, current_value };
 }
 
-function dbProductToLegacy(p: DbProduct) {
-  const m = p.metrics ?? {};
-  const mx = m as unknown as Record<string, unknown>;
-  const { metric_peak_distance, peak_value, current_value } = computePeakDistance(
-    p.monthly_qty ?? {},
+function dbProductToLegacy(
+  p: DbProduct,
+  currentYear: number,
+  previousYear: number,
+) {
+  const monthlyQty = p.monthly_qty ?? {};
+  const monthlySales = p.monthly_sales ?? {};
+  // Live metrics from monthly maps — catalog sync updates qty/sales but
+  // leaves products.metrics empty for ERP-only products.
+  const m = calculateProductMetrics(
+    monthlyQty,
+    monthlySales,
+    Object.keys(monthlyQty),
+    currentYear,
+    previousYear,
   );
+  const { metric_peak_distance, peak_value, current_value } =
+    computePeakDistance(monthlyQty);
   return {
     ...p,
     id: p.external_id,
@@ -175,10 +188,10 @@ function dbProductToLegacy(p: DbProduct) {
     returns_pct_prev6: 0,
     returns_pct_last6: 0,
     returns_change: 0,
-    status_long: (mx.status_long ?? "יציב") as StatusLong,
-    status_short: (mx.status_short ?? "יציב") as StatusShort,
-    monthly_qty: p.monthly_qty ?? {},
-    monthly_sales: p.monthly_sales ?? {},
+    status_long: (m.status_long ?? "יציב") as StatusLong,
+    status_short: (m.status_short ?? "יציב") as StatusShort,
+    monthly_qty: monthlyQty,
+    monthly_sales: monthlySales,
   };
 }
 
@@ -267,8 +280,10 @@ export function useProductDetail() {
 
   const product = useMemo(() => {
     const dbProduct = products.find((p) => String(p.external_id) === productId);
-    return dbProduct ? dbProductToLegacy(dbProduct) : null;
-  }, [products, productId]);
+    return dbProduct
+      ? dbProductToLegacy(dbProduct, currentYear, previousYear)
+      : null;
+  }, [products, productId, currentYear, previousYear]);
 
   const allStores = useMemo(() => stores.map(dbStoreToLegacy), [stores]);
 

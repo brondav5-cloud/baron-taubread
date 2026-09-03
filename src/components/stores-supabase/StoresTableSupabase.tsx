@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import {
+  HorizontalScrollArea,
   useMetricsHeaders,
   useMetricsPeriodDetails,
 } from "@/components/common";
@@ -81,7 +82,7 @@ function SortableTh({
       }
       onClick={() => onClick(column)}
       className={clsx(
-        "px-4 py-3 text-right cursor-pointer select-none hover:bg-gray-100 transition-colors",
+        "px-4 py-3 text-right whitespace-nowrap cursor-pointer select-none hover:bg-gray-100 transition-colors",
         className,
       )}
     >
@@ -221,12 +222,12 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-      <div className="overflow-x-auto overflow-y-visible scroll-smooth touch-pan-x">
-        <table className="w-full">
+      <HorizontalScrollArea>
+        <table className="min-w-full w-max">
           <thead className="bg-gray-50 border-b">
             <tr>
               {/* Checkbox */}
-              <th className="w-12 px-4 py-3">
+              <th className="w-12 px-4 py-3 whitespace-nowrap">
                 <input
                   type="checkbox"
                   checked={allSelected}
@@ -646,7 +647,7 @@ export function StoresTableSupabase({ hook }: StoresTableSupabaseProps) {
             )}
           </tbody>
         </table>
-      </div>
+      </HorizontalScrollArea>
     </div>
   );
 }
