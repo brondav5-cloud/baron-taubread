@@ -8,7 +8,7 @@ import { useStoreDetailSupabase } from "@/hooks/useStoreDetailSupabase";
 import { useStoreCityComparison } from "@/hooks/useStoreCityComparison";
 import { useStoreProducts } from "@/hooks/useStoreProducts";
 import { useStoreDeliveries } from "@/hooks/useStoreDeliveries";
-import { LoadingState } from "@/components/common";
+import { LoadingState, MetricsWindowBanner } from "@/components/common";
 import {
   StoreDetailHeader,
   StoreMetricsCards,
@@ -89,6 +89,7 @@ export default function StoreDetailPage() {
     chartData,
     goToStoresList,
     metricsPeriodInfo,
+    metricsWindow,
   } = useStoreDetailSupabase();
 
   const auth = useAuth();
@@ -138,6 +139,7 @@ export default function StoreDetailPage() {
 
       {activeTab === "overview" && (
         <>
+          <MetricsWindowBanner window={metricsWindow} />
           <StoreMetricsCards
             metrics={store.metrics}
             metricsPeriodInfo={metricsPeriodInfo}

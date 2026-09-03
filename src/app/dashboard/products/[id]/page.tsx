@@ -5,6 +5,7 @@ import { useProductDetail } from "@/hooks/useProductDetail";
 import { useProductMonthlyDeliveries } from "@/hooks/useProductMonthlyDeliveries";
 import { useAuth } from "@/hooks/useAuth";
 import { Button, EmptyState } from "@/components/ui";
+import { MetricsWindowBanner } from "@/components/common";
 import {
   ProductDetailHeader,
   ProductMetricsRow,
@@ -35,6 +36,7 @@ export default function ProductDetailPage() {
     availableYears,
     currentYear,
     previousYear,
+    metricsWindow,
     hideHolidays,
     setHideHolidays,
     storeSearch,
@@ -83,6 +85,8 @@ export default function ProductDetailPage() {
         monthSelection={monthSelection}
         onMonthSelectionChange={setMonthSelection}
       />
+
+      <MetricsWindowBanner window={metricsWindow} />
 
       {/* Metrics Row */}
       <ProductMetricsRow product={product} />

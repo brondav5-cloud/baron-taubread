@@ -9,7 +9,7 @@ import {
   ProductsPagination,
   ProductsTotalsBar,
 } from "@/components/products-supabase";
-import { LoadingState } from "@/components/common";
+import { LoadingState, MetricsWindowBanner } from "@/components/common";
 
 export default function ProductsPage() {
   const hook = useProductsPageSupabase();
@@ -26,6 +26,7 @@ export default function ProductsPage() {
     clearFilters,
     activeFiltersCount,
     totals,
+    metricsWindow,
     viewMode,
     currentPage,
     setCurrentPage,
@@ -76,6 +77,9 @@ export default function ProductsPage() {
   return (
     <div className="space-y-4">
       <ProductsHeaderSupabase hook={hook} />
+      {hook.viewMode === "metrics" && (
+        <MetricsWindowBanner window={metricsWindow} />
+      )}
 
       <ProductsFiltersPanel
         show={showFilters}

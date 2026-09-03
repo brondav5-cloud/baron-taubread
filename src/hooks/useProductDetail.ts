@@ -6,6 +6,7 @@ import { useSupabaseData } from "./useSupabaseData";
 import { DEFAULT_MONTH_SELECTION, type MonthSelection } from "@/components/ui";
 import { MONTH_NAMES_SHORT as PRODUCT_MONTHS } from "@/lib/periodUtils";
 import { calculateProductMetrics } from "@/lib/excelMetricsCalculator";
+import { filterSettledPeriods } from "@/lib/metricsWindow";
 import type { DbProduct, DbStore, MonthlyData } from "@/types/supabase";
 import type { StatusLong, StatusShort } from "@/types/data";
 export const PRODUCT_DONUT_COLORS = [
@@ -87,12 +88,16 @@ function computeProductStoreMetrics(
   row: Omit<ProductStore, "qty_current_year" | "qty_previous_year" | "metric_12v12" | "metric_6v6" | "metric_3v3" | "metric_2v2" | "sales_current_year">,
   currentYear: number,
   previousYear: number,
+  settledMonth: string,
 ): ProductStore {
   // Derive periods directly from the row's monthly_qty keys — no need for monthsList
   const currStr = String(currentYear);
   const prevStr = String(previousYear);
 
-  const allQtyPeriods = Object.keys(row.monthly_qty).sort();
+  const allQtyPeriods = filterSettledPeriods(
+    Object.keys(row.monthly_qty).sort(),
+    settledMonth,
+  );
   const currPeriods = allQtyPeriods.filter((p) => p.startsWith(currStr));
   const prevPeriods = allQtyPeriods.filter((p) => p.startsWith(prevStr));
 
@@ -149,20 +154,26 @@ function dbProductToLegacy(
   p: DbProduct,
   currentYear: number,
   previousYear: number,
+  settledMonth: string,
 ) {
   const monthlyQty = p.monthly_qty ?? {};
   const monthlySales = p.monthly_sales ?? {};
-  // Live metrics from monthly maps — catalog sync updates qty/sales but
-  // leaves products.metrics empty for ERP-only products.
+  const settledPeriods = filterSettledPeriods(
+    Object.keys(monthlyQty),
+    settledMonth,
+  );
+  const settledQty = Object.fromEntries(
+    settledPeriods.map((key) => [key, monthlyQty[key] ?? 0]),
+  );
   const m = calculateProductMetrics(
     monthlyQty,
     monthlySales,
-    Object.keys(monthlyQty),
+    settledPeriods,
     currentYear,
     previousYear,
   );
   const { metric_peak_distance, peak_value, current_value } =
-    computePeakDistance(monthlyQty);
+    computePeakDistance(settledQty);
   return {
     ...p,
     id: p.external_id,
@@ -244,11 +255,11 @@ export function useProductDetail() {
   const router = useRouter();
   const productId = params.id as string;
 
-  const { products, stores, metadata } = useSupabaseData();
+  const { products, stores, metadata, metricsWindow } = useSupabaseData();
 
   // Derive years first so they're available for useState initialization
-  const currentYear = metadata?.current_year ?? new Date().getFullYear();
-  const previousYear = metadata?.previous_year ?? currentYear - 1;
+  const currentYear = Number(metricsWindow.settledMonth.slice(0, 4));
+  const previousYear = currentYear - 1;
 
   const [selectedYear, setSelectedYear] = useState<number>(() => new Date().getFullYear());
   const [hideHolidays, setHideHolidays] = useState(false);
@@ -281,9 +292,14 @@ export function useProductDetail() {
   const product = useMemo(() => {
     const dbProduct = products.find((p) => String(p.external_id) === productId);
     return dbProduct
-      ? dbProductToLegacy(dbProduct, currentYear, previousYear)
+      ? dbProductToLegacy(
+          dbProduct,
+          currentYear,
+          previousYear,
+          metricsWindow.settledMonth,
+        )
       : null;
-  }, [products, productId, currentYear, previousYear]);
+  }, [products, productId, currentYear, previousYear, metricsWindow.settledMonth]);
 
   const allStores = useMemo(() => stores.map(dbStoreToLegacy), [stores]);
 
@@ -332,9 +348,14 @@ export function useProductDetail() {
   const productStores = useMemo((): ProductStore[] => {
     if (!rawProductStores.length) return [];
     return rawProductStores.map((row) =>
-      computeProductStoreMetrics(row, currentYear, previousYear),
+      computeProductStoreMetrics(
+        row,
+        currentYear,
+        previousYear,
+        metricsWindow.settledMonth,
+      ),
     );
-  }, [rawProductStores, currentYear, previousYear]);
+  }, [rawProductStores, currentYear, previousYear, metricsWindow.settledMonth]);
 
   const topStores = useMemo((): TopStore[] => {
     const sorted = [...productStores].sort(
@@ -382,6 +403,7 @@ export function useProductDetail() {
     availableYears,
     currentYear,
     previousYear,
+    metricsWindow,
     hideHolidays,
     setHideHolidays,
     storeSearch,

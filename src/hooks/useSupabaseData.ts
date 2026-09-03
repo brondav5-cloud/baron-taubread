@@ -4,6 +4,12 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatPeriodRange } from "@/lib/periodUtils";
+import {
+  applySettledProductMetrics,
+  applySettledStoreMetrics,
+  resolveMetricsWindow,
+  type MetricsWindow,
+} from "@/lib/metricsWindow";
 import type {
   DbStore,
   DbProduct,
@@ -16,6 +22,7 @@ interface SupabaseData {
   products: DbProduct[];
   metadata: DataMetadata | null;
   filters: DbFilters | null;
+  metricsWindow: MetricsWindow;
   periodLabel: string;
   isLoading: boolean;
   error: string | null;
@@ -87,8 +94,19 @@ export function useSupabaseData(): SupabaseData {
           storeMap.set(store.external_id, store);
         }
       }
-      setStores(Array.from(storeMap.values()));
-      setProducts(productsRes.data || []);
+      const window = resolveMetricsWindow(
+        metadataRes.data?.metrics_manual_ready_month,
+      );
+      setStores(
+        Array.from(storeMap.values()).map((store) =>
+          applySettledStoreMetrics(store, window),
+        ),
+      );
+      setProducts(
+        (productsRes.data || []).map((product) =>
+          applySettledProductMetrics(product, window),
+        ),
+      );
       setMetadata(metadataRes.data);
       setFilters(filtersRes.data);
     } catch (err) {
@@ -114,6 +132,11 @@ export function useSupabaseData(): SupabaseData {
     fetchData();
   }, [auth.status, companyId, fetchData]);
 
+  const metricsWindow = useMemo(
+    () => resolveMetricsWindow(metadata?.metrics_manual_ready_month),
+    [metadata?.metrics_manual_ready_month],
+  );
+
   const periodLabel = useMemo(() => {
     if (!companyId) return "";
     if (stores.length === 0 && products.length === 0) return "";
@@ -135,6 +158,7 @@ export function useSupabaseData(): SupabaseData {
     products,
     metadata,
     filters,
+    metricsWindow,
     periodLabel,
     isLoading,
     error,

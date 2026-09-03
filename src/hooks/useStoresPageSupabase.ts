@@ -95,6 +95,7 @@ export function useStoresPageSupabase() {
   const {
     stores: allStores,
     metadata,
+    metricsWindow,
     periodLabel: coveragePeriodLabel,
     filters: dbFilters,
     isLoading,
@@ -377,6 +378,7 @@ export function useStoresPageSupabase() {
     error,
     refetch,
     periodLabel,
+    metricsWindow,
     periodSelector,
     metricsPeriodInfo: periodSelector.metricsPeriodInfo,
     metricsPeriodLabels,

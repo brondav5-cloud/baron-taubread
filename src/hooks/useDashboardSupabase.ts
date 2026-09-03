@@ -104,8 +104,16 @@ export interface TopStore {
 // ============================================
 
 export function useDashboardSupabase() {
-  const { stores: allStores, products, metadata, periodLabel, isLoading, error } =
-    useSupabaseData();
+  const {
+    stores: allStores,
+    products,
+    metadata,
+    metricsWindow,
+    periodLabel,
+    isLoading,
+    error,
+    refetch,
+  } = useSupabaseData();
 
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
@@ -162,6 +170,8 @@ export function useDashboardSupabase() {
     previousYear,
     availableYears,
     periodLabel,
+    metricsWindow,
+    refetch,
     metadata,
     stores,
     products,

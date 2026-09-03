@@ -11,6 +11,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { clsx } from "clsx";
 
 const SCROLL_STEP = 320;
+const HEADER_OFFSET = 80;
+const BOTTOM_OFFSET = 88;
 
 function isRtl(el: HTMLElement) {
   return getComputedStyle(el).direction === "rtl";
@@ -49,12 +51,19 @@ export function HorizontalScrollArea({
   children,
   className,
 }: HorizontalScrollAreaProps) {
+  const wrapRef = useRef<HTMLDivElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const [hasOverflow, setHasOverflow] = useState(false);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+  const [dock, setDock] = useState({
+    visible: false,
+    top: 0,
+    left: 0,
+    right: 0,
+  });
 
-  const update = useCallback(() => {
+  const updateOverflow = useCallback(() => {
     const el = scrollerRef.current;
     if (!el) return;
 
@@ -78,23 +87,55 @@ export function HorizontalScrollArea({
     }
   }, []);
 
+  const updateDock = useCallback(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const visibleTop = Math.max(rect.top, HEADER_OFFSET);
+    const visibleBottom = Math.min(
+      rect.bottom,
+      window.innerHeight - BOTTOM_OFFSET,
+    );
+    const visibleHeight = visibleBottom - visibleTop;
+    setDock({
+      visible: visibleHeight > 64,
+      top: visibleTop + visibleHeight / 2,
+      left: rect.left + 8,
+      right: window.innerWidth - rect.right + 8,
+    });
+  }, []);
+
   useLayoutEffect(() => {
     const el = scrollerRef.current;
-    if (!el) return;
+    const wrap = wrapRef.current;
+    if (!el || !wrap) return;
 
-    update();
-    el.addEventListener("scroll", update, { passive: true });
+    const sync = () => {
+      updateOverflow();
+      updateDock();
+    };
+    sync();
 
-    const ro = new ResizeObserver(update);
+    el.addEventListener("scroll", updateOverflow, { passive: true });
+    document.addEventListener("scroll", updateDock, {
+      passive: true,
+      capture: true,
+    });
+    window.addEventListener("resize", sync);
+
+    const ro = new ResizeObserver(sync);
     ro.observe(el);
+    ro.observe(wrap);
     const child = el.firstElementChild;
     if (child) ro.observe(child);
 
     return () => {
-      el.removeEventListener("scroll", update);
+      el.removeEventListener("scroll", updateOverflow);
+      document.removeEventListener("scroll", updateDock, { capture: true });
+      window.removeEventListener("resize", sync);
       ro.disconnect();
     };
-  }, [update]);
+  }, [updateOverflow, updateDock]);
 
   const scrollVisual = (visual: "left" | "right") => {
     const el = scrollerRef.current;
@@ -105,8 +146,10 @@ export function HorizontalScrollArea({
     setScrollFromStart(el, scrollFromStart(el) + delta);
   };
 
+  const showArrows = hasOverflow && dock.visible;
+
   return (
-    <div className={clsx("relative", className)}>
+    <div ref={wrapRef} className={clsx("relative", className)}>
       {hasOverflow && (
         <>
           <div
@@ -121,13 +164,19 @@ export function HorizontalScrollArea({
               canScrollRight ? "opacity-100" : "opacity-0",
             )}
           />
+        </>
+      )}
+
+      {showArrows && (
+        <>
           <button
             type="button"
             aria-label="גלול שמאלה"
             disabled={!canScrollLeft}
             onClick={() => scrollVisual("left")}
+            style={{ top: dock.top, left: dock.left }}
             className={clsx(
-              "absolute left-2 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border bg-white shadow-md transition-opacity",
+              "fixed z-40 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border bg-white shadow-md transition-opacity",
               canScrollLeft
                 ? "border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
                 : "pointer-events-none opacity-0",
@@ -140,8 +189,9 @@ export function HorizontalScrollArea({
             aria-label="גלול ימינה"
             disabled={!canScrollRight}
             onClick={() => scrollVisual("right")}
+            style={{ top: dock.top, right: dock.right }}
             className={clsx(
-              "absolute right-2 top-3 z-20 flex h-9 w-9 items-center justify-center rounded-full border bg-white shadow-md transition-opacity",
+              "fixed z-40 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border bg-white shadow-md transition-opacity",
               canScrollRight
                 ? "border-gray-200 text-gray-700 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-600"
                 : "pointer-events-none opacity-0",

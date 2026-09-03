@@ -7,6 +7,7 @@ import {
   type AvailablePeriods,
 } from "@/lib/periodUtils";
 import type { DataMetadata } from "@/types/supabase";
+import { metricsPeriodInfoFromMetadata } from "@/lib/metricsWindow";
 
 // ============================================
 // TYPES
@@ -423,14 +424,7 @@ export function usePeriodSelector({
     displayMode,
 
     // Metrics period info (for headers)
-    metricsPeriodInfo: metadata
-      ? {
-          metricsPeriodStart:
-            metadata.metrics_period_start || metadata.period_start,
-          metricsPeriodEnd: metadata.metrics_period_end || metadata.period_end,
-          metricsMonths: metadata.metrics_months || metadata.months_list,
-        }
-      : null,
+    metricsPeriodInfo: metricsPeriodInfoFromMetadata(metadata),
 
     // Primary selection
     selectYear,

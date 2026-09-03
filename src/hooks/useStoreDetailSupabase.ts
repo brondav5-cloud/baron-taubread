@@ -7,6 +7,11 @@ import { useAuth } from "@/hooks/useAuth";
 import { getDeliveriesByPeriod } from "@/lib/db/deliveries.repo";
 import { MONTH_NAMES_SHORT as MONTHS } from "@/lib/periodUtils";
 import type { DbStore, DataMetadata } from "@/types/supabase";
+import {
+  applySettledStoreMetrics,
+  metricsPeriodInfoFromMetadata,
+  resolveMetricsWindow,
+} from "@/lib/metricsWindow";
 export const DONUT_COLORS = [
   "#22c55e",
   "#3b82f6",
@@ -296,10 +301,18 @@ export function useStoreDetailSupabase() {
   // Navigation
   const goToStoresList = () => router.push("/dashboard/stores");
 
+  const storeWithMetrics = useMemo(() => {
+    if (!store) return null;
+    return applySettledStoreMetrics(
+      store,
+      resolveMetricsWindow(metadata?.metrics_manual_ready_month),
+    );
+  }, [store, metadata?.metrics_manual_ready_month]);
+
   return {
     // Identifiers
     storeId,
-    store,
+    store: storeWithMetrics,
 
     // Loading state
     isLoading,
@@ -307,6 +320,7 @@ export function useStoreDetailSupabase() {
 
     // Metadata
     metadata,
+    metricsWindow: resolveMetricsWindow(metadata?.metrics_manual_ready_month),
     availableYears,
 
     // State
@@ -325,14 +339,7 @@ export function useStoreDetailSupabase() {
     goToStoresList,
 
     // For period labels in metrics
-    metricsPeriodInfo: metadata
-      ? {
-          metricsPeriodStart:
-            metadata.metrics_period_start || metadata.period_start,
-          metricsPeriodEnd: metadata.metrics_period_end || metadata.period_end,
-          metricsMonths: metadata.metrics_months || metadata.months_list || [],
-        }
-      : null,
+    metricsPeriodInfo: metricsPeriodInfoFromMetadata(metadata),
   };
 }
 

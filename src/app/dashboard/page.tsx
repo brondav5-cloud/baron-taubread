@@ -16,7 +16,8 @@ import {
   DataFreshnessBanner,
   AlertsInbox,
 } from "@/components/dashboard";
-import { LoadingSpinner } from "@/components/common";
+import { LoadingSpinner, MetricsWindowBanner } from "@/components/common";
+import { useState } from "react";
 
 const MonthlySalesChart = dynamic(
   () => import("@/components/dashboard/MonthlySalesChart").then((m) => m.MonthlySalesChart),
@@ -48,6 +49,8 @@ export default function DashboardPage() {
     topStores,
     bottomStores,
     metadata,
+    metricsWindow,
+    refetch,
     stores,
     products,
     statusDistribution,
@@ -60,6 +63,7 @@ export default function DashboardPage() {
 
   const auth = useAuth();
   const companyId = auth.status === "authed" ? auth.user.company_id : null;
+  const [markingReady, setMarkingReady] = useState(false);
   const opsAlerts = useOpsAlerts({
     companyId,
     stores,
@@ -91,6 +95,16 @@ export default function DashboardPage() {
 
   const hasData = stats.totalStores > 0 || stats.totalProducts > 0;
 
+  const markMetricsReady = async () => {
+    setMarkingReady(true);
+    try {
+      const res = await fetch("/api/metrics/ready", { method: "POST" });
+      if (res.ok) await refetch();
+    } finally {
+      setMarkingReady(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -99,11 +113,18 @@ export default function DashboardPage() {
       />
 
       {hasData && (
-        <DataFreshnessBanner
-          lastUploadLabel={opsAlerts.freshness.lastUploadLabel}
-          periodEnd={opsAlerts.freshness.periodEnd}
-          latestClosedWeek={opsAlerts.freshness.latestClosedWeek}
-        />
+        <>
+          <DataFreshnessBanner
+            lastUploadLabel={opsAlerts.freshness.lastUploadLabel}
+            periodEnd={opsAlerts.freshness.periodEnd}
+            latestClosedWeek={opsAlerts.freshness.latestClosedWeek}
+          />
+          <MetricsWindowBanner
+            window={metricsWindow}
+            onMarkReady={markMetricsReady}
+            markingReady={markingReady}
+          />
+        </>
       )}
 
       {/* Overview Cards */}

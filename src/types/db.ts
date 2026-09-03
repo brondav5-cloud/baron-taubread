@@ -73,6 +73,7 @@ export interface DataMetadata {
   metrics_period_start: string;
   metrics_period_end: string;
   metrics_months: string[];
+  metrics_manual_ready_month?: string | null;
   last_upload_at: string;
   updated_at: string;
 }

@@ -69,14 +69,6 @@ export function isWeekClosed(weekStart: string, today = jerusalemTodayYmd()): bo
   return today >= addDaysIso(weekStart, 7);
 }
 
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 1) return sorted[mid] ?? null;
-  return ((sorted[mid - 1] ?? 0) + (sorted[mid] ?? 0)) / 2;
-}
-
 function pctChange(current: number, previous: number): number | null {
   if (previous <= 0) return current > 0 ? 100 : null;
   return Math.round(((current - previous) / previous) * 1000) / 10;
@@ -198,52 +190,49 @@ export function buildWeeklyStoreAlerts(
 
   for (const [storeId, list] of Array.from(byStore.entries())) {
     const sorted = [...list].sort((a, b) => weekSortKey(a) - weekSortKey(b));
-    if (sorted.length < 5) continue;
-
     const closed = sorted.filter((row) => {
       const start = weekStartFromYearMonthWeek(row.year, row.month, row.week);
       if (!start) return false;
       if (start >= currentWeekStart) return false;
+      if (!isWeekClosed(start, today)) return false;
       if (!latestClosedWeek || start > latestClosedWeek) latestClosedWeek = start;
-      return isWeekClosed(start, today);
+      return true;
     });
-    if (closed.length < 5) continue;
+    if (closed.length < 2) continue;
 
     const last = closed[closed.length - 1]!;
-    const prev = closed.slice(-9, -1);
-    const baseline = median(prev.map((r) => r.qty));
-    if (baseline === null || baseline < MIN_WEEKLY_BASELINE) continue;
-
-    const change = pctChange(last.qty, baseline);
+    const prevWeek = closed[closed.length - 2]!;
+    const change = pctChange(last.qty, prevWeek.qty);
     if (change === null) continue;
 
-    const prevLast = closed[closed.length - 2];
-    const prevBaseline = prevLast
-      ? median(closed.slice(-10, -2).map((r) => r.qty))
-      : null;
+    const prevPrev = closed[closed.length - 3];
     const prevChange =
-      prevLast && prevBaseline && prevBaseline >= MIN_WEEKLY_BASELINE
-        ? pctChange(prevLast.qty, prevBaseline)
+      prevPrev && prevWeek.qty >= MIN_WEEKLY_BASELINE
+        ? pctChange(prevWeek.qty, prevPrev.qty)
         : null;
 
     const name = storeNameById.get(storeId) ?? String(storeId);
     const href = `/dashboard/stores/${storeId}?tab=weekly`;
 
-    if (last.qty === 0 && baseline >= MIN_WEEKLY_BASELINE) {
+    if (last.qty === 0 && prevWeek.qty >= MIN_WEEKLY_BASELINE) {
       alerts.push({
         id: `store-week-miss-${storeId}`,
         kind: "store_week_miss",
         severity: "critical",
         title: name,
-        evidence: `שבוע סגור בלי אספקה · בסיס ${Math.round(baseline)} יח׳`,
+        evidence: `שבוע סגור בלי אספקה · שבוע קודם ${Math.round(prevWeek.qty)} יח׳`,
         href,
         entityName: name,
       });
       continue;
     }
 
+    if (prevWeek.qty < MIN_WEEKLY_BASELINE) continue;
+
     const twoWeekDrop =
-      change <= WEEK_ALERT_PCT && prevChange !== null && prevChange <= WEEK_ALERT_PCT;
+      change <= WEEK_ALERT_PCT &&
+      prevChange !== null &&
+      prevChange <= WEEK_ALERT_PCT;
 
     if (change <= WEEK_CRITICAL_PCT || twoWeekDrop) {
       alerts.push({
@@ -252,8 +241,8 @@ export function buildWeeklyStoreAlerts(
         severity: change <= WEEK_CRITICAL_PCT ? "critical" : "warning",
         title: name,
         evidence: twoWeekDrop
-          ? `שני שבועות סגורים בירידה · אחרון ${fmtPct(change)} מול חציון 8 שבועות`
-          : `שבוע סגור ${fmtPct(change)} מול חציון 8 שבועות`,
+          ? `שני שבועות סגורים בירידה · אחרון ${fmtPct(change)} מול שבוע קודם`
+          : `שבוע סגור ${fmtPct(change)} מול שבוע קודם`,
         href,
         entityName: name,
       });
@@ -263,7 +252,7 @@ export function buildWeeklyStoreAlerts(
         kind: "store_week_drop",
         severity: "watch",
         title: name,
-        evidence: `מעקב שבועי · ${fmtPct(change)} מול חציון 8 שבועות`,
+        evidence: `מעקב שבועי · ${fmtPct(change)} מול שבוע קודם`,
         href,
         entityName: name,
       });
