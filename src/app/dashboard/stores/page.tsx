@@ -11,7 +11,7 @@ import {
   StoresExclusionBar,
   StoresInactivityAlert,
 } from "@/components/stores-supabase";
-import { LoadingState, MetricsWindowBanner } from "@/components/common";
+import { LoadingState } from "@/components/common";
 
 export default function StoresPage() {
   const hook = useStoresPageSupabase();
@@ -28,7 +28,6 @@ export default function StoresPage() {
     clearFilters,
     activeFiltersCount,
     totals,
-    metricsWindow,
     viewMode,
     currentPage,
     setCurrentPage,
@@ -76,9 +75,6 @@ export default function StoresPage() {
     <div className="space-y-4">
       {/* Header */}
       <StoresHeaderSupabase hook={hook} />
-      {hook.viewMode === "metrics" && (
-        <MetricsWindowBanner window={metricsWindow} />
-      )}
 
       {/* Filters Panel */}
       <StoresFiltersPanel

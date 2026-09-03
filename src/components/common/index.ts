@@ -27,7 +27,6 @@ export {
 
 export { SmartPeriodSelector } from "./SmartPeriodSelector";
 export { HorizontalScrollArea } from "./HorizontalScrollArea";
-export { MetricsWindowBanner } from "./MetricsWindowBanner";
 
 export type { MetricsPeriodInfo } from "./MetricsPeriodLabel";
 export type {

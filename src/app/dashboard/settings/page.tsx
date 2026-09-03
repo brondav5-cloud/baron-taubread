@@ -12,6 +12,7 @@ import {
   Check,
   ClipboardList,
   Users,
+  BarChart3,
   ChevronLeft,
   Loader2,
   Image as ImageIcon,
@@ -22,7 +23,9 @@ import Link from "next/link";
 import { useSettings } from "@/hooks/useSettings";
 import { useAuth } from "@/hooks/useAuth";
 import { useCompanyLogo } from "@/hooks/useCompanyLogo";
+import { useState } from "react";
 import { useSupabaseData } from "@/hooks/useSupabaseData";
+import { formatMonthLabelHe } from "@/lib/metricsWindow";
 import {
   Card,
   CardHeader,
@@ -113,9 +116,11 @@ export default function SettingsPage() {
     stores,
     products,
     metadata,
+    metricsWindow,
     isLoading: dataLoading,
     refetch: refetchData,
   } = useSupabaseData();
+  const [markingReady, setMarkingReady] = useState(false);
   const {
     saved,
     handleSave,
@@ -285,6 +290,55 @@ export default function SettingsPage() {
               label="הצג מדדים מורחבים"
               description="הצג את כל המדדים בטבלאות"
             />
+          </div>
+        </SettingsSection>
+
+        <SettingsSection
+          title="חלון מדדים"
+          description="מתי חודש נכנס לחישוב מדדים וחריגות"
+          icon={<BarChart3 className="w-5 h-5 text-gray-600" />}
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-gray-700">
+              מדדים עד{" "}
+              <span className="font-semibold">
+                {formatMonthLabelHe(metricsWindow.settledMonth)}
+              </span>
+              . החודש והשבוע הנוכחיים מוצגים כנתון בלבד.
+            </p>
+            {metricsWindow.pendingReturnsMonth ? (
+              <>
+                <p className="text-sm text-gray-500">
+                  {formatMonthLabelHe(metricsWindow.pendingReturnsMonth)} ממתין
+                  להחזרות עד {metricsWindow.autoReadyLabel}. לחץ רק אחרי שההחזרות
+                  כבר נכנסו, אחרת כל החנויות ייראו בעלייה.
+                </p>
+                <button
+                  type="button"
+                  disabled={markingReady}
+                  onClick={async () => {
+                    setMarkingReady(true);
+                    try {
+                      const res = await fetch("/api/metrics/ready", {
+                        method: "POST",
+                      });
+                      if (res.ok) await refetchData();
+                    } finally {
+                      setMarkingReady(false);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl text-sm font-medium bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60"
+                >
+                  {markingReady
+                    ? "מעדכן..."
+                    : `המדדים מוכנים — כלול את ${formatMonthLabelHe(metricsWindow.pendingReturnsMonth)}`}
+                </button>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">
+                אין חודש שממתין להחזרות. היישוב האוטומטי פעיל.
+              </p>
+            )}
           </div>
         </SettingsSection>
 
